@@ -1,0 +1,6 @@
+{
+  "name": "Vortex Code – Digital Redeem Store & Rewards Vault",
+  "description": "Premium customer portal for instant digital code redemption, game key vouchers, and order management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
