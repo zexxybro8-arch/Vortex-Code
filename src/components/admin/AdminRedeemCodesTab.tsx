@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAdmin } from '../../context/AdminContext';
-import { Key, Plus, Eye, EyeOff, Search, ShieldCheck, Check, Sparkles, Filter, Trash2, AlertCircle } from 'lucide-react';
+import { Key, Plus, Eye, EyeOff, Search, ShieldCheck, Check, Sparkles, Filter, Trash2, AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { generate16CharKey, formatFullCode, formatMaskedCode } from '../../utils/codeFormat';
+import type { AdminRedeemCode } from '../../types/admin';
 
 export const AdminRedeemCodesTab: React.FC = () => {
-  const { products, redeemCodes, addSingleRedeemCode, addBulkRedeemCodes, deleteRedeemCode } = useAdmin();
+  const { products, redeemCodes, addSingleRedeemCode, addBulkRedeemCodes, deleteRedeemCode, refreshData } = useAdmin();
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'USED' | 'RESERVED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -13,6 +14,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
   // Modals & form state
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isSingleModalOpen, setIsSingleModalOpen] = useState(false);
+  const [codeToDelete, setCodeToDelete] = useState<AdminRedeemCode | null>(null);
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '');
 
   // Bulk Generator State
@@ -25,6 +27,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
   const [singlePin, setSinglePin] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [alertError, setAlertError] = useState<string | null>(null);
   const [alertSuccess, setAlertSuccess] = useState<string | null>(null);
 
@@ -116,14 +119,23 @@ export const AdminRedeemCodesTab: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this redeem code from the database?')) return;
+  const handleDeleteConfirm = async () => {
+    if (!codeToDelete) return;
+    setAlertError(null);
+    setAlertSuccess(null);
+    setIsDeleting(true);
+
     try {
-      await deleteRedeemCode(id);
-      setAlertSuccess('Code removed from database. Stock recalculated.');
-      setTimeout(() => setAlertSuccess(null), 3000);
+      const isForce = codeToDelete.status === 'USED';
+      const result = await deleteRedeemCode(codeToDelete.id, isForce);
+      setAlertSuccess(`✅ Redeem code [${codeToDelete.codeMasked}] (${codeToDelete.productName} ${codeToDelete.denomination}) deleted permanently from database! Stock recalculated.`);
+      setCodeToDelete(null);
+      await refreshData();
+      setTimeout(() => setAlertSuccess(null), 5000);
     } catch (err: any) {
-      alert(`Error deleting code: ${err.message}`);
+      setAlertError(err.message || 'Database deletion failed.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -259,9 +271,9 @@ export const AdminRedeemCodesTab: React.FC = () => {
                     </button>
 
                     <button
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => setCodeToDelete(item)}
                       className="p-1.5 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg border border-rose-500/30 transition-colors cursor-pointer"
-                      title="Delete Code"
+                      title="Delete Code from Database"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -445,6 +457,92 @@ export const AdminRedeemCodesTab: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Code Confirmation Modal */}
+      {codeToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+                <span>Confirm Code Deletion</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCodeToDelete(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to permanently delete this redeem code from the persistent database?
+            </p>
+
+            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2 font-mono text-xs">
+              <div className="flex justify-between text-slate-400">
+                <span>Product:</span>
+                <strong className="text-white">{codeToDelete.productName}</strong>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Denomination:</span>
+                <strong className="text-white">{codeToDelete.denomination || `₹${codeToDelete.denominationRupees}`}</strong>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Masked Key:</span>
+                <strong className="text-emerald-400 font-bold tracking-wider">{codeToDelete.codeMasked}</strong>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Full Key:</span>
+                <strong className="text-emerald-300">{codeToDelete.fullCodeSecret}</strong>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Database Status:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  codeToDelete.status === 'AVAILABLE'
+                    ? 'bg-emerald-500/10 text-emerald-400'
+                    : 'bg-slate-800 text-slate-300'
+                }`}>
+                  {codeToDelete.status === 'AVAILABLE' ? 'UNUSED (IN STOCK)' : 'SOLD'}
+                </span>
+              </div>
+            </div>
+
+            {codeToDelete.status === 'USED' && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Warning:</strong> This code is already marked as SOLD. Deleting it will permanently unlink it from historical order records in the database.
+                </span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCodeToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-400 disabled:opacity-50 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-rose-950/50"
+              >
+                {isDeleting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span>Delete from Database</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

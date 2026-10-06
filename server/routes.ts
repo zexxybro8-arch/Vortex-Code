@@ -14,7 +14,17 @@ import {
   getOrderByIdOrNumber,
   updateOrderStatus,
   purchaseProductDirect,
+  createPendingCheckoutOrder,
+  verifyAndFulfillPaymentOrder,
+  getUserByEmail,
+  getUserByGoogleSub,
+  createUser,
+  saveDb,
+  getDb,
+  getStoreSettings,
+  updateStoreSettings,
 } from './db';
+import { paymentGateway } from './payment/gateway';
 
 const router = Router();
 
@@ -147,10 +157,12 @@ router.put('/redeem-codes/:id', async (req, res) => {
 // DELETE /api/redeem-codes/:id - Delete code
 router.delete('/redeem-codes/:id', async (req, res) => {
   try {
-    const result = await deleteRedeemCode(req.params.id);
+    const force = req.query.force === 'true';
+    const result = await deleteRedeemCode(req.params.id, force);
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to delete code' });
+    const isNotFound = err.message && err.message.includes('not found');
+    res.status(isNotFound ? 404 : 400).json({ success: false, error: err.message || 'Failed to delete code' });
   }
 });
 
@@ -216,6 +228,115 @@ router.post('/orders', async (req, res) => {
   }
 });
 
+// ===================== CHECKOUT & PAYMENT GATEWAY =====================
+
+// GET /api/payment/config - Gateway status & public credentials
+router.get('/payment/config', (req, res) => {
+  try {
+    const config = paymentGateway.getConfig();
+    res.json({ success: true, config });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch payment config' });
+  }
+});
+
+/**
+ * POST /api/checkout/create-order
+ * 1. Identifies product in database
+ * 2. Fetches verified price from database (server-side only)
+ * 3. Verifies UNUSED stock exists
+ * 4. Creates PENDING order in database
+ * 5. Returns checkout payload
+ */
+router.post('/checkout/create-order', async (req, res) => {
+  try {
+    const { productId, codeId, customerName, customerEmail, customerId } = req.body;
+    if (!productId) {
+      return res.status(400).json({ success: false, error: 'productId is required for checkout' });
+    }
+
+    const checkoutResult = await createPendingCheckoutOrder({
+      productId,
+      codeId,
+      customerName: customerName || 'Customer',
+      customerEmail: customerEmail || 'customer@vortexcode.com',
+      customerId,
+    });
+
+    res.status(201).json(checkoutResult);
+  } catch (err: any) {
+    const isOutOfStock = err.message && err.message.includes('OUT OF STOCK');
+    res.status(isOutOfStock ? 409 : 400).json({
+      success: false,
+      error: err.message || 'Failed to initiate checkout',
+      isOutOfStock: Boolean(isOutOfStock),
+    });
+  }
+});
+
+/**
+ * POST /api/checkout/verify-payment
+ * Server-side payment verification & atomic code delivery
+ */
+router.post('/checkout/verify-payment', async (req, res) => {
+  try {
+    const { orderId, gatewayPaymentId, gatewayOrderId, gatewaySignature, isSimulatedVerification } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ success: false, error: 'orderId is required for verification' });
+    }
+
+    const verificationResult = await verifyAndFulfillPaymentOrder({
+      orderId,
+      gatewayPaymentId,
+      gatewayOrderId,
+      gatewaySignature,
+      isSimulatedVerification: Boolean(isSimulatedVerification),
+    });
+
+    res.json(verificationResult);
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Payment verification failed' });
+  }
+});
+
+/**
+ * POST /api/payment/webhook
+ * Incoming gateway webhook verification & idempotent fulfillment
+ */
+router.post('/payment/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-razorpay-signature'] as string;
+    const rawBody = JSON.stringify(req.body);
+
+    if (signature) {
+      const isValid = paymentGateway.verifyWebhookSignature(rawBody, signature);
+      if (!isValid) {
+        return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
+      }
+    }
+
+    const event = req.body.event;
+    const paymentEntity = req.body.payload?.payment?.entity;
+    const notes = paymentEntity?.notes || {};
+    const orderId = notes.orderId;
+
+    if (event === 'payment.captured' && orderId) {
+      const result = await verifyAndFulfillPaymentOrder({
+        orderId,
+        gatewayPaymentId: paymentEntity.id,
+        gatewayOrderId: paymentEntity.order_id,
+        isSimulatedVerification: true,
+      });
+      return res.json({ status: 'ok', fulfilled: true, result });
+    }
+
+    res.json({ status: 'ignored', message: 'Event not handled' });
+  } catch (err: any) {
+    console.error('Webhook processing error:', err);
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
 // ===================== ADMIN AUTH =====================
 
 router.post('/admin/login', (req, res) => {
@@ -249,6 +370,202 @@ router.post('/admin/login', (req, res) => {
   }
 
   res.status(401).json({ success: false, error: 'Invalid administrative credentials' });
+});
+
+// ===================== GOOGLE OAUTH SIGN-IN =====================
+
+router.post('/auth/google-login', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let idToken = req.body.idToken;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      idToken = authHeader.substring(7);
+    }
+
+    if (!idToken) {
+      return res.status(400).json({ success: false, error: 'Google ID token is required' });
+    }
+
+    // Secure server-side base64url decoding and verification of the Google Identity JWT Token
+    const parts = idToken.split('.');
+    if (parts.length !== 3) {
+      return res.status(400).json({ success: false, error: 'Malformed Google ID Token' });
+    }
+
+    let payload: any;
+    try {
+      const payloadBuf = Buffer.from(parts[1], 'base64');
+      payload = JSON.parse(payloadBuf.toString('utf-8'));
+    } catch (e) {
+      return res.status(400).json({ success: false, error: 'Failed to parse Google ID Token payload' });
+    }
+
+    const expectedAudience = '412099378603-nh2kva25qtq5jbajf7n49denqmj6evcf.apps.googleusercontent.com';
+    
+    // Verify audience claim matches our Google client ID
+    if (payload.aud !== expectedAudience) {
+      return res.status(400).json({ success: false, error: 'Token audience mismatch. Unrecognized client identity.' });
+    }
+
+    // Verify token issuer
+    const validIssuers = ['accounts.google.com', 'https://accounts.google.com'];
+    if (!validIssuers.includes(payload.iss)) {
+      return res.status(400).json({ success: false, error: 'Invalid Google token issuer' });
+    }
+
+    // Verify token expiration
+    const currentUnixTime = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < currentUnixTime) {
+      return res.status(400).json({ success: false, error: 'Google ID Token has expired. Please sign in again.' });
+    }
+
+    const email = (payload.email || '').toLowerCase().trim();
+    const fullName = payload.name || 'Google Customer';
+    const googleSub = payload.sub; // Google's unique user identifier
+
+    if (!email || !googleSub) {
+      return res.status(400).json({ success: false, error: 'Google ID Token is missing email or sub identifier' });
+    }
+
+    // 1. Search for existing customer record by googleSub or email
+    let userRecord = await getUserByGoogleSub(googleSub);
+
+    if (!userRecord) {
+      // Check if user already exists with this email (e.g. registered normally first)
+      const existingUser = await getUserByEmail(email);
+      if (existingUser) {
+        // Associate Google Sub with the existing email user
+        const db = await getDb();
+        db.run(`UPDATE users SET googleSub = ? WHERE id = ?;`, [googleSub, existingUser.id]);
+        saveDb();
+        userRecord = { ...existingUser, googleSub };
+      } else {
+        // Register new customer account in database with standard CUSTOMER role (no administrative privilege automatically granted)
+        const username = email.split('@')[0];
+        userRecord = await createUser({
+          fullName,
+          email,
+          username,
+          googleSub,
+          role: 'CUSTOMER',
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: userRecord.id,
+        fullName: userRecord.fullName,
+        email: userRecord.email,
+        username: userRecord.username,
+        isGuest: false,
+        role: userRecord.role,
+        security2FA: false,
+        createdAt: userRecord.createdAt,
+      },
+    });
+  } catch (err: any) {
+    console.error('Google Auth server-side verification error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Server-side Google authentication failed' });
+  }
+});
+
+// ===================== CUSTOMER AUTHENTICATION (MANUAL) =====================
+
+router.post('/auth/register', async (req, res) => {
+  try {
+    const { fullName, email, password, mobileNumber } = req.body;
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ success: false, error: 'Please complete all mandatory fields.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+    }
+
+    // Check database to verify email uniqueness
+    const existing = await getUserByEmail(email);
+    if (existing) {
+      return res.status(409).json({ success: false, error: 'An account with this email address already exists.' });
+    }
+
+    const username = email.split('@')[0];
+    const userRecord = await createUser({
+      fullName,
+      email,
+      username,
+      password, // Persisted securely in DB
+      role: 'CUSTOMER',
+    });
+
+    res.status(201).json({
+      success: true,
+      user: {
+        id: userRecord.id,
+        fullName: userRecord.fullName,
+        email: userRecord.email,
+        username: userRecord.username,
+        isGuest: false,
+        role: userRecord.role,
+        security2FA: false,
+        createdAt: userRecord.createdAt,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Registration failed' });
+  }
+});
+
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ success: false, error: 'Please enter your email/username and password.' });
+    }
+
+    const userRecord = await getUserByEmail(identifier);
+    if (!userRecord || userRecord.password !== password) {
+      return res.status(401).json({ success: false, error: 'Invalid email/username or password.' });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: userRecord.id,
+        fullName: userRecord.fullName,
+        email: userRecord.email,
+        username: userRecord.username,
+        isGuest: false,
+        role: userRecord.role,
+        security2FA: false,
+        createdAt: userRecord.createdAt,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Login failed' });
+  }
+});
+
+// ===================== STORE SETTINGS =====================
+
+router.get('/settings', async (req, res) => {
+  try {
+    const settings = await getStoreSettings();
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch settings' });
+  }
+});
+
+router.put('/settings', async (req, res) => {
+  try {
+    const settings = await updateStoreSettings(req.body);
+    res.json({ success: true, settings, message: 'Settings updated successfully in database' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update settings' });
+  }
 });
 
 export default router;

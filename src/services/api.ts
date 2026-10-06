@@ -179,13 +179,14 @@ export const api = {
     return data;
   },
 
-  async deleteRedeemCode(id: string): Promise<any> {
-    const res = await fetch(`/api/redeem-codes/${encodeURIComponent(id)}`, {
+  async deleteRedeemCode(id: string, force?: boolean): Promise<{ success: boolean; id: string; message?: string }> {
+    const url = `/api/redeem-codes/${encodeURIComponent(id)}${force ? '?force=true' : ''}`;
+    const res = await fetch(url, {
       method: 'DELETE',
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to delete code');
+      throw new Error(data.error || 'Failed to delete code from database');
     }
     return data;
   },
@@ -243,5 +244,92 @@ export const api = {
       throw new Error(result.error || 'Purchase failed');
     }
     return result;
+  },
+
+  // Checkout & Payment Gateway
+  async getPaymentConfig(): Promise<any> {
+    try {
+      const res = await fetch('/api/payment/config');
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.config;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async createCheckoutOrder(data: {
+    productId: string;
+    codeId?: string;
+    customerName: string;
+    customerEmail: string;
+    customerId?: string;
+  }): Promise<{
+    success: boolean;
+    order: any;
+    gatewayOrder: any;
+    gatewayConfig: any;
+    isOutOfStock?: boolean;
+    error?: string;
+  }> {
+    const res = await fetch('/api/checkout/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || 'Failed to initiate checkout order');
+    }
+    return result;
+  },
+
+  async verifyPayment(data: {
+    orderId: string;
+    gatewayPaymentId?: string;
+    gatewayOrderId?: string;
+    gatewaySignature?: string;
+    isSimulatedVerification?: boolean;
+  }): Promise<{
+    success: boolean;
+    order: any;
+    message?: string;
+    alreadyFulfilled?: boolean;
+  }> {
+    const res = await fetch('/api/checkout/verify-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || 'Payment verification failed');
+    }
+    return result;
+  },
+
+  // Store Settings
+  async getStoreSettings(): Promise<any> {
+    try {
+      const res = await fetch('/api/settings');
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.settings;
+    } catch {
+      return null;
+    }
+  },
+
+  async updateStoreSettings(settings: Record<string, any>): Promise<any> {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update store settings');
+    }
+    return data.settings;
   },
 };

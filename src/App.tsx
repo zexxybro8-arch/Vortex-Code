@@ -54,8 +54,6 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isAdm = checkIsAdminRoute();
-      // "Open user" - default view to user website
       setIsAdminRoute(false);
       if (window.location.pathname.startsWith('/admin')) {
         window.history.replaceState({ route: '/dashboard' }, '', '/dashboard');

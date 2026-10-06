@@ -14,6 +14,7 @@ interface AuthContextType {
   currentView: AuthView;
   setCurrentView: (view: AuthView) => void;
   login: (credentials: LoginCredentials) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<string>;
   logout: () => void;
@@ -51,7 +52,19 @@ const getInitialView = (): AuthView => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('vortex_logged_user');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
   const [currentView, setCurrentViewInternal] = useState<AuthView>(getInitialView);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
@@ -90,18 +103,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const apiOrders = await api.getOrders();
       if (apiOrders) {
-        const mappedOrders: OrderItem[] = apiOrders.map((o) => ({
+        // Filter orders for the current user if user email exists, or show user's orders
+        const userOrders = user
+          ? apiOrders.filter((o) => o.customerEmail?.toLowerCase() === user.email?.toLowerCase())
+          : apiOrders;
+
+        const mappedOrders: OrderItem[] = userOrders.map((o) => ({
           id: o.id,
           orderNumber: o.orderNumber,
           codeTitle: o.productName,
           priceRupees: Number(o.amount),
           rewardValueRupees: Number(o.amount * 15),
           codeValue: Number(o.amount * 15),
-          redeemCode: o.deliveredCode || 'VRX-8829-K91A-7741',
-          pin: o.deliveredPin || '9842',
+          redeemCode: o.paymentStatus === 'PAID' && o.deliveredCode ? o.deliveredCode : 'PAYMENT PENDING',
+          pin: o.paymentStatus === 'PAID' ? o.deliveredPin || '' : '',
           category: 'GOOGLE PLAY',
           purchaseDate: o.createdAt ? o.createdAt.substring(0, 16).replace('T', ' ') : new Date().toISOString().substring(0, 16),
-          status: o.deliveryStatus === 'DELIVERED' ? 'Completed' : 'Processing',
+          status: o.paymentStatus === 'PAID' && o.deliveryStatus === 'DELIVERED' ? 'Completed' : 'Processing',
           paymentMethod: o.paymentMethod || 'Direct Payment Gateway',
         }));
         setOrders(mappedOrders);
@@ -109,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('Failed to load orders from database in AuthContext:', err);
     }
-  }, []);
+  }, [user]);
 
   const refreshAvailableCodes = useCallback(async () => {
     try {
@@ -173,10 +191,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const loggedUser = await authService.login(credentials);
       setUser(loggedUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vortex_logged_user', JSON.stringify(loggedUser));
+      }
       setCurrentView('dashboard');
       addToast('success', `Welcome back, ${loggedUser.fullName}! Access granted to Vortex Vault.`);
     } catch (err: any) {
       addToast('error', err.message || 'Authentication failed. Check your credentials.');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async (idToken: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/google-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Google login failed.');
+      }
+      
+      const loggedUser = data.user;
+      setUser(loggedUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vortex_logged_user', JSON.stringify(loggedUser));
+      }
+      setCurrentView('dashboard');
+      addToast('success', `Welcome, ${loggedUser.fullName}! Signed in securely via Google.`);
+    } catch (err: any) {
+      addToast('error', err.message || 'Google authentication cancelled or failed.');
       throw err;
     } finally {
       setIsLoading(false);
@@ -188,6 +240,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const newUser = await authService.register(credentials);
       setUser(newUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vortex_logged_user', JSON.stringify(newUser));
+      }
       setCurrentView('dashboard');
       addToast('success', 'Account created successfully! Welcome to Vortex Code Store.');
     } catch (err: any) {
@@ -214,6 +269,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('vortex_logged_user');
+    }
     setCurrentView('login');
     addToast('info', 'You have been signed out safely.');
   };
@@ -268,6 +326,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentView,
         setCurrentView,
         login,
+        loginWithGoogle,
         register,
         requestPasswordReset,
         logout,

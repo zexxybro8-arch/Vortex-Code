@@ -95,7 +95,7 @@ interface AdminContextType {
   addRedeemCodes: (newCodes: Omit<AdminRedeemCode, 'id'>[]) => Promise<void>;
   addSingleRedeemCode: (productId: string, code: string, pin?: string) => Promise<any>;
   addBulkRedeemCodes: (productId: string, codesText: string) => Promise<any>;
-  deleteRedeemCode: (id: string) => Promise<void>;
+  deleteRedeemCode: (id: string, force?: boolean) => Promise<any>;
 
   // Orders
   orders: AdminOrder[];
@@ -219,7 +219,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Fetch real data from backend API & Database
   const refreshData = useCallback(async () => {
     try {
-      const [apiProducts, apiCodes, apiOrders] = await Promise.all([
+      const [apiProducts, apiCodes, apiOrders, apiSettings] = await Promise.all([
         api.getProducts().catch((err) => {
           console.error('Failed to load products from API:', err);
           return [];
@@ -232,6 +232,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           console.error('Failed to load orders from API:', err);
           return [];
         }),
+        api.getStoreSettings().catch((err) => {
+          console.error('Failed to load store settings from API:', err);
+          return null;
+        }),
       ]);
 
       if (apiProducts && apiProducts.length > 0) {
@@ -242,6 +246,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       if (apiOrders) {
         setOrders(apiOrders.map(mapApiOrderToAdmin));
+      }
+      if (apiSettings) {
+        setStoreSettings(apiSettings);
       }
     } catch (err) {
       console.error('Error refreshing admin data from DB:', err);
@@ -382,11 +389,12 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const deleteRedeemCode = async (id: string) => {
+  const deleteRedeemCode = async (id: string, force?: boolean) => {
     setIsLoading(true);
     try {
-      await api.deleteRedeemCode(id);
+      const result = await api.deleteRedeemCode(id, force);
       await refreshData();
+      return result;
     } finally {
       setIsLoading(false);
     }
@@ -414,8 +422,19 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   };
 
-  const updateStoreSettings = (newSettings: any) => {
-    setStoreSettings((prev) => ({ ...prev, ...newSettings }));
+  const updateStoreSettings = async (newSettings: any) => {
+    setIsLoading(true);
+    try {
+      const merged = { ...storeSettings, ...newSettings };
+      const updated = await api.updateStoreSettings(merged);
+      if (updated) {
+        setStoreSettings(updated);
+      }
+    } catch (err: any) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Dynamically compute stats strictly from actual database records

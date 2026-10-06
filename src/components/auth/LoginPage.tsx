@@ -1,16 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../common/Logo';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login, setCurrentView, isLoading } = useAuth();
+  const { login, loginWithGoogle, setCurrentView, isLoading } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Dynamically load Google Identity Services (GSI) script on component mount
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const google = (window as any).google;
+      if (google) {
+        google.accounts.id.initialize({
+          client_id: '412099378603-nh2kva25qtq5jbajf7n49denqmj6evcf.apps.googleusercontent.com',
+          callback: async (response: any) => {
+            try {
+              setErrorMessage('');
+              await loginWithGoogle(response.credential);
+            } catch (err: any) {
+              setErrorMessage(err.message || 'Google authentication cancelled or failed.');
+            }
+          },
+        });
+
+        // Renders standard, highly professional, secure Google branded button
+        google.accounts.id.renderButton(
+          document.getElementById('google-signin-btn-container'),
+          {
+            theme: 'outline',
+            size: 'large',
+            width: 320,
+            text: 'continue_with',
+            shape: 'rectangular',
+          }
+        );
+      }
+    };
+
+    document.body.appendChild(script);
+
+    return () => {
+      try {
+        document.body.removeChild(script);
+      } catch (err) {
+        // Safe fallback in case script was already unmounted
+      }
+    };
+  }, [loginWithGoogle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,6 +207,18 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="relative my-6 flex py-1 items-center justify-center">
+            <div className="flex-grow border-t border-slate-800"></div>
+            <span className="flex-shrink mx-4 text-slate-500 font-mono text-[10px] uppercase font-bold tracking-widest">──────── OR ────────</span>
+            <div className="flex-grow border-t border-slate-800"></div>
+          </div>
+
+          {/* Secure Google Login Button Container */}
+          <div className="flex justify-center w-full pt-1">
+            <div id="google-signin-btn-container" className="w-full flex justify-center min-h-[44px]"></div>
+          </div>
 
           {/* Below link: Register Page */}
           <div className="mt-6 pt-5 border-t border-slate-800/80 text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">

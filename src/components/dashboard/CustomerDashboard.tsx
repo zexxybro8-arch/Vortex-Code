@@ -5,6 +5,7 @@ import type { DashboardTab, StoreProduct } from '../../types';
 import { HowToRedeem } from './HowToRedeem';
 import { SupportTab } from './SupportTab';
 import { formatMaskedCode, formatFullCode } from '../../utils/codeFormat';
+import { PaymentCheckoutModal, type CheckoutData } from '../checkout/PaymentCheckoutModal';
 import {
   Search,
   Zap,
@@ -36,6 +37,10 @@ export const CustomerDashboard: React.FC = () => {
   const [selectedDenomination, setSelectedDenomination] = useState<string>('ALL VALUES');
   const [buyingProductId, setBuyingProductId] = useState<string | null>(null);
   const [buyingCodeId, setBuyingCodeId] = useState<string | null>(null);
+
+  // Payment Checkout Modal State
+  const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
   // Live Products and Unused Redeem Codes from single source of truth (Database)
   const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -201,7 +206,7 @@ export const CustomerDashboard: React.FC = () => {
     }
 
     if (product.stockStatus === 'OUT OF STOCK' || (product.stock !== undefined && product.stock <= 0)) {
-      addToast('error', 'This item is currently out of stock. Please check back later.');
+      addToast('error', 'OUT OF STOCK: No redeem codes available for this product.');
       return;
     }
 
@@ -214,23 +219,26 @@ export const CustomerDashboard: React.FC = () => {
     if (codeId) setBuyingCodeId(codeId);
 
     try {
-      const res = await api.purchaseProduct({
+      // 1. Identify product in DB & create checkout record with server-verified price
+      const checkoutRes = await api.createCheckoutOrder({
         productId: product.id,
         codeId,
         customerName: user.fullName || user.username || 'Verified Customer',
         customerEmail: user.email,
-        paymentMethod: 'Direct Payment Gateway',
+        customerId: user.id,
       });
 
-      if (res && res.success && res.order) {
-        const deliveredCode = res.order.deliveredCode || 'Encrypted Key Generated';
-        addToast('success', `🎉 Code purchased for ${res.order.productName}! Secret key [${deliveredCode}] saved to your Vault.`);
-        // Immediately synchronize with database
-        await fetchLiveDatabaseData();
-        await refreshCustomerOrders();
+      if (checkoutRes && checkoutRes.success && checkoutRes.order) {
+        setCheckoutData({
+          order: checkoutRes.order,
+          gatewayOrder: checkoutRes.gatewayOrder,
+          gatewayConfig: checkoutRes.gatewayConfig,
+          productImage: product.image,
+        });
+        setIsCheckoutModalOpen(true);
       }
     } catch (err: any) {
-      addToast('error', err.message || 'Purchase failed. Please try again.');
+      addToast('error', err.message || 'Checkout initiation failed. Please try again.');
     } finally {
       setBuyingProductId(null);
       setBuyingCodeId(null);
@@ -312,12 +320,6 @@ export const CustomerDashboard: React.FC = () => {
                   <Tag className="w-3.5 h-3.5" />
                   <span>SELECT RECHARGE AMOUNT / DENOMINATION:</span>
                 </div>
-                <div className="text-xs font-mono text-slate-400 flex items-center gap-2">
-                  <span>Available Stock:</span>
-                  <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20">
-                    {unusedCodes.length} UNUSED CODES IN DATABASE
-                  </span>
-                </div>
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
@@ -383,11 +385,6 @@ export const CustomerDashboard: React.FC = () => {
                         <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight leading-snug truncate group-hover:text-emerald-300 transition-colors">
                           {prod.name}
                         </h3>
-                        <div className="text-[10px] font-mono text-emerald-400/90 font-bold uppercase tracking-wider mt-0.5 flex items-center gap-2">
-                          <span>{prod.category}</span>
-                          <span>·</span>
-                          <span>{prod.denomination}</span>
-                        </div>
                       </div>
                     </div>
 
@@ -403,10 +400,10 @@ export const CustomerDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* REWARD VALUE BOX */}
+                      {/* BALANCE BOX */}
                       <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
                         <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
-                          REWARD VALUE
+                          BALANCE
                         </div>
                         <div className="text-lg sm:text-xl font-black text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
                           ₹{prod.rewardValueRupees.toLocaleString('en-IN')}
@@ -566,6 +563,16 @@ export const CustomerDashboard: React.FC = () => {
         )}
 
       </main>
+
+      <PaymentCheckoutModal
+        isOpen={isCheckoutModalOpen}
+        onClose={() => setIsCheckoutModalOpen(false)}
+        checkoutData={checkoutData}
+        onPaymentSuccess={async () => {
+          await fetchLiveDatabaseData();
+          await refreshCustomerOrders();
+        }}
+      />
 
     </div>
   );
