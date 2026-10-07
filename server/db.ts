@@ -222,6 +222,8 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileSize', '55');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileRight', '35');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileBottom', '110');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconSize', '42');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactMobileIconSize', '42');`);
 
   // FamGateway Live Production Credentials
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
@@ -1788,6 +1790,8 @@ export async function getStoreSettings() {
     contactWidgetMobileSize: 55,
     contactWidgetMobileRight: 35,
     contactWidgetMobileBottom: 110,
+    contactIconSize: 42,
+    contactMobileIconSize: 42,
     famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
     famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc',
     famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
@@ -1808,7 +1812,9 @@ export async function getStoreSettings() {
         key === 'contactWidgetBottom' ||
         key === 'contactWidgetMobileSize' ||
         key === 'contactWidgetMobileRight' ||
-        key === 'contactWidgetMobileBottom'
+        key === 'contactWidgetMobileBottom' ||
+        key === 'contactIconSize' ||
+        key === 'contactMobileIconSize'
       ) {
         settings[key] = Number(val) || settings[key];
       } else {

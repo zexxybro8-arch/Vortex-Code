@@ -381,6 +381,8 @@ export const api = {
     contactWidgetMobileSize?: number;
     contactWidgetMobileRight?: number;
     contactWidgetMobileBottom?: number;
+    contactIconSize?: number;
+    contactMobileIconSize?: number;
     telegramEnabled?: boolean;
     telegramUrl?: string;
   }): Promise<any> {

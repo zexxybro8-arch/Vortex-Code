@@ -1031,6 +1031,8 @@ function normalizeContactConfig(body: any): {
   contactWidgetMobileSize: number;
   contactWidgetMobileRight: number;
   contactWidgetMobileBottom: number;
+  contactIconSize: number;
+  contactMobileIconSize: number;
   error?: string;
 } {
   const contactEnabled =
@@ -1056,22 +1058,35 @@ function normalizeContactConfig(body: any): {
   const contactWidgetMobileRight = clampNumber(body.contactWidgetMobileRight, 0, 100, 35);
   const contactWidgetMobileBottom = clampNumber(body.contactWidgetMobileBottom, 60, 300, 110);
 
+  // Icon / Logo sizes: 20px - 100px (safely constrained so it does not exceed outer button)
+  const rawIconSize = clampNumber(body.contactIconSize, 20, 100, 42);
+  const contactIconSize = Math.min(rawIconSize, Math.max(20, contactWidgetSize - 4));
+
+  const rawMobileIconSize = clampNumber(body.contactMobileIconSize, 20, 100, 42);
+  const contactMobileIconSize = Math.min(rawMobileIconSize, Math.max(20, contactWidgetMobileSize - 4));
+
   // Validate contactIconUrl if provided
+  const baseErrorResult = {
+    valid: false,
+    contactEnabled,
+    contactPlatform: platform as any,
+    contactUrl: '',
+    contactIconUrl: '',
+    contactLabel,
+    contactWidgetSize,
+    contactWidgetRight,
+    contactWidgetBottom,
+    contactWidgetMobileSize,
+    contactWidgetMobileRight,
+    contactWidgetMobileBottom,
+    contactIconSize,
+    contactMobileIconSize,
+  };
+
   if (contactIconUrl) {
     if (/^(javascript:|data:|vbscript:)/i.test(contactIconUrl)) {
       return {
-        valid: false,
-        contactEnabled,
-        contactPlatform: platform as any,
-        contactUrl: '',
-        contactIconUrl: '',
-        contactLabel,
-        contactWidgetSize,
-        contactWidgetRight,
-        contactWidgetBottom,
-        contactWidgetMobileSize,
-        contactWidgetMobileRight,
-        contactWidgetMobileBottom,
+        ...baseErrorResult,
         error: 'Invalid icon image URL scheme',
       };
     }
@@ -1086,18 +1101,7 @@ function normalizeContactConfig(body: any): {
   // Reject malicious schemes
   if (/^(javascript:|data:|vbscript:)/i.test(rawUrl)) {
     return {
-      valid: false,
-      contactEnabled,
-      contactPlatform: platform as any,
-      contactUrl: '',
-      contactIconUrl: '',
-      contactLabel,
-      contactWidgetSize,
-      contactWidgetRight,
-      contactWidgetBottom,
-      contactWidgetMobileSize,
-      contactWidgetMobileRight,
-      contactWidgetMobileBottom,
+      ...baseErrorResult,
       error: 'Invalid contact URL scheme',
     };
   }
@@ -1117,18 +1121,7 @@ function normalizeContactConfig(body: any): {
         normalizedUrl = `https://t.me/${rawUrl}`;
       } else {
         return {
-          valid: false,
-          contactEnabled,
-          contactPlatform: platform as any,
-          contactUrl: '',
-          contactIconUrl: '',
-          contactLabel,
-          contactWidgetSize,
-          contactWidgetRight,
-          contactWidgetBottom,
-          contactWidgetMobileSize,
-          contactWidgetMobileRight,
-          contactWidgetMobileBottom,
+          ...baseErrorResult,
           error: 'Invalid Telegram username or URL format',
         };
       }
@@ -1137,35 +1130,13 @@ function normalizeContactConfig(body: any): {
       const parsed = new URL(normalizedUrl);
       if (!['t.me', 'telegram.me'].includes(parsed.hostname.toLowerCase())) {
         return {
-          valid: false,
-          contactEnabled,
-          contactPlatform: platform as any,
-          contactUrl: '',
-          contactIconUrl: '',
-          contactLabel,
-          contactWidgetSize,
-          contactWidgetRight,
-          contactWidgetBottom,
-          contactWidgetMobileSize,
-          contactWidgetMobileRight,
-          contactWidgetMobileBottom,
+          ...baseErrorResult,
           error: 'Telegram URL must point to t.me or telegram.me',
         };
       }
     } catch {
       return {
-        valid: false,
-        contactEnabled,
-        contactPlatform: platform as any,
-        contactUrl: '',
-        contactIconUrl: '',
-        contactLabel,
-        contactWidgetSize,
-        contactWidgetRight,
-        contactWidgetBottom,
-        contactWidgetMobileSize,
-        contactWidgetMobileRight,
-        contactWidgetMobileBottom,
+        ...baseErrorResult,
         error: 'Malformed Telegram URL',
       };
     }
@@ -1200,18 +1171,7 @@ function normalizeContactConfig(body: any): {
       new URL(normalizedUrl);
     } catch {
       return {
-        valid: false,
-        contactEnabled,
-        contactPlatform: platform as any,
-        contactUrl: '',
-        contactIconUrl: '',
-        contactLabel,
-        contactWidgetSize,
-        contactWidgetRight,
-        contactWidgetBottom,
-        contactWidgetMobileSize,
-        contactWidgetMobileRight,
-        contactWidgetMobileBottom,
+        ...baseErrorResult,
         error: 'Invalid URL for Custom Contact',
       };
     }
@@ -1230,6 +1190,8 @@ function normalizeContactConfig(body: any): {
     contactWidgetMobileSize,
     contactWidgetMobileRight,
     contactWidgetMobileBottom,
+    contactIconSize,
+    contactMobileIconSize,
   };
 }
 
@@ -1252,6 +1214,8 @@ async function handleSaveContact(req: any, res: any) {
       contactWidgetMobileSize: String(validation.contactWidgetMobileSize),
       contactWidgetMobileRight: String(validation.contactWidgetMobileRight),
       contactWidgetMobileBottom: String(validation.contactWidgetMobileBottom),
+      contactIconSize: String(validation.contactIconSize),
+      contactMobileIconSize: String(validation.contactMobileIconSize),
       // Backward compatibility sync
       telegramEnabled: validation.contactEnabled ? 'true' : 'false',
       telegramUrl: validation.contactUrl,

@@ -152,6 +152,8 @@ interface AdminContextType {
     contactWidgetMobileSize?: number;
     contactWidgetMobileRight?: number;
     contactWidgetMobileBottom?: number;
+    contactIconSize?: number;
+    contactMobileIconSize?: number;
     famupigatewayBaseUrl: string;
     famupigatewayApiKey: string;
     famupigatewayWebhookSecret: string;
@@ -172,6 +174,8 @@ interface AdminContextType {
     contactWidgetMobileSize?: number;
     contactWidgetMobileRight?: number;
     contactWidgetMobileBottom?: number;
+    contactIconSize?: number;
+    contactMobileIconSize?: number;
     telegramEnabled?: boolean;
     telegramUrl?: string;
   }) => Promise<any>;
@@ -284,6 +288,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactWidgetMobileSize: 55,
     contactWidgetMobileRight: 35,
     contactWidgetMobileBottom: 110,
+    contactIconSize: 42,
+    contactMobileIconSize: 42,
     famupigatewayBaseUrl: 'https://famupigateway.site/api',
     famupigatewayApiKey: 'Famcfc08cd92c090e3718e9ad92155eb0fc',
     famupigatewayWebhookSecret: '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
@@ -665,6 +671,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactWidgetMobileSize?: number;
     contactWidgetMobileRight?: number;
     contactWidgetMobileBottom?: number;
+    contactIconSize?: number;
+    contactMobileIconSize?: number;
     telegramEnabled?: boolean;
     telegramUrl?: string;
   }) => {
@@ -685,6 +693,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           contactWidgetMobileSize: updated.contactWidgetMobileSize !== undefined ? Number(updated.contactWidgetMobileSize) : (contact.contactWidgetMobileSize ?? prev.contactWidgetMobileSize),
           contactWidgetMobileRight: updated.contactWidgetMobileRight !== undefined ? Number(updated.contactWidgetMobileRight) : (contact.contactWidgetMobileRight ?? prev.contactWidgetMobileRight),
           contactWidgetMobileBottom: updated.contactWidgetMobileBottom !== undefined ? Number(updated.contactWidgetMobileBottom) : (contact.contactWidgetMobileBottom ?? prev.contactWidgetMobileBottom),
+          contactIconSize: updated.contactIconSize !== undefined ? Number(updated.contactIconSize) : (contact.contactIconSize ?? prev.contactIconSize),
+          contactMobileIconSize: updated.contactMobileIconSize !== undefined ? Number(updated.contactMobileIconSize) : (contact.contactMobileIconSize ?? prev.contactMobileIconSize),
           telegramEnabled: updated.telegramEnabled !== undefined ? updated.telegramEnabled : (contact.contactEnabled ?? prev.telegramEnabled),
           telegramUrl: updated.telegramUrl || contact.contactUrl || prev.telegramUrl,
         }));
