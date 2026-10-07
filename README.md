@@ -16,8 +16,6 @@ When deploying this application on Hostinger using hPanel's **Node.js Dashboard*
 | **`FAMUPIGATEWAY_API_KEY`** | Your actual production API Key provided by FamGateway. |
 | **`FAMUPIGATEWAY_WEBHOOK_SECRET`** | Your production webhook verification secret signature provided by FamGateway to verify incoming payment webhooks safely. |
 | **`FAMUPIGATEWAY_EXPIRY_MINUTES`** | Enter `5` (specifies the minutes allowed for the QR code and payment session before expiration). |
-| **`NODE_ENV`** | Enter `production` to run the application in high-performance production mode. |
-| **`PORT`** | The port number your server listens on. Enter `3000` (or use the custom Node.js application port if provided by Hostinger). |
 
 ---
 
