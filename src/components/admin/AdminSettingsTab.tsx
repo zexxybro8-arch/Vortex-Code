@@ -28,9 +28,11 @@ export const AdminSettingsTab: React.FC = () => {
   const [copiedCallback, setCopiedCallback] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  // Sync state if storeSettings loads or updates asynchronously
+  const isInitializedRef = React.useRef(false);
+
+  // Sync state ONLY ONCE upon initial load to prevent background polling from overwriting user typing
   useEffect(() => {
-    if (storeSettings) {
+    if (storeSettings && !isInitializedRef.current) {
       if (storeSettings.storeName) setStoreName(storeSettings.storeName);
       if (storeSettings.subtitle) setSubtitle(storeSettings.subtitle);
       if (storeSettings.supportEmail) setSupportEmail(storeSettings.supportEmail);
@@ -41,6 +43,9 @@ export const AdminSettingsTab: React.FC = () => {
       if (storeSettings.famupigatewayWebhookSecret !== undefined) setFamupigatewayWebhookSecret(storeSettings.famupigatewayWebhookSecret);
       if (storeSettings.famupigatewayExpiryMinutes) setFamupigatewayExpiryMinutes(storeSettings.famupigatewayExpiryMinutes);
       if (storeSettings.appUrl) setAppUrl(storeSettings.appUrl);
+
+      // Mark as initialized so subsequent 3-second background polling ticks don't wipe out typed inputs
+      isInitializedRef.current = true;
     }
   }, [storeSettings]);
 
