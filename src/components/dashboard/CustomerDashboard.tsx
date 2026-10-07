@@ -42,14 +42,14 @@ export const CustomerDashboard: React.FC = () => {
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
-  // Live Products and Unused Redeem Codes from single source of truth (Database)
+  // Live Products and securely masked unused codes from single source of truth (Database)
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [unusedCodes, setUnusedCodes] = useState<ApiRedeemCode[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
 
   const fetchLiveDatabaseData = useCallback(async () => {
     try {
-      // 1. Fetch live products with exact database computed stock
+      // 1. Fetch live products and securely masked unused codes
       const [apiProds, apiCodes] = await Promise.all([
         api.getProducts(),
         api.getRedeemCodes(undefined, 'UNUSED'),
@@ -120,8 +120,8 @@ export const CustomerDashboard: React.FC = () => {
 
   // Build the items to display based on selected denomination
   // For a selected denomination:
-  // Return ALL records where status = "UNUSED" AND matching product/denomination
-  // If 0 UNUSED codes, show the out-of-stock representation for that product
+  // Return records where status = "UNUSED" AND matching product/denomination
+  // Each card displays its unique securely masked prefix, e.g. CSGY AGTS **** ****
   interface DisplayCardItem {
     key: string;
     product: StoreProduct;
@@ -154,7 +154,7 @@ export const CustomerDashboard: React.FC = () => {
             key: `code_${c.id}`,
             product: prod,
             codeRecord: c,
-            maskedCode: c.codeMasked || formatMaskedCode(c.code),
+            maskedCode: c.codeMasked || 'XXXX XXXX **** ****',
             isOutOfStock: false,
             availableStockCount: prod.stock ?? prodUnusedCodes.length,
           });
@@ -191,7 +191,7 @@ export const CustomerDashboard: React.FC = () => {
           key: `code_${c.id}`,
           product: matchingProd!,
           codeRecord: c,
-          maskedCode: c.codeMasked || formatMaskedCode(c.code),
+          maskedCode: c.codeMasked || 'XXXX XXXX **** ****',
           isOutOfStock: false,
           availableStockCount: matchingProd!.stock ?? denomUnusedCodes.length,
         });
@@ -215,6 +215,9 @@ export const CustomerDashboard: React.FC = () => {
       return;
     }
 
+    // Force clear previous checkout and fulfillment states before creating a new unique order
+    setCheckoutData(null);
+    setIsCheckoutModalOpen(false);
     setBuyingProductId(product.id);
     if (codeId) setBuyingCodeId(codeId);
 
@@ -566,7 +569,10 @@ export const CustomerDashboard: React.FC = () => {
 
       <PaymentCheckoutModal
         isOpen={isCheckoutModalOpen}
-        onClose={() => setIsCheckoutModalOpen(false)}
+        onClose={() => {
+          setIsCheckoutModalOpen(false);
+          setCheckoutData(null);
+        }}
         checkoutData={checkoutData}
         onPaymentSuccess={async () => {
           await fetchLiveDatabaseData();
