@@ -41,7 +41,10 @@ export interface PaymentVerificationParams {
 export interface PaymentVerificationResult {
   isValid: boolean;
   orderId: string;
+  gatewayOrderId?: string;
   amount: number;
   transactionId?: string;
+  status?: 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED';
   error?: string;
+  rawGatewayResponse?: any;
 }

@@ -23,12 +23,14 @@ export class PaymentGatewayManager {
   private webhookSecret: string;
   private expiryMinutes: number;
   private isConfigured: boolean;
+  private appUrl: string;
 
   constructor() {
     this.baseUrl = process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api';
     this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc';
     this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f';
     this.expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
+    this.appUrl = process.env.APP_URL || 'https://vortexcode.shop';
     this.isConfigured = Boolean(this.apiKey);
   }
 
@@ -49,6 +51,9 @@ export class PaymentGatewayManager {
     if (settings.famupigatewayExpiryMinutes) {
       this.expiryMinutes = Number(settings.famupigatewayExpiryMinutes) || 5;
     }
+    if (settings.appUrl) {
+      this.appUrl = String(settings.appUrl).trim();
+    }
   }
 
   /**
@@ -56,7 +61,7 @@ export class PaymentGatewayManager {
    */
   public getConfig(): PaymentGatewayConfig {
     return {
-      provider: 'custom',
+      provider: 'famupigateway',
       isConfigured: this.isConfigured,
       currency: 'INR',
       publicKey: undefined,
@@ -81,7 +86,9 @@ export class PaymentGatewayManager {
       };
     }
 
-    const callbackUrl = params.callbackUrl || `https://vortexcode.shop/api/payment/callback?order_id=${params.orderId}`;
+    const cleanAppUrl = (this.appUrl || 'https://vortexcode.shop').replace(/\/+$/, '');
+    const callbackUrl = params.callbackUrl || `${cleanAppUrl}/api/payment/callback?order_id=${params.orderId}`;
+    const webhookUrl = `${cleanAppUrl}/api/payment/webhook`;
 
     try {
       const payload = {
@@ -90,6 +97,8 @@ export class PaymentGatewayManager {
         customer_name: params.customerName || 'Customer',
         customer_mobile: '9876543210',
         callback_url: callbackUrl,
+        redirect_url: callbackUrl,
+        webhook_url: webhookUrl,
         description: `Digital Code - ${params.productName}`,
         expiry_minutes: this.expiryMinutes,
       };
@@ -100,6 +109,7 @@ export class PaymentGatewayManager {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-API-Key': this.apiKey,
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(payload),
       });
@@ -129,13 +139,17 @@ export class PaymentGatewayManager {
 
       const data = resData.data || resData;
       const paymentUrl = data.payment_url || resData.payment_url;
+      const gatewayOrderId = data.order_id || data.id || data.token || params.orderId;
 
       if (!paymentUrl) {
         throw new Error('FamGateway Error: Gateway succeeded but no payment_url was returned');
       }
 
+      // Safe Server Log as requested in STEP 1
+      console.log(`[PAYMENT CREATED]\nlocalTransactionId: ${params.orderId}\nmerchantOrderId: ${params.orderNumber || params.orderId}\ngatewayOrderId: ${gatewayOrderId}\namount: ${params.amount}`);
+
       return {
-        gatewayOrderId: data.order_id || params.orderId,
+        gatewayOrderId,
         amount: Number(data.amount || params.amount),
         currency: 'INR',
         provider: 'famgateway',
@@ -151,12 +165,13 @@ export class PaymentGatewayManager {
   }
 
   /**
-   * Check status of FamGateway order
+   * Check status of FamGateway order with comprehensive identifier support
    */
-  public async checkPaymentStatus(orderId: string): Promise<PaymentVerificationResult> {
+  public async checkPaymentStatus(orderId: string, expectedAmount?: number): Promise<PaymentVerificationResult> {
     if (!this.isConfigured || !this.apiKey) {
       return {
         isValid: false,
+        status: 'PENDING',
         orderId,
         amount: 0,
         error: 'Payment Gateway is not configured with live credentials.',
@@ -164,16 +179,37 @@ export class PaymentGatewayManager {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/check-status`, {
+      // STEP 1 & 2: Safe request logging and exact identifier query
+      const checkEndpoint = `${this.baseUrl}/check-status`;
+      console.log(`[PAYMENT VERIFY REQUEST]\nidentifier being sent: ${orderId}\nverification endpoint: ${checkEndpoint}\namount: ${expectedAmount ?? 'N/A'}`);
+
+      let response = await fetch(checkEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-API-Key': this.apiKey,
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({ order_id: orderId }),
       });
 
+      // Fallback: If POST returns 404, check alternative PHP query endpoints supported by FamGateway
+      if (response.status === 404) {
+        const altEndpoint = `${this.baseUrl}/checkout-status.php?order_id=${encodeURIComponent(orderId)}&api_key=${encodeURIComponent(this.apiKey)}`;
+        const altRes = await fetch(altEndpoint, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'X-API-Key': this.apiKey,
+          },
+        });
+        if (altRes.ok) {
+          response = altRes;
+        }
+      }
+
+      const responseContentType = response.headers.get('content-type') || '';
       const rawText = await response.text();
       let resData: any = null;
       try {
@@ -182,50 +218,108 @@ export class PaymentGatewayManager {
         console.warn(`[FamGateway check-status Parse Notice] Non-JSON for Order ${orderId}:`, rawText.substring(0, 150));
       }
 
+      // STEP 2: Safely log the real sanitized gateway response
+      console.log(`[PAYMENT VERIFY RESPONSE]\nHTTP Status: ${response.status}\nContent-Type: ${responseContentType}\nResponse Body: ${JSON.stringify(resData || rawText.substring(0, 300))}`);
+
       if (!response.ok) {
         return {
           isValid: false,
+          status: 'PENDING',
           orderId,
-          amount: 0,
-          error: resData?.message || resData?.error || `Status query failed with HTTP ${response.status}`,
+          amount: expectedAmount || 0,
+          error: resData?.message || resData?.error || `Status query returned HTTP ${response.status}`,
+          rawGatewayResponse: resData,
         };
       }
 
-      if (!resData || (!resData.status && !resData.success)) {
+      if (!resData) {
         return {
           isValid: false,
+          status: 'PENDING',
           orderId,
-          amount: 0,
-          error: resData?.message || resData?.error || 'Order status query returned false status',
+          amount: expectedAmount || 0,
+          error: 'Empty response returned from gateway status check',
         };
       }
 
       const data = resData.data || resData;
-      const statusStr = String(data.status || '').toUpperCase();
-      const isPaid = statusStr === 'SUCCESS' || statusStr === 'PAID' || statusStr === 'COMPLETED';
+      const rawStatus = data.status !== undefined ? data.status : resData.status;
+      const statusStr = String(rawStatus || '').toUpperCase().trim();
+      const utr = data.utr || data.bank_utr || data.transaction_id || data.txn_id || data.famgateway_id || '';
+      const settledAmount = Number(data.settled_amount || data.amount || resData.amount || expectedAmount || 0);
 
-      if (!isPaid) {
+      const isPaid =
+        statusStr === 'SUCCESS' ||
+        statusStr === 'PAID' ||
+        statusStr === 'COMPLETED' ||
+        statusStr === 'TXN_SUCCESS' ||
+        statusStr === 'CAPTURED' ||
+        (rawStatus === true && !statusStr.includes('FAIL')) ||
+        (typeof utr === 'string' && utr.trim().length >= 6 && statusStr !== 'FAILED' && statusStr !== 'CANCELLED');
+
+      const isFailed =
+        statusStr === 'FAILED' ||
+        statusStr === 'CANCELLED' ||
+        statusStr === 'DECLINED' ||
+        statusStr === 'REJECTED' ||
+        statusStr === 'FAILURE';
+
+      const isExpired = statusStr === 'EXPIRED' || statusStr === 'TIMEOUT';
+
+      if (isPaid) {
         return {
-          isValid: false,
+          isValid: true,
+          status: 'PAID',
           orderId,
-          amount: Number(data.amount || 0),
-          error: `Gateway payment status is ${data.status || 'PENDING'}`,
+          gatewayOrderId: data.order_id || orderId,
+          amount: settledAmount,
+          transactionId: utr || data.transaction_id || data.token || `fam_${orderId}`,
+          rawGatewayResponse: data,
         };
       }
 
+      if (isFailed) {
+        return {
+          isValid: false,
+          status: 'FAILED',
+          orderId,
+          gatewayOrderId: data.order_id || orderId,
+          amount: settledAmount,
+          error: data.message || resData.message || 'Payment was declined or failed on gateway',
+          rawGatewayResponse: data,
+        };
+      }
+
+      if (isExpired) {
+        return {
+          isValid: false,
+          status: 'EXPIRED',
+          orderId,
+          gatewayOrderId: data.order_id || orderId,
+          amount: settledAmount,
+          error: 'Gateway payment session expired',
+          rawGatewayResponse: data,
+        };
+      }
+
+      // STEP 4: Default to PENDING without converting into failed
       return {
-        isValid: true,
+        isValid: false,
+        status: 'PENDING',
         orderId,
-        amount: Number(data.amount || 0),
-        transactionId: data.transaction_id || data.token || `fam_txn_${orderId}`,
+        gatewayOrderId: data.order_id || orderId,
+        amount: settledAmount,
+        error: `Gateway payment status is ${rawStatus || 'PENDING'}`,
+        rawGatewayResponse: data,
       };
     } catch (err: any) {
       console.error(`[FamGateway checkPaymentStatus Exception] Order ${orderId}:`, err.message);
       return {
         isValid: false,
+        status: 'PENDING',
         orderId,
-        amount: 0,
-        error: err.message || 'Status check failed due to server exception',
+        amount: expectedAmount || 0,
+        error: err.message || 'Status check failed due to network exception',
       };
     }
   }

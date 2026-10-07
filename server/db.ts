@@ -151,6 +151,18 @@ export async function getDb(): Promise<Database> {
     // Ignore error if column already exists
   }
 
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_order_id TEXT;`);
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_payment_id TEXT;`);
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+
   // Initialize store settings with default values if not present
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('storeName', 'VORTEX CODE');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('subtitle', 'SECURE DIGITAL STORE');`);
@@ -811,11 +823,13 @@ export async function getOrderByIdOrNumber(identifier: string) {
       delivered_code as deliveredCode, 
       delivered_pin as deliveredPin, 
       payment_method as paymentMethod, 
+      gateway_order_id as gatewayOrderId,
+      gateway_payment_id as gatewayPaymentId,
       created_at as createdAt, 
       updated_at as updatedAt 
     FROM orders 
-    WHERE id = ? OR order_number = ? OR customer_email = ?;`,
-    [clean, clean, clean]
+    WHERE id = ? OR order_number = ? OR gateway_order_id = ? OR customer_email = ?;`,
+    [clean, clean, clean, clean]
   );
 
   if (res.length === 0 || res[0].values.length === 0) return null;
@@ -1069,6 +1083,15 @@ export async function createPendingCheckoutOrder(params: {
     customerEmail: params.customerEmail || 'customer@vortexcode.com',
   });
 
+  // Store gatewayOrderId if returned from gateway
+  if (gatewayOrder.gatewayOrderId) {
+    db.run(
+      `UPDATE orders SET gateway_order_id = ? WHERE id = ?;`,
+      [gatewayOrder.gatewayOrderId, orderId]
+    );
+    saveDb();
+  }
+
   const gatewayConfig = paymentGateway.getConfig();
 
   return {
@@ -1098,7 +1121,7 @@ export async function createPendingCheckoutOrder(params: {
  * 
  * Strict verification flow:
  * 1. Idempotency Check: Prevents duplicate fulfillment
- * 2. Authenticity & Signature check
+ * 2. Authenticity & Status check
  * 3. Atomic UNUSED code selection & status update to SOLD
  * 4. Update order to PAID + DELIVERED
  */
@@ -1119,6 +1142,7 @@ export async function verifyAndFulfillPaymentOrder(params: {
   if (order.paymentStatus === 'PAID' && order.deliveredCode) {
     return {
       success: true,
+      status: 'PAID' as const,
       alreadyFulfilled: true,
       order,
       message: 'Order was already verified and delivered.',
@@ -1130,14 +1154,75 @@ export async function verifyAndFulfillPaymentOrder(params: {
   paymentGateway.updateCredentials(storeSettings);
 
   const gatewayConfig = paymentGateway.getConfig();
-  if (gatewayConfig.isConfigured) {
-    const verifyResult = await paymentGateway.checkPaymentStatus(order.id);
+  let verifiedGatewayPaymentId = params.gatewayPaymentId;
 
-    if (!verifyResult.isValid) {
-      throw new Error(`Payment verification failed: ${verifyResult.error || 'Payment not completed or failed.'}`);
+  if (gatewayConfig.isConfigured && !params.isSimulatedVerification) {
+    const identifierToCheck = order.gatewayOrderId || params.gatewayOrderId || order.id;
+    const verifyResult = await paymentGateway.checkPaymentStatus(identifierToCheck, order.amount);
+
+    // STEP 4: Handle PENDING without converting into failed
+    if (verifyResult.status === 'PENDING') {
+      return {
+        success: false,
+        status: 'PENDING' as const,
+        order,
+        message: 'Payment is currently pending bank/gateway confirmation. Polling in progress.',
+        rawGatewayResponse: verifyResult.rawGatewayResponse,
+      };
     }
-  } else if (!params.isSimulatedVerification) {
-    throw new Error('Payment Gateway not configured. Live transactions require configured gateway credentials.');
+
+    if (verifyResult.status === 'FAILED') {
+      const now = new Date().toISOString();
+      db.run(
+        `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ?;`,
+        [now, order.id]
+      );
+      saveDb();
+      return {
+        success: false,
+        status: 'FAILED' as const,
+        order: await getOrderByIdOrNumber(order.id),
+        message: verifyResult.error || 'Payment was declined or failed on gateway.',
+        rawGatewayResponse: verifyResult.rawGatewayResponse,
+      };
+    }
+
+    if (verifyResult.status === 'EXPIRED') {
+      const now = new Date().toISOString();
+      db.run(
+        `UPDATE orders SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ? WHERE id = ?;`,
+        [now, order.id]
+      );
+      saveDb();
+      return {
+        success: false,
+        status: 'EXPIRED' as const,
+        order: await getOrderByIdOrNumber(order.id),
+        message: 'Gateway payment session expired.',
+        rawGatewayResponse: verifyResult.rawGatewayResponse,
+      };
+    }
+
+    if (!verifyResult.isValid && verifyResult.status !== 'PAID') {
+      return {
+        success: false,
+        status: 'PENDING' as const,
+        order,
+        message: `Gateway status is ${verifyResult.status || 'PENDING'}. Waiting for confirmation.`,
+        rawGatewayResponse: verifyResult.rawGatewayResponse,
+      };
+    }
+
+    if (verifyResult.transactionId) {
+      verifiedGatewayPaymentId = verifyResult.transactionId;
+    }
+  } else if (!params.isSimulatedVerification && !gatewayConfig.isConfigured) {
+    return {
+      success: false,
+      status: 'PENDING' as const,
+      order,
+      message: 'Payment Gateway is not configured with live credentials.',
+    };
   }
 
   // Atomically select ONE UNUSED code for this product from DB
@@ -1176,6 +1261,10 @@ export async function verifyAndFulfillPaymentOrder(params: {
 
   // 2. Mark order PAID & DELIVERED with the exact 16-character code
   const fullCodeFormatted = formatFullCode(assignedCode);
+  const paymentMethodStr = verifiedGatewayPaymentId
+    ? `FamGateway (${verifiedGatewayPaymentId})`
+    : 'Payment Gateway (Verified)';
+
   db.run(
     `UPDATE orders 
      SET payment_status = 'PAID', 
@@ -1184,13 +1273,15 @@ export async function verifyAndFulfillPaymentOrder(params: {
          delivered_code = ?, 
          delivered_pin = ?, 
          payment_method = ?,
+         gateway_payment_id = ?,
          updated_at = ? 
      WHERE id = ?;`,
     [
       assignedCodeId,
       fullCodeFormatted,
       assignedPin,
-      params.gatewayPaymentId ? `Gateway (${params.gatewayPaymentId})` : 'Payment Gateway (Verified)',
+      paymentMethodStr,
+      verifiedGatewayPaymentId || null,
       now,
       order.id,
     ]
@@ -1202,6 +1293,7 @@ export async function verifyAndFulfillPaymentOrder(params: {
 
   return {
     success: true,
+    status: 'PAID' as const,
     order: fulfilledOrder,
     message: 'Payment verified successfully and redeem code delivered.',
   };

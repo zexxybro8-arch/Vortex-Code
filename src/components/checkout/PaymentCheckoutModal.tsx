@@ -43,6 +43,7 @@ export interface CheckoutData {
     webhookConfigured: boolean;
   };
   productImage?: string;
+  isPendingVerification?: boolean;
 }
 
 interface PaymentCheckoutModalProps {
@@ -62,21 +63,45 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [fulfilledOrder, setFulfilledOrder] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const pollTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const pollCountRef = React.useRef(0);
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  React.useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, []);
 
   // Clean and reset any stale order fulfillment and verification states on load/order switch
   React.useEffect(() => {
     if (isOpen) {
+      stopPolling();
       setFulfilledOrder(null);
       setErrorMessage(null);
+      setStatusNotice(null);
       setCopied(false);
       setIsVerifying(false);
+
+      if (checkoutData?.isPendingVerification) {
+        executeVerification();
+      }
     }
-  }, [isOpen, checkoutData?.order?.id]);
+  }, [isOpen, checkoutData?.order?.id, checkoutData?.isPendingVerification]);
 
   const handleClose = () => {
+    stopPolling();
     setFulfilledOrder(null);
     setErrorMessage(null);
+    setStatusNotice(null);
     setCopied(false);
     setIsVerifying(false);
     onClose();
@@ -94,7 +119,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
     setTimeout(() => setCopied(false), 3000);
   };
 
-  const handleSimulatedGatewayVerification = async () => {
+  const executeVerification = async () => {
     setIsVerifying(true);
     setErrorMessage(null);
 
@@ -102,23 +127,79 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
       // Calls server-side verification endpoint
       const result = await api.verifyPayment({
         orderId: order.id,
-        gatewayPaymentId: `pay_${Math.random().toString(36).substring(2, 9)}`,
         gatewayOrderId: checkoutData.gatewayOrder?.gatewayOrderId,
-        isSimulatedVerification: true,
+        isSimulatedVerification: !isGatewayReady,
       });
 
-      if (result.success && result.order) {
+      if (result.status === 'PAID' || result.order?.deliveredCode) {
+        stopPolling();
+        setIsVerifying(false);
+        setStatusNotice(null);
         setFulfilledOrder(result.order);
         addToast('success', 'Payment verified by server! Code attached to order.');
         await refreshCustomerOrders();
         if (onPaymentSuccess) {
           onPaymentSuccess(result.order);
         }
+        return;
+      }
+
+      if (result.status === 'PENDING') {
+        setStatusNotice('Payment in progress — waiting for UPI bank confirmation... (Checking automatically)');
+        if (!pollTimerRef.current) {
+          pollCountRef.current = 0;
+          setIsVerifying(true);
+          pollTimerRef.current = setInterval(async () => {
+            pollCountRef.current += 1;
+            if (pollCountRef.current > 40) {
+              stopPolling();
+              setIsVerifying(false);
+              setStatusNotice('Bank confirmation is taking longer than usual. If money was debited, your code will be added to your Vault shortly.');
+              return;
+            }
+            try {
+              const pollRes = await api.verifyPayment({
+                orderId: order.id,
+                gatewayOrderId: checkoutData.gatewayOrder?.gatewayOrderId,
+                isSimulatedVerification: !isGatewayReady,
+              });
+              if (pollRes.status === 'PAID' || pollRes.order?.deliveredCode) {
+                stopPolling();
+                setIsVerifying(false);
+                setStatusNotice(null);
+                setFulfilledOrder(pollRes.order);
+                addToast('success', 'Payment confirmed! Code delivered.');
+                await refreshCustomerOrders();
+                if (onPaymentSuccess) {
+                  onPaymentSuccess(pollRes.order);
+                }
+              }
+            } catch {
+              // Ignore transient polling notice
+            }
+          }, 3000);
+        }
+        return;
+      }
+
+      if (result.status === 'FAILED') {
+        stopPolling();
+        setIsVerifying(false);
+        setStatusNotice(null);
+        setErrorMessage(result.message || 'Payment was declined or cancelled on gateway.');
+        return;
+      }
+
+      if (result.status === 'EXPIRED') {
+        stopPolling();
+        setIsVerifying(false);
+        setStatusNotice(null);
+        setErrorMessage('Payment session expired.');
+        return;
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Payment verification failed on the server.');
       addToast('error', err.message || 'Payment verification failed.');
-    } finally {
       setIsVerifying(false);
     }
   };
@@ -259,6 +340,14 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </div>
             )}
 
+            {/* In-Progress / Pending Notice */}
+            {statusNotice && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5 font-mono animate-pulse">
+                <RefreshCw className="w-4 h-4 shrink-0 animate-spin text-amber-400" />
+                <span>{statusNotice}</span>
+              </div>
+            )}
+
             {/* 2. PAYMENT METHOD & QR SECTION */}
             <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
               
@@ -336,12 +425,15 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               <div className="pt-2 space-y-2">
                 <button
                   type="button"
-                  onClick={handleSimulatedGatewayVerification}
+                  onClick={() => executeVerification()}
                   disabled={isVerifying}
                   className="w-full py-3.5 px-4 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   {isVerifying ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Checking with Bank & Verifying...</span>
+                    </div>
                   ) : (
                     <>
                       <CheckCircle2 className="w-5 h-5" />

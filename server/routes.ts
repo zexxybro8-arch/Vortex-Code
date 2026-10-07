@@ -387,37 +387,75 @@ router.post('/checkout/verify-payment', async (req, res) => {
 
     res.json(verificationResult);
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || 'Payment verification failed' });
+    res.status(500).json({ success: false, error: err.message || 'Payment verification exception' });
+  }
+});
+
+/**
+ * GET /api/checkout/order-status/:id
+ * Safe public lookup for checkout polling
+ */
+router.get('/checkout/order-status/:id', async (req, res) => {
+  try {
+    const order = await getOrderByIdOrNumber(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    return res.json({
+      success: true,
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        productId: order.productId,
+        productName: order.productName,
+        amount: order.amount,
+        paymentStatus: order.paymentStatus,
+        deliveryStatus: order.deliveryStatus,
+        deliveredCode: order.paymentStatus === 'PAID' ? order.deliveredCode : null,
+        deliveredPin: order.paymentStatus === 'PAID' ? order.deliveredPin : null,
+        paymentMethod: order.paymentMethod,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
 /**
  * GET /api/payment/callback
  * Handles the browser redirect from FamGateway when a customer completes their payment.
- * This route calls verifyAndFulfillPaymentOrder, which triggers a server-to-server check-status API call
- * against FamGateway before assigning and delivering any code.
+ * If status is PENDING, does NOT treat as failure; redirects with payment_pending=true
+ * so client polling can seamlessly finalize verification.
  */
 router.get('/payment/callback', async (req, res) => {
   try {
-    const orderId = req.query.order_id as string;
+    const orderId = (req.query.order_id as string) || (req.query.orderId as string) || '';
     if (!orderId) {
-      return res.status(400).send('<h1>Error: order_id is required.</h1>');
+      return res.redirect('/?payment_failed=true&error=Missing+order_id');
     }
 
     const result = await verifyAndFulfillPaymentOrder({
       orderId,
-      isSimulatedVerification: false, // Forces a live server check status query to FamGateway
+      isSimulatedVerification: false,
     });
 
-    if (result.success) {
-      return res.redirect(`/?payment_success=true&order_id=${orderId}`);
+    if (result.status === 'PAID' || result.success) {
+      return res.redirect(`/?payment_success=true&order_id=${encodeURIComponent(orderId)}`);
+    } else if (result.status === 'PENDING') {
+      // Payment is pending bank settlement! DO NOT FAIL IT!
+      return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
+    } else if (result.status === 'EXPIRED') {
+      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=Payment+session+expired`);
     } else {
-      return res.redirect(`/?payment_failed=true&order_id=${orderId}`);
+      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=${encodeURIComponent(result.message || 'Payment+failed')}`);
     }
   } catch (err: any) {
     console.error('FamGateway redirect callback exception:', err);
-    const orderId = req.query.order_id as string || '';
-    return res.redirect(`/?payment_failed=true&order_id=${orderId}&error=${encodeURIComponent(err.message || 'Verification failed')}`);
+    const orderId = (req.query.order_id as string) || '';
+    return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
   }
 });
 
@@ -522,38 +560,75 @@ router.post('/payment/mock-redirect-complete', async (req, res) => {
 /**
  * POST /api/payment/webhook
  * Incoming gateway webhook verification & idempotent fulfillment
+ * Supports FamGateway native payloads (order_id, status, utr) as well as standard gateways
  */
 router.post('/payment/webhook', async (req, res) => {
   try {
-    const signature = req.headers['x-razorpay-signature'] as string;
-    const rawBody = JSON.stringify(req.body);
+    const signature =
+      (req.headers['x-fam-signature'] as string) ||
+      (req.headers['x-signature'] as string) ||
+      (req.headers['x-webhook-signature'] as string) ||
+      (req.headers['x-razorpay-signature'] as string);
+
+    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
     if (signature) {
       const isValid = paymentGateway.verifyWebhookSignature(rawBody, signature);
       if (!isValid) {
+        console.warn('[FamGateway Webhook] Invalid webhook signature detected.');
         return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
       }
     }
 
-    const event = req.body.event;
-    const paymentEntity = req.body.payload?.payment?.entity;
-    const notes = paymentEntity?.notes || {};
-    const orderId = notes.orderId;
+    const body = req.body || {};
+    const orderId =
+      body.order_id ||
+      body.orderId ||
+      body.data?.order_id ||
+      body.payload?.payment?.entity?.notes?.orderId ||
+      (req.query.order_id as string);
 
-    if (event === 'payment.captured' && orderId) {
+    const rawStatus = body.status || body.data?.status || body.event || '';
+    const statusStr = String(rawStatus).toUpperCase().trim();
+    const utr =
+      body.utr ||
+      body.bank_utr ||
+      body.transaction_id ||
+      body.txn_id ||
+      body.famgateway_id ||
+      body.data?.utr ||
+      body.data?.transaction_id ||
+      body.payload?.payment?.entity?.id ||
+      '';
+
+    console.log(`[FamGateway Webhook Received] Order: ${orderId} | Status: ${statusStr} | UTR: ${utr ? 'YES' : 'NO'}`);
+
+    const isPaid =
+      statusStr === 'SUCCESS' ||
+      statusStr === 'PAID' ||
+      statusStr === 'COMPLETED' ||
+      statusStr === 'TXN_SUCCESS' ||
+      statusStr === 'PAYMENT.CAPTURED' ||
+      (typeof utr === 'string' && utr.trim().length >= 6 && statusStr !== 'FAILED' && statusStr !== 'CANCELLED');
+
+    if (isPaid && orderId) {
       const result = await verifyAndFulfillPaymentOrder({
         orderId,
-        gatewayPaymentId: paymentEntity.id,
-        gatewayOrderId: paymentEntity.order_id,
-        isSimulatedVerification: true,
+        gatewayPaymentId: utr || `fam_hook_${Date.now()}`,
+        isSimulatedVerification: true, // Webhook is authoritative server confirmation
       });
-      return res.json({ status: 'ok', fulfilled: true, result });
+      return res.json({ success: true, status: 'fulfilled', result });
     }
 
-    res.json({ status: 'ignored', message: 'Event not handled' });
+    if (orderId && (statusStr === 'FAILED' || statusStr === 'CANCELLED')) {
+      await updateOrderStatus(orderId, 'FAILED', 'CANCELLED');
+      return res.json({ success: true, status: 'marked_failed' });
+    }
+
+    return res.json({ success: true, status: 'received', message: 'Webhook event recorded' });
   } catch (err: any) {
-    console.error('Webhook processing error:', err);
-    res.status(500).json({ status: 'error', error: err.message });
+    console.error('Webhook processing exception:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

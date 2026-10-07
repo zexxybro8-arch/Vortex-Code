@@ -148,9 +148,33 @@ export const CustomerDashboard: React.FC = () => {
       refreshCustomerOrders();
       // Clean query params so they don't persist on refresh
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('payment_pending') === 'true') {
+      const orderId = params.get('order_id');
+      if (orderId) {
+        addToast('info', 'Payment received! Finalizing bank verification...');
+        api.getCheckoutOrderStatus(orderId).then((res) => {
+          if (res?.success && res.order) {
+            setCheckoutData({
+              order: res.order,
+              gatewayOrder: { gatewayOrderId: res.order.gatewayOrderId || orderId },
+              gatewayConfig: {
+                isConfigured: true,
+                currency: 'INR',
+                merchantName: 'Vortex Digital Store',
+                webhookConfigured: true,
+                provider: 'famupigateway',
+              },
+              productImage: 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
+              isPendingVerification: true,
+            });
+            setIsCheckoutModalOpen(true);
+          }
+        }).catch(() => {});
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
     } else if (params.get('payment_failed') === 'true') {
       const err = params.get('error') || 'Payment failed or cancelled';
-      addToast('error', `Checkout failed: ${err}`);
+      addToast('error', `Checkout notice: ${err}`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [addToast, refreshCustomerOrders]);

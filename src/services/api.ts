@@ -73,7 +73,7 @@ async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promi
     throw new Error(errorMsg);
   }
 
-  if (data && typeof data === 'object' && data.success === false) {
+  if (data && typeof data === 'object' && data.success === false && data.status !== 'PENDING') {
     throw new Error(data.error || data.message || 'Operation failed on server');
   }
 
@@ -298,15 +298,24 @@ export const api = {
     isSimulatedVerification?: boolean;
   }): Promise<{
     success: boolean;
+    status?: 'PAID' | 'PENDING' | 'FAILED' | 'EXPIRED';
     order: any;
     message?: string;
     alreadyFulfilled?: boolean;
+    rawGatewayResponse?: any;
   }> {
     return safeFetchJson('/api/checkout/verify-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+  },
+
+  async getCheckoutOrderStatus(id: string): Promise<{
+    success: boolean;
+    order: any;
+  }> {
+    return safeFetchJson(`/api/checkout/order-status/${encodeURIComponent(id)}`);
   },
 
   // Store Settings
