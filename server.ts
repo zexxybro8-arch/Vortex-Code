@@ -15,9 +15,13 @@ async function bootstrap() {
   const app = express();
   app.use(express.json());
 
-  // Initialize SQLite database
-  await getDb();
-  console.log('Database initialized successfully.');
+  // Health check routes for Cloud Run container probes
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
   // Mount API endpoints
   app.use('/api', apiRouter);
@@ -40,9 +44,18 @@ async function bootstrap() {
     console.log('Serving production static build from dist.');
   }
 
+  // Bind server listener immediately so Cloud Run health checks pass without delay
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Vortex Full-Stack Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // Initialize SQLite database asynchronously in parallel
+  try {
+    await getDb();
+    console.log('Database initialized successfully.');
+  } catch (err) {
+    console.error('Non-fatal database initialization warning:', err);
+  }
 }
 
 bootstrap().catch((err) => {
