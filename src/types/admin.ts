@@ -1,12 +1,25 @@
 export type AdminTab =
   | 'dashboard'
-  | 'customers'
-  | 'products'
+  | 'branding'
   | 'categories'
-  | 'denominations'
   | 'redeem-codes'
+  | 'products'
+  | 'denominations'
   | 'orders'
+  | 'customers'
   | 'settings';
+
+export interface AdminCategory {
+  id: string;
+  name: string;
+  denomination: string;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  productCount?: number;
+  availableStock?: number;
+}
 
 export interface AdminUser {
   id: string;
@@ -69,7 +82,7 @@ export interface AdminRedeemCode {
   denominationRupees: number;
   denomination?: string;
   orderId?: string | null;
-  status: 'AVAILABLE' | 'USED' | 'RESERVED';
+  status: 'AVAILABLE' | 'USED' | 'RESERVED' | 'DISABLED';
   createdAt: string;
   usedByCustomerEmail?: string;
   usedAt?: string;

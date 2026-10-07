@@ -153,6 +153,7 @@ export const api = {
     productId: string;
     code: string;
     pin?: string;
+    status?: string;
   }): Promise<any> {
     return safeFetchJson('/api/redeem-codes', {
       method: 'POST',
@@ -175,7 +176,23 @@ export const api = {
     });
   },
 
-  async updateRedeemCodeStatus(id: string, status: 'UNUSED' | 'RESERVED' | 'SOLD'): Promise<any> {
+  async updateRedeemCode(id: string, updates: {
+    code?: string;
+    pin?: string;
+    status?: string;
+    productId?: string;
+  }): Promise<any> {
+    return safeFetchJson(`/api/redeem-codes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async updateRedeemCodeStatus(id: string, status: 'UNUSED' | 'RESERVED' | 'SOLD' | 'DISABLED'): Promise<any> {
     return safeFetchJson(`/api/redeem-codes/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 
@@ -318,7 +335,7 @@ export const api = {
     return safeFetchJson(`/api/checkout/order-status/${encodeURIComponent(id)}`);
   },
 
-  // Store Settings
+  // Store Settings & Branding
   async getStoreSettings(): Promise<any> {
     try {
       const data = await safeFetchJson('/api/settings');
@@ -335,5 +352,78 @@ export const api = {
       body: JSON.stringify(settings),
     });
     return data.settings;
+  },
+
+  async updateBranding(branding: { logoUrl: string; websiteName: string; tagline: string }): Promise<any> {
+    const data = await safeFetchJson('/api/admin/branding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(branding),
+    });
+    return data.settings;
+  },
+
+  // Categories
+  async getCategories(all = false): Promise<any[]> {
+    try {
+      const url = all ? '/api/categories?all=true' : '/api/categories';
+      const data = await safeFetchJson(url);
+      return data?.categories || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getAdminCategories(): Promise<any[]> {
+    try {
+      const data = await safeFetchJson('/api/admin/categories');
+      return data?.categories || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async createCategory(categoryData: {
+    name: string;
+    denomination: string;
+    enabled?: boolean;
+    sortOrder?: number;
+  }): Promise<any> {
+    const data = await safeFetchJson('/api/admin/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(categoryData),
+    });
+    return data.category;
+  },
+
+  async updateCategory(
+    id: string,
+    categoryData: {
+      name?: string;
+      denomination?: string;
+      enabled?: boolean;
+      sortOrder?: number;
+    }
+  ): Promise<any> {
+    const data = await safeFetchJson(`/api/admin/categories/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(categoryData),
+    });
+    return data.category;
+  },
+
+  async toggleCategory(id: string): Promise<any> {
+    const data = await safeFetchJson(`/api/admin/categories/${encodeURIComponent(id)}/toggle`, {
+      method: 'PATCH',
+    });
+    return data.category;
+  },
+
+  async deleteCategory(id: string): Promise<any> {
+    return safeFetchJson(`/api/admin/categories/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
   },
 };

@@ -102,7 +102,7 @@ export async function getDb(): Promise<Database> {
       product_id TEXT NOT NULL,
       code TEXT NOT NULL,
       pin TEXT,
-      status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD')),
+      status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD', 'DISABLED')),
       order_id TEXT,
       created_at TEXT NOT NULL,
       used_at TEXT,
@@ -143,6 +143,16 @@ export async function getDb(): Promise<Database> {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      denomination TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   try {
@@ -163,9 +173,39 @@ export async function getDb(): Promise<Database> {
     // Ignore error if column already exists
   }
 
+  // Ensure redeem_codes table allows 'DISABLED' status
+  try {
+    const tableSqlRes = dbInstance.exec(`SELECT sql FROM sqlite_master WHERE name = 'redeem_codes';`);
+    const tableSql = (tableSqlRes[0]?.values[0]?.[0] as string) || '';
+    if (tableSql && !tableSql.includes('DISABLED')) {
+      dbInstance.run(`
+        CREATE TABLE redeem_codes_migrated (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL,
+          code TEXT NOT NULL,
+          pin TEXT,
+          status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD', 'DISABLED')),
+          order_id TEXT,
+          created_at TEXT NOT NULL,
+          used_at TEXT,
+          FOREIGN KEY(product_id) REFERENCES products(id)
+        );
+        INSERT INTO redeem_codes_migrated SELECT id, product_id, code, pin, status, order_id, created_at, used_at FROM redeem_codes;
+        DROP TABLE redeem_codes;
+        ALTER TABLE redeem_codes_migrated RENAME TO redeem_codes;
+      `);
+      saveDb();
+    }
+  } catch (migErr) {
+    console.warn('redeem_codes schema migration notice:', migErr);
+  }
+
   // Initialize store settings with default values if not present
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('storeName', 'VORTEX CODE');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('websiteName', 'VORTEX CODE');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('subtitle', 'SECURE DIGITAL STORE');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('tagline', 'SECURE DIGITAL STORE');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('logoUrl', '');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('supportEmail', 'support@vortexcode.com');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('currencySymbol', '₹');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('enableAutoFulfillment', 'true');`);
@@ -176,6 +216,33 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayWebhookSecret', '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f');`);
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayExpiryMinutes', '5');`);
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
+
+  // Seed default categories if empty
+  try {
+    const catCheck = dbInstance.exec(`SELECT count(*) as count FROM categories;`);
+    const catCount = catCheck.length > 0 && catCheck[0].values.length > 0 ? (catCheck[0].values[0][0] as number) : 0;
+    if (catCount === 0) {
+      const nowIso = new Date().toISOString();
+      const defaultCategories = [
+        { id: 'cat_100', name: '₹100 Recharge', denomination: '₹100', sort_order: 1 },
+        { id: 'cat_120', name: '₹120 Recharge', denomination: '₹120', sort_order: 2 },
+        { id: 'cat_150', name: '₹150 Recharge', denomination: '₹150', sort_order: 3 },
+        { id: 'cat_200', name: '₹200 Recharge', denomination: '₹200', sort_order: 4 },
+        { id: 'cat_300', name: '₹300 Recharge', denomination: '₹300', sort_order: 5 },
+        { id: 'cat_500', name: '₹500 Recharge', denomination: '₹500', sort_order: 6 },
+        { id: 'cat_700', name: '₹700 Recharge', denomination: '₹700', sort_order: 7 },
+        { id: 'cat_900', name: '₹900 Recharge', denomination: '₹900', sort_order: 8 },
+      ];
+      for (const cat of defaultCategories) {
+        dbInstance.run(
+          `INSERT OR IGNORE INTO categories (id, name, denomination, enabled, sort_order, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?);`,
+          [cat.id, cat.name, cat.denomination, cat.sort_order, nowIso, nowIso]
+        );
+      }
+    }
+  } catch (e) {
+    console.error('Category seeding error:', e);
+  }
 
   // Check if products table is empty or needs normalization
   const prodCheck = dbInstance.exec(`SELECT count(*) as count FROM products;`);
@@ -406,8 +473,26 @@ function seedInitialData(db: Database) {
 
 // Database helper operations with immediate persistence to disk
 
-export async function getAllProducts() {
+export async function getAllProducts(includeDisabled = true) {
   const db = await getDb();
+
+  // Retrieve disabled categories to enforce filtering
+  const disabledCatsRes = db.exec(`SELECT denomination FROM categories WHERE enabled = 0;`);
+  const disabledDenoms = new Set<string>();
+  if (disabledCatsRes.length > 0 && disabledCatsRes[0].values.length > 0) {
+    disabledCatsRes[0].values.forEach((row) => {
+      const d = String(row[0] || '').trim();
+      if (d) {
+        disabledDenoms.add(d);
+        const digits = d.replace(/\D/g, '');
+        if (digits) {
+          disabledDenoms.add(`₹${digits}`);
+          disabledDenoms.add(digits);
+        }
+      }
+    });
+  }
+
   const query = `
     SELECT 
       p.id, 
@@ -434,16 +519,30 @@ export async function getAllProducts() {
   if (res.length === 0) return [];
 
   const columns = res[0].columns;
-  return res[0].values.map((row) => {
+  let items = res[0].values.map((row) => {
     const obj: any = {};
     columns.forEach((col, idx) => {
       obj[col] = row[idx];
     });
-    // Calculate stockStatus directly from database UNUSED count
+
     obj.enabled = Boolean(obj.enabled);
     obj.stock = Number(obj.stock);
     obj.soldCount = Number(obj.soldCount);
     obj.totalCodes = Number(obj.totalCodes);
+
+    const denomClean = String(obj.denomination || '').trim();
+    const priceStr = String(obj.price || '');
+    const isCatDisabled =
+      disabledDenoms.has(denomClean) ||
+      disabledDenoms.has(`₹${denomClean.replace(/\D/g, '')}`) ||
+      disabledDenoms.has(priceStr);
+
+    obj.categoryDisabled = isCatDisabled;
+    if (isCatDisabled) {
+      obj.enabled = false;
+    }
+
+    // Calculate stockStatus directly from database UNUSED count
     obj.stockStatus = !obj.enabled
       ? 'DISABLED'
       : obj.stock > 0
@@ -451,10 +550,16 @@ export async function getAllProducts() {
       : 'OUT OF STOCK';
     return obj;
   });
+
+  if (!includeDisabled) {
+    items = items.filter((p) => p.enabled && !p.categoryDisabled);
+  }
+
+  return items;
 }
 
-export async function getProductById(id: string) {
-  const products = await getAllProducts();
+export async function getProductById(id: string, includeDisabled = true) {
+  const products = await getAllProducts(includeDisabled);
   return products.find((p: any) => p.id === id) || null;
 }
 
@@ -526,6 +631,182 @@ export async function deleteOrDisableProduct(id: string) {
   db.run(`UPDATE products SET enabled = 0, updated_at = ? WHERE id = ?;`, [now, id]);
   saveDb();
   return { success: true, message: `Product ${id} disabled successfully` };
+}
+
+// ===================== RECHARGE CATEGORIES =====================
+
+export interface DatabaseCategory {
+  id: string;
+  name: string;
+  denomination: string;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  productCount?: number;
+  availableStock?: number;
+}
+
+export async function isDenominationDisabled(denomination: string): Promise<boolean> {
+  if (!denomination) return false;
+  const db = await getDb();
+  const clean = denomination.trim();
+  const digits = clean.replace(/\D/g, '');
+  const res = db.exec(
+    `SELECT enabled FROM categories WHERE denomination = ? OR denomination = ? OR denomination = ?;`,
+    [clean, `₹${digits}`, digits]
+  );
+  if (res.length > 0 && res[0].values.length > 0) {
+    const isEnabled = Boolean(res[0].values[0][0]);
+    return !isEnabled;
+  }
+  return false;
+}
+
+export async function getAllCategories(includeDisabled = true) {
+  const db = await getDb();
+  let sql = `
+    SELECT 
+      c.id, 
+      c.name, 
+      c.denomination, 
+      c.enabled, 
+      c.sort_order as sortOrder, 
+      c.created_at as createdAt, 
+      c.updated_at as updatedAt,
+      COUNT(DISTINCT p.id) as productCount,
+      COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as availableStock
+    FROM categories c
+    LEFT JOIN products p ON (p.denomination = c.denomination OR p.denomination = '₹' || REPLACE(c.denomination, '₹', ''))
+    LEFT JOIN redeem_codes r ON p.id = r.product_id
+  `;
+
+  if (!includeDisabled) {
+    sql += ` WHERE c.enabled = 1`;
+  }
+
+  sql += ` GROUP BY c.id ORDER BY c.sort_order ASC, c.name ASC;`;
+
+  const res = db.exec(sql);
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    obj.enabled = Boolean(obj.enabled);
+    obj.sortOrder = Number(obj.sortOrder);
+    obj.productCount = Number(obj.productCount || 0);
+    obj.availableStock = Number(obj.availableStock || 0);
+    return obj;
+  });
+}
+
+export async function getCategoryById(id: string) {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT id, name, denomination, enabled, sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt FROM categories WHERE id = ?;`,
+    [id.trim()]
+  );
+  if (res.length === 0 || res[0].values.length === 0) return null;
+  const columns = res[0].columns;
+  const row = res[0].values[0];
+  const obj: any = {};
+  columns.forEach((col, idx) => {
+    obj[col] = row[idx];
+  });
+  obj.enabled = Boolean(obj.enabled);
+  obj.sortOrder = Number(obj.sortOrder);
+  return obj;
+}
+
+export async function createCategory(data: {
+  name: string;
+  denomination: string;
+  enabled?: boolean;
+  sortOrder?: number;
+}) {
+  const db = await getDb();
+  const cleanDenom = data.denomination.trim().startsWith('₹')
+    ? data.denomination.trim()
+    : `₹${data.denomination.trim().replace(/\D/g, '') || data.denomination.trim()}`;
+  const digits = cleanDenom.replace(/\D/g, '') || Math.random().toString(36).substring(2, 6);
+  const id = `cat_${digits}_${Math.random().toString(36).substring(2, 5)}`;
+  const now = new Date().toISOString();
+  const enabledInt = data.enabled !== false ? 1 : 0;
+  const sortOrder = Number(data.sortOrder ?? 0);
+
+  db.run(
+    `INSERT INTO categories (id, name, denomination, enabled, sort_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [id, data.name.trim(), cleanDenom, enabledInt, sortOrder, now, now]
+  );
+  saveDb();
+  return getCategoryById(id);
+}
+
+export async function updateCategory(
+  id: string,
+  updates: {
+    name?: string;
+    denomination?: string;
+    enabled?: boolean;
+    sortOrder?: number;
+  }
+) {
+  const db = await getDb();
+  const existing = await getCategoryById(id);
+  if (!existing) {
+    throw new Error(`Category with ID "${id}" not found.`);
+  }
+
+  const name = updates.name !== undefined ? updates.name.trim() : existing.name;
+  let denomination = existing.denomination;
+  if (updates.denomination !== undefined) {
+    const d = updates.denomination.trim();
+    denomination = d.startsWith('₹') ? d : `₹${d.replace(/\D/g, '') || d}`;
+  }
+  const enabledInt = updates.enabled !== undefined ? (updates.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
+  const sortOrder = updates.sortOrder !== undefined ? Number(updates.sortOrder) : existing.sortOrder;
+  const now = new Date().toISOString();
+
+  db.run(
+    `UPDATE categories SET name = ?, denomination = ?, enabled = ?, sort_order = ?, updated_at = ? WHERE id = ?;`,
+    [name, denomination, enabledInt, sortOrder, now, id]
+  );
+  saveDb();
+  return getCategoryById(id);
+}
+
+export async function toggleCategoryStatus(id: string) {
+  const db = await getDb();
+  const existing = await getCategoryById(id);
+  if (!existing) {
+    throw new Error(`Category with ID "${id}" not found.`);
+  }
+
+  const nextEnabled = existing.enabled ? 0 : 1;
+  const now = new Date().toISOString();
+
+  db.run(
+    `UPDATE categories SET enabled = ?, updated_at = ? WHERE id = ?;`,
+    [nextEnabled, now, id]
+  );
+  saveDb();
+  return getCategoryById(id);
+}
+
+export async function deleteCategory(id: string) {
+  const db = await getDb();
+  const existing = await getCategoryById(id);
+  if (!existing) {
+    throw new Error(`Category with ID "${id}" not found.`);
+  }
+
+  db.run(`DELETE FROM categories WHERE id = ?;`, [id]);
+  saveDb();
+  return { success: true, message: `Category ${id} deleted successfully.` };
 }
 
 export function normalizeCode(raw: string): string {
@@ -601,9 +882,15 @@ export async function getRedeemCodes(productId?: string, status?: string, denomi
     sql += ` AND r.product_id = ?`;
     params.push(productId);
   }
-  if (status) {
+  if (status && status !== 'ALL') {
+    let dbStatus = status;
+    const s = String(status).toUpperCase();
+    if (s === 'AVAILABLE' || s === 'UNUSED') dbStatus = 'UNUSED';
+    else if (s === 'USED' || s === 'SOLD') dbStatus = 'SOLD';
+    else if (s === 'RESERVED') dbStatus = 'RESERVED';
+    else if (s === 'DISABLED') dbStatus = 'DISABLED';
     sql += ` AND r.status = ?`;
-    params.push(status);
+    params.push(dbStatus);
   }
   if (denomination && denomination !== 'ALL VALUES') {
     const cleanDenom = denomination.trim();
@@ -635,6 +922,7 @@ export async function addRedeemCode(data: {
   productId: string;
   code: string;
   pin?: string;
+  status?: string;
 }) {
   const db = await getDb();
   const validation = validateCode(data.code);
@@ -651,10 +939,21 @@ export async function addRedeemCode(data: {
   const now = new Date().toISOString();
   const pin = data.pin?.trim() || Math.floor(1000 + Math.random() * 9000).toString();
 
+  let status = 'UNUSED';
+  if (data.status) {
+    const s = String(data.status).toUpperCase();
+    if (s === 'AVAILABLE' || s === 'UNUSED') status = 'UNUSED';
+    else if (s === 'USED' || s === 'SOLD') status = 'SOLD';
+    else if (s === 'RESERVED') status = 'RESERVED';
+    else if (s === 'DISABLED') status = 'DISABLED';
+  }
+
+  const usedAt = status === 'SOLD' ? now : null;
+
   db.run(
     `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, created_at, used_at)
-     VALUES (?, ?, ?, ?, 'UNUSED', NULL, ?, NULL);`,
-    [id, data.productId, cleanCode, pin, now]
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?);`,
+    [id, data.productId, cleanCode, pin, status, now, usedAt]
   );
   saveDb();
   return {
@@ -664,7 +963,7 @@ export async function addRedeemCode(data: {
     codeFull: formatFullCode(cleanCode),
     codeMasked: maskCode(cleanCode),
     pin,
-    status: 'UNUSED',
+    status,
     createdAt: now,
   };
 }
@@ -741,6 +1040,75 @@ export async function updateRedeemCodeStatus(id: string, status: 'UNUSED' | 'RES
   );
   saveDb();
   return { id, status, updatedAt: now };
+}
+
+export async function updateRedeemCode(
+  id: string,
+  updates: {
+    code?: string;
+    pin?: string;
+    status?: string;
+    productId?: string;
+  }
+) {
+  const db = await getDb();
+  const cleanId = id.trim();
+  const check = db.exec(`SELECT id, code, pin, status, product_id FROM redeem_codes WHERE id = ?;`, [cleanId]);
+  if (check.length === 0 || check[0].values.length === 0) {
+    throw new Error(`Redeem code with ID "${cleanId}" not found in database.`);
+  }
+
+  const row = check[0].values[0];
+  let code = row[1] as string;
+  let pin = (row[2] as string) || '';
+  let status = row[3] as string;
+  let productId = row[4] as string;
+
+  if (updates.code) {
+    const validation = validateCode(updates.code);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid code. Must be exactly 16 characters.');
+    }
+    code = validation.normalized;
+  }
+
+  if (updates.pin !== undefined) {
+    pin = updates.pin.trim();
+  }
+
+  if (updates.status) {
+    const s = String(updates.status).toUpperCase();
+    if (s === 'AVAILABLE' || s === 'UNUSED') status = 'UNUSED';
+    else if (s === 'USED' || s === 'SOLD') status = 'SOLD';
+    else if (s === 'RESERVED') status = 'RESERVED';
+    else if (s === 'DISABLED') status = 'DISABLED';
+  }
+
+  if (updates.productId) {
+    const prod = await getProductById(updates.productId);
+    if (!prod) throw new Error(`Product ${updates.productId} not found`);
+    productId = updates.productId;
+  }
+
+  const now = new Date().toISOString();
+  const usedAt = status === 'SOLD' ? now : null;
+
+  db.run(
+    `UPDATE redeem_codes SET code = ?, pin = ?, status = ?, product_id = ?, used_at = ? WHERE id = ?;`,
+    [code, pin, status, productId, usedAt, cleanId]
+  );
+  saveDb();
+
+  return {
+    id: cleanId,
+    productId,
+    code,
+    codeFull: formatFullCode(code),
+    codeMasked: maskCode(code),
+    pin,
+    status,
+    updatedAt: now,
+  };
 }
 
 export async function deleteRedeemCode(id: string, force?: boolean) {
@@ -920,8 +1288,11 @@ export async function purchaseProductDirect(params: {
     throw new Error('Associated product not found');
   }
 
-  if (!product.enabled) {
-    throw new Error('This product is currently disabled and cannot be purchased.');
+  const isCatDisabledForDirect = await isDenominationDisabled(product.denomination);
+  if (!product.enabled || isCatDisabledForDirect) {
+    const err: any = new Error('This recharge category is currently unavailable.');
+    err.statusCode = 400;
+    throw err;
   }
 
   const now = new Date().toISOString();
@@ -1000,8 +1371,11 @@ export async function createPendingCheckoutOrder(params: {
     throw new Error('Product not found in database.');
   }
 
-  if (!product.enabled) {
-    throw new Error('This product is currently disabled and unavailable for checkout.');
+  const isCatDisabled = await isDenominationDisabled(product.denomination);
+  if (!product.enabled || isCatDisabled) {
+    const err: any = new Error('This recharge category is currently unavailable.');
+    err.statusCode = 400;
+    throw err;
   }
 
   // Stock verification: count available UNUSED codes
@@ -1381,7 +1755,10 @@ export async function getStoreSettings() {
   const res = db.exec(`SELECT key, value FROM store_settings;`);
   const settings: Record<string, any> = {
     storeName: 'VORTEX CODE',
+    websiteName: 'VORTEX CODE',
     subtitle: 'SECURE DIGITAL STORE',
+    tagline: 'SECURE DIGITAL STORE',
+    logoUrl: '',
     supportEmail: 'support@vortexcode.com',
     currencySymbol: '₹',
     enableAutoFulfillment: true,
@@ -1406,16 +1783,38 @@ export async function getStoreSettings() {
     });
   }
 
+  // Ensure websiteName and storeName, tagline and subtitle sync
+  if (settings.websiteName && !settings.storeName) settings.storeName = settings.websiteName;
+  if (settings.storeName && !settings.websiteName) settings.websiteName = settings.storeName;
+  if (settings.tagline && !settings.subtitle) settings.subtitle = settings.tagline;
+  if (settings.subtitle && !settings.tagline) settings.tagline = settings.subtitle;
+
   return settings;
 }
 
 export async function updateStoreSettings(updates: Record<string, any>) {
   const db = await getDb();
-  for (const [key, value] of Object.entries(updates)) {
-    db.run(
-      `INSERT OR REPLACE INTO store_settings (key, value) VALUES (?, ?);`,
-      [key, String(value)]
-    );
+  const normalizedUpdates: Record<string, any> = { ...updates };
+  if (normalizedUpdates.websiteName && !normalizedUpdates.storeName) {
+    normalizedUpdates.storeName = normalizedUpdates.websiteName;
+  }
+  if (normalizedUpdates.storeName && !normalizedUpdates.websiteName) {
+    normalizedUpdates.websiteName = normalizedUpdates.storeName;
+  }
+  if (normalizedUpdates.tagline && !normalizedUpdates.subtitle) {
+    normalizedUpdates.subtitle = normalizedUpdates.tagline;
+  }
+  if (normalizedUpdates.subtitle && !normalizedUpdates.tagline) {
+    normalizedUpdates.tagline = normalizedUpdates.subtitle;
+  }
+
+  for (const [key, value] of Object.entries(normalizedUpdates)) {
+    if (value !== undefined) {
+      db.run(
+        `INSERT OR REPLACE INTO store_settings (key, value) VALUES (?, ?);`,
+        [key, String(value)]
+      );
+    }
   }
   saveDb();
   return getStoreSettings();

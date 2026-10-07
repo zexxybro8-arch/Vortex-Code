@@ -45,6 +45,7 @@ export const CustomerDashboard: React.FC = () => {
   // Live Products and securely masked unused codes from single source of truth (Database)
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [unusedCodes, setUnusedCodes] = useState<ApiRedeemCode[]>([]);
+  const [activeCategories, setActiveCategories] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
 
@@ -75,14 +76,19 @@ export const CustomerDashboard: React.FC = () => {
   const fetchLiveDatabaseData = useCallback(async () => {
     const currentRequestId = ++fetchRequestIdRef.current;
     try {
-      // Fetch live products and securely masked unused codes from single source of truth
-      const [apiProds, apiCodes] = await Promise.all([
+      // Fetch live products, unused codes, and active categories from database
+      const [apiProds, apiCodes, apiCats] = await Promise.all([
         api.getProducts(),
         api.getRedeemCodes(undefined, 'UNUSED'),
+        api.getCategories(false),
       ]);
 
       // Ignore out-of-order stale response
       if (currentRequestId !== fetchRequestIdRef.current) return;
+
+      if (Array.isArray(apiCats)) {
+        setActiveCategories(apiCats);
+      }
 
       if (Array.isArray(apiProds)) {
         const mapped: StoreProduct[] = apiProds.map((p) => {
@@ -179,11 +185,29 @@ export const CustomerDashboard: React.FC = () => {
     }
   }, [addToast, refreshCustomerOrders]);
 
-  const defaultDenominations = ['ALL VALUES', '₹100', '₹120', '₹150', '₹200', '₹300', '₹500', '₹700', '₹900'];
-  const extraDenoms = products
-    .map((p) => p.denomination)
-    .filter((d) => d && !defaultDenominations.includes(d));
-  const denominations = [...defaultDenominations, ...Array.from(new Set(extraDenoms))];
+  // Dynamically compute active denominations strictly from enabled categories and enabled products
+  const categoryDenominations = activeCategories
+    .filter((c) => c.enabled !== false)
+    .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+    .map((c) => c.denomination);
+
+  const productDenominations = products
+    .filter((p) => p.enabled)
+    .map((p) => p.denomination);
+
+  const activeDenomsList =
+    categoryDenominations.length > 0
+      ? categoryDenominations
+      : Array.from(new Set(productDenominations));
+
+  const denominations = ['ALL VALUES', ...activeDenomsList];
+
+  // Auto-reset filter if active category was disabled while user was viewing it
+  useEffect(() => {
+    if (selectedDenomination !== 'ALL VALUES' && !denominations.includes(selectedDenomination)) {
+      setSelectedDenomination('ALL VALUES');
+    }
+  }, [denominations, selectedDenomination]);
 
   // Helper to get total UNUSED stock count for any denomination button with 100% mathematical consistency
   const getDenominationStockCount = useCallback((denom: string): number => {
@@ -197,9 +221,9 @@ export const CustomerDashboard: React.FC = () => {
     }
 
     const matchingProd = products.find(
-      (p) => p.denomination === denom || p.denomination === `₹${denom.replace(/\D/g, '')}`
+      (p) => p.enabled && (p.denomination === denom || p.denomination === `₹${denom.replace(/\D/g, '')}`)
     );
-    if (!matchingProd || matchingProd.enabled === false) return 0;
+    if (!matchingProd) return 0;
     const pCodes = getUnusedCodesForProduct(matchingProd, unusedCodes);
     return pCodes.length > 0 ? pCodes.length : (matchingProd.stock ?? 0);
   }, [products, unusedCodes, getUnusedCodesForProduct]);
@@ -218,11 +242,12 @@ export const CustomerDashboard: React.FC = () => {
 
   const targetProducts =
     selectedDenomination === 'ALL VALUES'
-      ? products
+      ? products.filter((p) => p.enabled)
       : products.filter(
           (p) =>
-            p.denomination === selectedDenomination ||
-            p.denomination === `₹${selectedDenomination.replace(/\D/g, '')}`
+            p.enabled &&
+            (p.denomination === selectedDenomination ||
+              p.denomination === `₹${selectedDenomination.replace(/\D/g, '')}`)
         );
 
   targetProducts.forEach((prod) => {
@@ -264,7 +289,21 @@ export const CustomerDashboard: React.FC = () => {
 
   const handleBuyNow = async (product: StoreProduct, codeId?: string) => {
     if (product.enabled === false) {
-      addToast('error', 'This item is currently unavailable.');
+      addToast('error', 'This recharge category is currently unavailable.');
+      return;
+    }
+
+    const isCategoryDisabled =
+      activeCategories.length > 0 &&
+      !activeCategories.some(
+        (c) =>
+          c.enabled !== false &&
+          (c.denomination === product.denomination ||
+            c.denomination === `₹${product.denomination.replace(/\D/g, '')}`)
+      );
+
+    if (isCategoryDisabled) {
+      addToast('error', 'This recharge category is currently unavailable.');
       return;
     }
 

@@ -7,6 +7,7 @@ import {
   AdminCustomer,
   AdminPayment,
   AdminRedeemCode,
+  AdminCategory,
 } from '../types/admin';
 import { StoreProduct } from '../types';
 import { adminAuthService, AdminLoginCredentials } from '../services/adminAuthService';
@@ -56,7 +57,14 @@ function mapApiCodeToAdmin(c: any): AdminRedeemCode {
     denominationRupees: c.denomination ? Number(c.denomination.replace(/\D/g, '')) || 100 : 100,
     denomination: c.denomination,
     orderId: c.orderId,
-    status: c.status === 'UNUSED' ? 'AVAILABLE' : c.status === 'SOLD' ? 'USED' : 'RESERVED',
+    status:
+      c.status === 'UNUSED' || c.status === 'AVAILABLE'
+        ? 'AVAILABLE'
+        : c.status === 'SOLD' || c.status === 'USED'
+        ? 'USED'
+        : c.status === 'DISABLED'
+        ? 'DISABLED'
+        : 'RESERVED',
     createdAt: c.createdAt ? c.createdAt.substring(0, 10) : new Date().toISOString().substring(0, 10),
     usedAt: c.usedAt || undefined,
   };
@@ -90,11 +98,24 @@ interface AdminContextType {
   updateProduct: (id: string, updated: Partial<StoreProduct>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
 
+  // Categories
+  categories: AdminCategory[];
+  addCategory: (cat: { name: string; denomination: string; enabled?: boolean; sortOrder?: number }) => Promise<any>;
+  updateCategory: (id: string, updates: Partial<AdminCategory>) => Promise<any>;
+  toggleCategory: (id: string) => Promise<any>;
+  deleteCategory: (id: string) => Promise<any>;
+
   // Redeem Codes
   redeemCodes: AdminRedeemCode[];
   addRedeemCodes: (newCodes: Omit<AdminRedeemCode, 'id'>[]) => Promise<void>;
-  addSingleRedeemCode: (productId: string, code: string, pin?: string) => Promise<any>;
+  addSingleRedeemCode: (
+    productId: string,
+    code: string,
+    pin?: string,
+    status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'
+  ) => Promise<any>;
   addBulkRedeemCodes: (productId: string, codesText: string) => Promise<any>;
+  updateRedeemCode: (id: string, updates: any) => Promise<any>;
   deleteRedeemCode: (id: string, force?: boolean) => Promise<any>;
 
   // Orders
@@ -108,10 +129,13 @@ interface AdminContextType {
   // Payments
   payments: AdminPayment[];
 
-  // Settings
+  // Settings & Branding
   storeSettings: {
     storeName: string;
+    websiteName: string;
     subtitle: string;
+    tagline: string;
+    logoUrl: string;
     supportEmail: string;
     currencySymbol: string;
     enableAutoFulfillment: boolean;
@@ -122,6 +146,7 @@ interface AdminContextType {
     appUrl: string;
   };
   updateStoreSettings: (newSettings: any) => void;
+  updateBranding: (branding: { logoUrl: string; websiteName: string; tagline: string }) => Promise<any>;
 
   stats: AdminDashboardStats;
   refreshData: () => Promise<void>;
@@ -211,7 +236,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [storeSettings, setStoreSettings] = useState({
     storeName: 'VORTEX CODE',
+    websiteName: 'VORTEX CODE',
     subtitle: 'SECURE DIGITAL STORE',
+    tagline: 'SECURE DIGITAL STORE',
+    logoUrl: '',
     supportEmail: 'support@vortexcode.com',
     currencySymbol: '₹',
     enableAutoFulfillment: true,
@@ -221,6 +249,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     famupigatewayExpiryMinutes: 5,
     appUrl: 'https://vortexcode.shop',
   });
+
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
 
   const setAdminTab = (tab: AdminTab) => {
     setAdminTabInternal(tab);
@@ -244,7 +274,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshData = useCallback(async () => {
     if (!adminUser) return; // Securely skip if not authenticated
     try {
-      const [apiProducts, apiCodes, apiOrders, apiSettings] = await Promise.all([
+      const [apiProducts, apiCodes, apiOrders, apiSettings, apiCats] = await Promise.all([
         api.getProducts().catch((err) => {
           console.error('Failed to load products from API:', err);
           return [];
@@ -261,6 +291,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           console.error('Failed to load store settings from API:', err);
           return null;
         }),
+        api.getAdminCategories().catch((err) => {
+          console.error('Failed to load categories from API:', err);
+          return [];
+        }),
       ]);
 
       if (apiProducts && apiProducts.length > 0) {
@@ -274,6 +308,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       if (apiSettings) {
         setStoreSettings(apiSettings);
+      }
+      if (apiCats) {
+        setCategories(apiCats);
       }
     } catch (err) {
       console.error('Error refreshing admin data from DB:', err);
@@ -391,10 +428,15 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Real Database Redeem Codes Actions
-  const addSingleRedeemCode = async (productId: string, code: string, pin?: string) => {
+  const addSingleRedeemCode = async (
+    productId: string,
+    code: string,
+    pin?: string,
+    status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'
+  ) => {
     setIsLoading(true);
     try {
-      const result = await api.addRedeemCode({ productId, code, pin });
+      const result = await api.addRedeemCode({ productId, code, pin, status });
       await refreshData();
       return result;
     } finally {
@@ -406,6 +448,25 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsLoading(true);
     try {
       const result = await api.addBulkRedeemCodes(productId, codesText);
+      await refreshData();
+      return result;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateRedeemCode = async (
+    id: string,
+    updates: {
+      code?: string;
+      pin?: string;
+      status?: string;
+      productId?: string;
+    }
+  ) => {
+    setIsLoading(true);
+    try {
+      const result = await api.updateRedeemCode(id, updates);
       await refreshData();
       return result;
     } finally {
@@ -469,6 +530,54 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   };
 
+  const addCategory = async (catData: {
+    name: string;
+    denomination: string;
+    enabled?: boolean;
+    sortOrder?: number;
+  }) => {
+    setIsLoading(true);
+    try {
+      const created = await api.createCategory(catData);
+      await refreshData();
+      return created;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateCategory = async (id: string, updates: Partial<AdminCategory>) => {
+    setIsLoading(true);
+    try {
+      const updated = await api.updateCategory(id, updates);
+      await refreshData();
+      return updated;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleCategory = async (id: string) => {
+    try {
+      const toggled = await api.toggleCategory(id);
+      await refreshData();
+      return toggled;
+    } catch (err) {
+      console.error('Failed to toggle category:', err);
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.deleteCategory(id);
+      await refreshData();
+      return res;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const updateStoreSettings = async (newSettings: any) => {
     setIsLoading(true);
     try {
@@ -479,6 +588,19 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } catch (err: any) {
       console.error('Failed to save settings:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateBranding = async (branding: { logoUrl: string; websiteName: string; tagline: string }) => {
+    setIsLoading(true);
+    try {
+      const updated = await api.updateBranding(branding);
+      if (updated) {
+        setStoreSettings((prev) => ({ ...prev, ...updated }));
+      }
+      return updated;
     } finally {
       setIsLoading(false);
     }
@@ -520,10 +642,16 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addProduct,
         updateProduct,
         deleteProduct,
+        categories,
+        addCategory,
+        updateCategory,
+        toggleCategory,
+        deleteCategory,
         redeemCodes,
         addRedeemCodes,
         addSingleRedeemCode,
         addBulkRedeemCodes,
+        updateRedeemCode,
         deleteRedeemCode,
         orders,
         updateOrderStatus,
@@ -532,6 +660,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         payments,
         storeSettings,
         updateStoreSettings,
+        updateBranding,
         stats,
         refreshData,
       }}

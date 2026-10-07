@@ -5,6 +5,7 @@ import { Logo } from '../common/Logo';
 import { AdminDashboardTab } from './AdminDashboardTab';
 import { AdminProductsTab } from './AdminProductsTab';
 import { AdminCategoriesTab } from './AdminCategoriesTab';
+import { AdminBrandingTab } from './AdminBrandingTab';
 import { AdminDenominationsTab } from './AdminDenominationsTab';
 import { AdminRedeemCodesTab } from './AdminRedeemCodesTab';
 import { AdminOrdersTab } from './AdminOrdersTab';
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   ChevronRight,
   Globe,
+  Sparkles,
 } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
@@ -33,13 +35,13 @@ export const AdminLayout: React.FC = () => {
 
   const menuItems: Array<{ id: AdminTab; label: string; icon: React.ReactNode }> = [
     { id: 'dashboard', label: 'Dashboard Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'customers', label: 'Registered Users', icon: <Users className="w-4 h-4" /> },
-    { id: 'products', label: 'Products & Pricing', icon: <ShoppingBag className="w-4 h-4" /> },
-    { id: 'categories', label: 'Categories', icon: <Tag className="w-4 h-4" /> },
-    { id: 'denominations', label: 'Denominations', icon: <Layers className="w-4 h-4" /> },
+    { id: 'branding', label: 'Branding & Logo', icon: <Sparkles className="w-4 h-4" /> },
+    { id: 'categories', label: 'Recharge Categories', icon: <Layers className="w-4 h-4" /> },
     { id: 'redeem-codes', label: 'Redeem Codes (Stock)', icon: <Key className="w-4 h-4" /> },
+    { id: 'products', label: 'Products & Pricing', icon: <ShoppingBag className="w-4 h-4" /> },
     { id: 'orders', label: 'Orders & Sales', icon: <Receipt className="w-4 h-4" /> },
-    { id: 'settings', label: 'Admin Settings', icon: <Settings className="w-4 h-4" /> },
+    { id: 'customers', label: 'Registered Users', icon: <Users className="w-4 h-4" /> },
+    { id: 'settings', label: 'Payment & API Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
   return (
@@ -197,12 +199,12 @@ export const AdminLayout: React.FC = () => {
         {/* MAIN CONTENT AREA */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto overflow-y-auto">
           {adminTab === 'dashboard' && <AdminDashboardTab />}
-          {adminTab === 'customers' && <AdminCustomersTab />}
-          {adminTab === 'products' && <AdminProductsTab />}
+          {adminTab === 'branding' && <AdminBrandingTab />}
           {adminTab === 'categories' && <AdminCategoriesTab />}
-          {adminTab === 'denominations' && <AdminDenominationsTab />}
           {adminTab === 'redeem-codes' && <AdminRedeemCodesTab />}
+          {adminTab === 'products' && <AdminProductsTab />}
           {adminTab === 'orders' && <AdminOrdersTab />}
+          {adminTab === 'customers' && <AdminCustomersTab />}
           {adminTab === 'settings' && <AdminSettingsTab />}
         </main>
 

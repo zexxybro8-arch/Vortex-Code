@@ -5,10 +5,17 @@ import {
   createProduct,
   updateProduct,
   deleteOrDisableProduct,
+  getAllCategories,
+  getCategoryById,
+  createCategory,
+  updateCategory,
+  toggleCategoryStatus,
+  deleteCategory,
   getRedeemCodes,
   addRedeemCode,
   addBulkRedeemCodes,
   updateRedeemCodeStatus,
+  updateRedeemCode,
   deleteRedeemCode,
   getAllOrders,
   getOrderByIdOrNumber,
@@ -87,10 +94,11 @@ const softAdminCheck = (req: any): boolean => {
 
 // ===================== PRODUCTS =====================
 
-// GET /api/products - Get all products with real database stock & status
+// GET /api/products - Get all products with real database stock & status (filters disabled categories for storefront)
 router.get('/products', async (req, res) => {
   try {
-    const products = await getAllProducts();
+    const isAdmin = softAdminCheck(req);
+    const products = await getAllProducts(isAdmin);
     res.json({ success: true, products });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to fetch products' });
@@ -100,7 +108,8 @@ router.get('/products', async (req, res) => {
 // GET /api/products/:id
 router.get('/products/:id', async (req, res) => {
   try {
-    const product = await getProductById(req.params.id);
+    const isAdmin = softAdminCheck(req);
+    const product = await getProductById(req.params.id, isAdmin);
     if (!product) {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
@@ -149,6 +158,79 @@ router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to disable product' });
+  }
+});
+
+// ===================== RECHARGE CATEGORIES =====================
+
+// GET /api/categories - Public storefront only gets enabled categories; admin gets all if ?all=true
+router.get('/categories', async (req, res) => {
+  try {
+    const isAdmin = softAdminCheck(req);
+    const includeDisabled = isAdmin && req.query.all === 'true';
+    const categories = await getAllCategories(includeDisabled);
+    res.json({ success: true, categories });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch categories' });
+  }
+});
+
+// GET /api/admin/categories - Full admin list with product count and stock
+router.get('/admin/categories', isAdminMiddleware, async (req, res) => {
+  try {
+    const categories = await getAllCategories(true);
+    res.json({ success: true, categories });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch categories' });
+  }
+});
+
+// POST /api/admin/categories - Create category
+router.post('/admin/categories', isAdminMiddleware, async (req, res) => {
+  try {
+    const { name, denomination, enabled, sortOrder } = req.body;
+    if (!name || !denomination) {
+      return res.status(400).json({ success: false, error: 'Name and denomination are required' });
+    }
+    const category = await createCategory({
+      name,
+      denomination,
+      enabled: enabled !== undefined ? Boolean(enabled) : true,
+      sortOrder: Number(sortOrder || 0),
+    });
+    res.status(201).json({ success: true, category, message: 'Category created successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to create category' });
+  }
+});
+
+// PUT /api/admin/categories/:id - Update category
+router.put('/admin/categories/:id', isAdminMiddleware, async (req, res) => {
+  try {
+    const category = await updateCategory(req.params.id, req.body);
+    res.json({ success: true, category, message: 'Category updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update category' });
+  }
+});
+
+// PATCH /api/admin/categories/:id/toggle - Toggle category status
+router.patch('/admin/categories/:id/toggle', isAdminMiddleware, async (req, res) => {
+  try {
+    const category = await toggleCategoryStatus(req.params.id);
+    res.json({ success: true, category, message: `Category ${category?.name} status updated` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to toggle category' });
+  }
+});
+
+// DELETE /api/admin/categories/:id - Delete category
+router.delete('/admin/categories/:id', isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await deleteCategory(req.params.id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to delete category' });
   }
 });
 
@@ -212,17 +294,14 @@ router.post('/redeem-codes/bulk', isAdminMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/redeem-codes/:id - Update status
+// PUT /api/redeem-codes/:id - Update redeem code (status, code, pin, product)
 router.put('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
   try {
-    const { status } = req.body;
-    if (!status || !['UNUSED', 'RESERVED', 'SOLD'].includes(status)) {
-      return res.status(400).json({ success: false, error: 'Valid status (UNUSED, RESERVED, SOLD) is required' });
-    }
-    const result = await updateRedeemCodeStatus(req.params.id, status);
-    res.json({ success: true, code: result, message: 'Redeem code status updated successfully' });
+    const { status, code, pin, productId } = req.body;
+    const result = await updateRedeemCode(req.params.id, { status, code, pin, productId });
+    res.json({ success: true, code: result, message: 'Redeem code updated successfully' });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to update code status' });
+    res.status(500).json({ success: false, error: err.message || 'Failed to update code' });
   }
 });
 
@@ -896,6 +975,38 @@ router.put('/settings', isAdminMiddleware, async (req, res) => {
     res.json({ success: true, settings, message: 'Settings updated successfully in database' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to update settings' });
+  }
+});
+
+router.post('/admin/branding', isAdminMiddleware, async (req, res) => {
+  try {
+    const { logoUrl, websiteName, tagline } = req.body;
+    const settings = await updateStoreSettings({
+      logoUrl: logoUrl !== undefined ? logoUrl.trim() : '',
+      websiteName: websiteName !== undefined ? websiteName.trim() : 'VORTEX CODE',
+      tagline: tagline !== undefined ? tagline.trim() : 'SECURE DIGITAL STORE',
+      storeName: websiteName !== undefined ? websiteName.trim() : 'VORTEX CODE',
+      subtitle: tagline !== undefined ? tagline.trim() : 'SECURE DIGITAL STORE',
+    });
+    res.json({ success: true, settings, message: 'Branding updated successfully in database' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update branding' });
+  }
+});
+
+router.put('/admin/branding', isAdminMiddleware, async (req, res) => {
+  try {
+    const { logoUrl, websiteName, tagline } = req.body;
+    const settings = await updateStoreSettings({
+      logoUrl: logoUrl !== undefined ? logoUrl.trim() : '',
+      websiteName: websiteName !== undefined ? websiteName.trim() : 'VORTEX CODE',
+      tagline: tagline !== undefined ? tagline.trim() : 'SECURE DIGITAL STORE',
+      storeName: websiteName !== undefined ? websiteName.trim() : 'VORTEX CODE',
+      subtitle: tagline !== undefined ? tagline.trim() : 'SECURE DIGITAL STORE',
+    });
+    res.json({ success: true, settings, message: 'Branding updated successfully in database' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update branding' });
   }
 });
 
