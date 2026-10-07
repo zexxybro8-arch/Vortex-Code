@@ -1010,4 +1010,197 @@ router.put('/admin/branding', isAdminMiddleware, async (req, res) => {
   }
 });
 
+// ===================== CONTACT & CUSTOMER SUPPORT SETTINGS =====================
+
+function normalizeContactConfig(body: any): {
+  valid: boolean;
+  contactEnabled: boolean;
+  contactPlatform: 'telegram' | 'whatsapp' | 'custom';
+  contactUrl: string;
+  contactIconUrl: string;
+  contactLabel: string;
+  error?: string;
+} {
+  const contactEnabled =
+    body.contactEnabled !== undefined
+      ? Boolean(body.contactEnabled)
+      : body.telegramEnabled !== undefined
+      ? Boolean(body.telegramEnabled)
+      : true;
+
+  let platform = (body.contactPlatform || 'telegram').toLowerCase().trim();
+  if (!['telegram', 'whatsapp', 'custom'].includes(platform)) {
+    platform = 'telegram';
+  }
+
+  let rawUrl = (body.contactUrl || body.telegramUrl || '').trim();
+  let contactIconUrl = (body.contactIconUrl || '').trim();
+  let contactLabel = (body.contactLabel || 'Contact Admin').trim();
+
+  // Validate contactIconUrl if provided
+  if (contactIconUrl) {
+    if (/^(javascript:|data:|vbscript:)/i.test(contactIconUrl)) {
+      return {
+        valid: false,
+        contactEnabled,
+        contactPlatform: platform as any,
+        contactUrl: '',
+        contactIconUrl: '',
+        contactLabel,
+        error: 'Invalid icon image URL scheme',
+      };
+    }
+  }
+
+  if (!rawUrl) {
+    if (platform === 'telegram') rawUrl = 'https://t.me/VortexCodeSupport';
+    else if (platform === 'whatsapp') rawUrl = 'https://wa.me/919999999999';
+    else rawUrl = 'https://vortexcode.shop';
+  }
+
+  // Reject malicious schemes
+  if (/^(javascript:|data:|vbscript:)/i.test(rawUrl)) {
+    return {
+      valid: false,
+      contactEnabled,
+      contactPlatform: platform as any,
+      contactUrl: '',
+      contactIconUrl: '',
+      contactLabel,
+      error: 'Invalid contact URL scheme',
+    };
+  }
+
+  let normalizedUrl = rawUrl;
+
+  if (platform === 'telegram') {
+    if (rawUrl.startsWith('@')) {
+      normalizedUrl = `https://t.me/${rawUrl.substring(1).trim()}`;
+    } else if (rawUrl.startsWith('http://t.me/') || rawUrl.startsWith('https://t.me/')) {
+      normalizedUrl = rawUrl.replace(/^http:\/\//i, 'https://');
+    } else if (rawUrl.startsWith('t.me/')) {
+      normalizedUrl = `https://${rawUrl}`;
+    } else if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+      const usernameMatch = rawUrl.match(/^[a-zA-Z0-9_]{3,64}$/);
+      if (usernameMatch) {
+        normalizedUrl = `https://t.me/${rawUrl}`;
+      } else {
+        return {
+          valid: false,
+          contactEnabled,
+          contactPlatform: platform as any,
+          contactUrl: '',
+          contactIconUrl: '',
+          contactLabel,
+          error: 'Invalid Telegram username or URL format',
+        };
+      }
+    }
+    try {
+      const parsed = new URL(normalizedUrl);
+      if (!['t.me', 'telegram.me'].includes(parsed.hostname.toLowerCase())) {
+        return {
+          valid: false,
+          contactEnabled,
+          contactPlatform: platform as any,
+          contactUrl: '',
+          contactIconUrl: '',
+          contactLabel,
+          error: 'Telegram URL must point to t.me or telegram.me',
+        };
+      }
+    } catch {
+      return {
+        valid: false,
+        contactEnabled,
+        contactPlatform: platform as any,
+        contactUrl: '',
+        contactIconUrl: '',
+        contactLabel,
+        error: 'Malformed Telegram URL',
+      };
+    }
+  } else if (platform === 'whatsapp') {
+    const digitsOnly = rawUrl.replace(/[\s\-\+\(\)]/g, '');
+    if (/^\d{7,15}$/.test(digitsOnly)) {
+      normalizedUrl = `https://wa.me/${digitsOnly}`;
+    } else if (rawUrl.startsWith('wa.me/')) {
+      normalizedUrl = `https://${rawUrl}`;
+    } else if (rawUrl.startsWith('http://wa.me/') || rawUrl.startsWith('https://wa.me/')) {
+      normalizedUrl = rawUrl.replace(/^http:\/\//i, 'https://');
+    } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      try {
+        const parsed = new URL(rawUrl);
+        if (!parsed.hostname.includes('whatsapp.com') && !parsed.hostname.includes('wa.me')) {
+          normalizedUrl = `https://wa.me/${digitsOnly || rawUrl}`;
+        } else {
+          normalizedUrl = rawUrl;
+        }
+      } catch {
+        normalizedUrl = `https://wa.me/${digitsOnly}`;
+      }
+    } else {
+      normalizedUrl = `https://wa.me/${digitsOnly}`;
+    }
+  } else {
+    // Custom platform
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      return {
+        valid: false,
+        contactEnabled,
+        contactPlatform: platform as any,
+        contactUrl: '',
+        contactIconUrl: '',
+        contactLabel,
+        error: 'Invalid URL for Custom Contact',
+      };
+    }
+  }
+
+  return {
+    valid: true,
+    contactEnabled,
+    contactPlatform: platform as any,
+    contactUrl: normalizedUrl,
+    contactIconUrl,
+    contactLabel: contactLabel || 'Contact Admin',
+  };
+}
+
+async function handleSaveContact(req: any, res: any) {
+  try {
+    const validation = normalizeContactConfig(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, error: validation.error || 'Invalid contact configuration' });
+    }
+
+    const settings = await updateStoreSettings({
+      contactEnabled: validation.contactEnabled ? 'true' : 'false',
+      contactPlatform: validation.contactPlatform,
+      contactUrl: validation.contactUrl,
+      contactIconUrl: validation.contactIconUrl,
+      contactLabel: validation.contactLabel,
+      // Backward compatibility sync
+      telegramEnabled: validation.contactEnabled ? 'true' : 'false',
+      telegramUrl: validation.contactUrl,
+    });
+
+    res.json({
+      success: true,
+      settings,
+      message: 'Contact settings updated successfully in database',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update contact settings' });
+  }
+}
+
+router.post('/admin/contact', isAdminMiddleware, handleSaveContact);
+router.put('/admin/contact', isAdminMiddleware, handleSaveContact);
+
 export default router;

@@ -8,10 +8,8 @@ import {
   Home,
   Ticket,
   Search,
-  KeyRound,
   LogOut,
-  UserCheck,
-  Shield,
+  User,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -20,23 +18,33 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/90 shadow-2xl transition-all">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-2">
+      <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* Left: Brand logo + name + "DIGITAL REWARDS PLATFORM" subtitle */}
-        <button
-          onClick={() => {
-            setMobileMenuOpen(false);
-            setCurrentView('landing');
-          }}
-          className="focus:outline-none rounded-xl cursor-pointer text-left shrink-0"
-        >
-          <Logo size="sm" showSubtitle={false} />
-          <span className="block text-[9px] font-mono font-bold tracking-widest text-emerald-400/90 uppercase -mt-0.5">
-            DIGITAL REWARDS PLATFORM
-          </span>
-        </button>
+        {/* LEFT AREA: Mobile Hamburger (LEFT on mobile) + Brand (Logo & Text) */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
+          
+          {/* Hamburger Menu on the LEFT for Mobile */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5 text-emerald-400" /> : <Menu className="w-5 h-5" />}
+          </button>
 
-        {/* Desktop Nav Links */}
+          {/* Logo & Brand Name & Subtitle without any frame or container */}
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setCurrentView('landing');
+            }}
+            className="focus:outline-none rounded-xl cursor-pointer text-left shrink min-w-0 flex items-center"
+          >
+            <Logo size="sm" showSubtitle={true} />
+          </button>
+        </div>
+
+        {/* CENTER: Desktop Nav Links (Hidden on Mobile) */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-300">
           <button
             onClick={() => setCurrentView('landing')}
@@ -69,75 +77,78 @@ export const Header: React.FC = () => {
           </button>
         </nav>
 
-        {/* Right Header Controls: Orders/Cart Icon + Mobile Menu Toggle */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* RIGHT AREA: Cart / Orders Icon moved slightly inward from edge (LEFT) & aligned slightly UP */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 mr-1.5 sm:mr-3 md:mr-4">
           
-          {/* Orders Icon - VISIBLE ONLY AFTER AUTHENTICATED LOGIN */}
-          {user && (
-            <button
-              onClick={() => setCurrentView('dashboard')}
-              className="p-2 sm:p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-200 transition-all cursor-pointer relative shadow-md flex items-center gap-2"
-              title="My Orders & Vault"
-            >
-              <ShoppingBag className="w-4 h-4 text-emerald-400" />
-              <span className="hidden sm:inline text-xs font-mono font-bold text-slate-300">My Orders</span>
-              <span className="w-4 h-4 rounded-full bg-emerald-400 text-slate-950 font-mono font-extrabold text-[10px] flex items-center justify-center shadow-lg">
-                {orders.length}
-              </span>
-            </button>
-          )}
+          {/* Cart / Orders Button (Always on the RIGHT, positioned slightly inward and vertically centered/higher) */}
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className="relative -translate-y-0.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-200 transition-all cursor-pointer shadow-md flex items-center gap-1.5 shrink-0"
+            title="My Orders & Cart"
+            aria-label="View Cart and Orders"
+          >
+            <ShoppingBag className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="hidden lg:inline text-xs font-mono font-bold text-slate-300">Orders</span>
+            <span className="w-4 h-4 rounded-full bg-emerald-400 text-slate-950 font-mono font-extrabold text-[10px] flex items-center justify-center shadow-lg shrink-0">
+              {orders.length}
+            </span>
+          </button>
 
-          {/* Auth Buttons for Logged-Out Users */}
+          {/* Desktop Auth Controls */}
           {!user ? (
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
               <button
                 onClick={() => setCurrentView('login')}
-                className="px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all cursor-pointer"
+                className="px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all cursor-pointer"
               >
                 Sign In
               </button>
               <button
                 onClick={() => setCurrentView('register')}
-                className="px-3.5 py-2 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl transition-all shadow-md cursor-pointer"
+                className="px-3 py-1.5 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl transition-all shadow-md cursor-pointer"
               >
-                Get Started
+                Register
               </button>
             </div>
           ) : (
-            <button
-              onClick={logout}
-              className="hidden sm:inline-flex p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-xl transition-colors border border-slate-800/80 cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="hidden sm:flex items-center gap-2">
+              <button
+                onClick={() => setCurrentView('dashboard')}
+                className="px-3 py-1.5 text-xs font-mono font-bold text-emerald-400 bg-slate-900 border border-slate-800 rounded-xl flex items-center gap-1.5 cursor-pointer"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span className="max-w-[100px] truncate">{user.fullName.split(' ')[0]}</span>
+              </button>
+              <button
+                onClick={logout}
+                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-xl transition-colors border border-slate-800/80 cursor-pointer"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
-
-          {/* Mobile Hamburger Toggle */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
-            aria-label="Toggle navigation menu"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5 text-emerald-400" /> : <Menu className="w-5 h-5" />}
-          </button>
 
         </div>
 
       </div>
 
-      {/* Mobile Slide Drawer */}
+      {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
-        <div className="border-t border-slate-800 bg-slate-950/98 px-4 py-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
+        <div className="md:hidden border-t border-slate-800 bg-slate-950/98 px-4 py-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-2">
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
                 setCurrentView('landing');
               }}
-              className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-200 hover:text-emerald-400 flex items-center gap-2"
+              className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+                currentView === 'landing'
+                  ? 'bg-emerald-400 text-slate-950 border-emerald-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-200 hover:text-white'
+              }`}
             >
-              <Home className="w-4 h-4 text-emerald-400" />
+              <Home className="w-4 h-4" />
               <span>Home</span>
             </button>
 
@@ -146,9 +157,13 @@ export const Header: React.FC = () => {
                 setMobileMenuOpen(false);
                 setCurrentView('dashboard');
               }}
-              className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-200 hover:text-emerald-400 flex items-center gap-2"
+              className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+                currentView === 'dashboard' || currentView === 'store'
+                  ? 'bg-emerald-400 text-slate-950 border-emerald-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-200 hover:text-white'
+              }`}
             >
-              <Ticket className="w-4 h-4 text-emerald-400" />
+              <Ticket className="w-4 h-4" />
               <span>Redeem Store</span>
             </button>
 
@@ -157,14 +172,18 @@ export const Header: React.FC = () => {
                 setMobileMenuOpen(false);
                 setCurrentView('order-lookup');
               }}
-              className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-200 hover:text-emerald-400 flex items-center gap-2"
+              className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+                currentView === 'order-lookup'
+                  ? 'bg-emerald-400 text-slate-950 border-emerald-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-200 hover:text-white'
+              }`}
             >
-              <Search className="w-4 h-4 text-emerald-400" />
+              <Search className="w-4 h-4" />
               <span>Order Lookup</span>
             </button>
           </nav>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+          <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
             {!user ? (
               <>
                 <button
@@ -172,7 +191,7 @@ export const Header: React.FC = () => {
                     setMobileMenuOpen(false);
                     setCurrentView('login');
                   }}
-                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-200 rounded-xl"
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-200 rounded-xl cursor-pointer"
                 >
                   Sign In
                 </button>
@@ -181,22 +200,28 @@ export const Header: React.FC = () => {
                     setMobileMenuOpen(false);
                     setCurrentView('register');
                   }}
-                  className="flex-1 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs rounded-xl"
+                  className="flex-1 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs rounded-xl cursor-pointer"
                 >
-                  Get Started
+                  Register
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  logout();
-                }}
-                className="w-full py-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-xl flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out ({user.fullName})</span>
-              </button>
+              <div className="w-full space-y-2">
+                <div className="flex items-center justify-between px-2 text-xs font-mono text-slate-400">
+                  <span>Signed in as:</span>
+                  <span className="text-white font-bold">{user.fullName}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    logout();
+                  }}
+                  className="w-full py-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

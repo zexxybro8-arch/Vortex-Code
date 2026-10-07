@@ -53,55 +53,61 @@ export const Logo: React.FC<LogoProps> = ({
     setImageError(false);
   }, [effectiveLogoUrl]);
 
-  const iconSizeClass = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-12 h-12' : 'w-10 h-10';
-  const titleSizeClass = size === 'sm' ? 'text-base' : size === 'lg' ? 'text-2xl' : 'text-xl';
+  // Frameless, direct sizing without boxes or card frames
+  // Mobile ~42-50px visual height, scaled proportionally on tablet/desktop
+  const logoImageClass =
+    size === 'sm'
+      ? 'h-10 sm:h-11 md:h-12 w-auto max-w-[120px] sm:max-w-[150px]'
+      : size === 'lg'
+      ? 'h-14 sm:h-16 md:h-20 w-auto max-w-[200px]'
+      : 'h-11 sm:h-12 md:h-14 w-auto max-w-[160px]';
+
+  const titleSizeClass =
+    size === 'sm'
+      ? 'text-sm sm:text-base md:text-lg font-black'
+      : size === 'lg'
+      ? 'text-2xl sm:text-3xl font-black'
+      : 'text-base sm:text-xl font-black';
 
   const hasCustomImage = Boolean(effectiveLogoUrl && !imageError);
 
   return (
-    <div className="flex items-center gap-3 select-none group">
+    <div className="flex items-center gap-2.5 sm:gap-3 select-none">
       {hasCustomImage ? (
-        <div className={`relative ${iconSizeClass} flex items-center justify-center shrink-0`}>
-          <div className="absolute inset-0 bg-emerald-500/20 rounded-xl blur-md group-hover:bg-emerald-400/40 transition-all duration-300"></div>
-          <img
-            src={effectiveLogoUrl}
-            alt={effectiveWebsiteName}
-            onError={() => setImageError(true)}
-            className="relative w-full h-full object-contain rounded-xl bg-slate-900 border border-emerald-500/50 p-1 shadow-lg group-hover:border-emerald-400 transition-colors"
-          />
-        </div>
+        /* DIRECT LOGO IMAGE WITHOUT ANY FRAME, BORDER, BACKGROUND CARD, OR BOX */
+        <img
+          src={effectiveLogoUrl}
+          alt={effectiveWebsiteName}
+          onError={() => setImageError(true)}
+          className={`${logoImageClass} object-contain shrink-0 align-middle drop-shadow-sm`}
+        />
       ) : (
-        /* Default Brand Icon: Rounded shield + gift card voucher with emerald glow */
-        <div className={`relative ${iconSizeClass} flex items-center justify-center shrink-0`}>
-          <div className="absolute inset-0 bg-emerald-500/30 rounded-xl blur-md group-hover:bg-emerald-400/50 transition-all duration-300"></div>
-          <div className="relative w-full h-full bg-slate-900 border border-emerald-500/50 rounded-xl flex items-center justify-center shadow-lg overflow-hidden group-hover:border-emerald-400 transition-colors">
-            <svg
-              className="w-3/5 h-3/5 text-emerald-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="2" y="5" width="20" height="14" rx="3" />
-              <path d="M2 10h20" strokeWidth="1.8" strokeDasharray="2 2" />
-              <path d="M6 15h4" strokeWidth="2.5" />
-              <path d="M16 15h2" strokeWidth="2.5" />
-            </svg>
-            <div className="absolute top-0 right-0 w-2 h-2 bg-emerald-400 rounded-full animate-ping opacity-75"></div>
-          </div>
+        /* Sleek built-in fallback voucher/shield icon without heavy border box */
+        <div className="flex items-center justify-center shrink-0">
+          <svg
+            className={`${size === 'sm' ? 'w-9 h-9' : size === 'lg' ? 'w-14 h-14' : 'w-10 h-10'} text-emerald-400 drop-shadow-md`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="2" y="5" width="20" height="14" rx="3" />
+            <path d="M2 10h20" strokeWidth="1.8" strokeDasharray="2 2" />
+            <path d="M6 15h4" strokeWidth="2.5" />
+            <path d="M16 15h2" strokeWidth="2.5" />
+          </svg>
         </div>
       )}
 
-      <div className="flex flex-col">
-        <div className="flex items-center gap-1.5">
-          <span className={`${titleSizeClass} font-extrabold tracking-tight text-white font-mono uppercase`}>
-            {effectiveWebsiteName}
-          </span>
-        </div>
+      {/* Brand Name & Tagline */}
+      <div className="flex flex-col justify-center min-w-0">
+        <span className={`${titleSizeClass} tracking-tight text-white font-mono uppercase truncate leading-tight`}>
+          {effectiveWebsiteName}
+        </span>
         {showSubtitle && effectiveTagline && (
-          <span className="text-[10px] font-medium tracking-widest text-emerald-400/90 uppercase -mt-0.5">
+          <span className="text-[9px] sm:text-[10px] font-bold tracking-widest text-emerald-400 uppercase truncate leading-tight mt-0.5">
             {effectiveTagline}
           </span>
         )}

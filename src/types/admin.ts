@@ -7,6 +7,7 @@ export type AdminTab =
   | 'denominations'
   | 'orders'
   | 'customers'
+  | 'contact'
   | 'settings';
 
 export interface AdminCategory {

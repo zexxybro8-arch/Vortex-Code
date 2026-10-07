@@ -209,6 +209,13 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('supportEmail', 'support@vortexcode.com');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('currencySymbol', '₹');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('enableAutoFulfillment', 'true');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('telegramEnabled', 'true');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('telegramUrl', 'https://t.me/VortexCodeSupport');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactEnabled', 'true');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactPlatform', 'telegram');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactUrl', 'https://t.me/VortexCodeSupport');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconUrl', '');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactLabel', 'Contact Admin');`);
 
   // FamGateway Live Production Credentials
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
@@ -1762,6 +1769,13 @@ export async function getStoreSettings() {
     supportEmail: 'support@vortexcode.com',
     currencySymbol: '₹',
     enableAutoFulfillment: true,
+    telegramEnabled: true,
+    telegramUrl: 'https://t.me/VortexCodeSupport',
+    contactEnabled: true,
+    contactPlatform: 'telegram',
+    contactUrl: 'https://t.me/VortexCodeSupport',
+    contactIconUrl: '',
+    contactLabel: 'Contact Admin',
     famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
     famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc',
     famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
@@ -1773,7 +1787,7 @@ export async function getStoreSettings() {
     res[0].values.forEach((row) => {
       const key = row[0] as string;
       const val = row[1] as string;
-      if (key === 'enableAutoFulfillment') {
+      if (key === 'enableAutoFulfillment' || key === 'telegramEnabled' || key === 'contactEnabled') {
         settings[key] = val === 'true';
       } else if (key === 'famupigatewayExpiryMinutes') {
         settings[key] = Number(val) || 5;

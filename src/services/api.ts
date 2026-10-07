@@ -369,6 +369,26 @@ export const api = {
     return data.settings;
   },
 
+  async updateContactSettings(contact: {
+    contactEnabled?: boolean;
+    contactPlatform?: 'telegram' | 'whatsapp' | 'custom';
+    contactUrl?: string;
+    contactIconUrl?: string;
+    contactLabel?: string;
+    telegramEnabled?: boolean;
+    telegramUrl?: string;
+  }): Promise<any> {
+    const data = await safeFetchJson('/api/admin/contact', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+      body: JSON.stringify(contact),
+    });
+    return data.settings;
+  },
+
   // Categories
   async getCategories(all = false): Promise<any[]> {
     try {

@@ -10,6 +10,7 @@ import { CustomerVault } from './components/store/CustomerVault';
 import { OrderLookupPage } from './components/store/OrderLookupPage';
 import { AuthRequiredModal } from './components/store/AuthRequiredModal';
 import { ToastContainer } from './components/common/Toast';
+import { TelegramFloatingButton } from './components/common/TelegramFloatingButton';
 import { AdminContainer } from './components/admin/AdminContainer';
 
 const checkIsAdminRoute = (): boolean => {
@@ -110,6 +111,7 @@ export default function App() {
 
         <AuthRequiredModal />
         <ToastContainer />
+        <TelegramFloatingButton />
       </div>
     </AuthProvider>
   );

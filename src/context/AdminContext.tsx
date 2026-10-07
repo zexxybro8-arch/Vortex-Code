@@ -139,6 +139,13 @@ interface AdminContextType {
     supportEmail: string;
     currencySymbol: string;
     enableAutoFulfillment: boolean;
+    telegramEnabled: boolean;
+    telegramUrl: string;
+    contactEnabled?: boolean;
+    contactPlatform?: 'telegram' | 'whatsapp' | 'custom';
+    contactUrl?: string;
+    contactIconUrl?: string;
+    contactLabel?: string;
     famupigatewayBaseUrl: string;
     famupigatewayApiKey: string;
     famupigatewayWebhookSecret: string;
@@ -147,6 +154,15 @@ interface AdminContextType {
   };
   updateStoreSettings: (newSettings: any) => void;
   updateBranding: (branding: { logoUrl: string; websiteName: string; tagline: string }) => Promise<any>;
+  updateContactSettings: (contact: {
+    contactEnabled?: boolean;
+    contactPlatform?: 'telegram' | 'whatsapp' | 'custom';
+    contactUrl?: string;
+    contactIconUrl?: string;
+    contactLabel?: string;
+    telegramEnabled?: boolean;
+    telegramUrl?: string;
+  }) => Promise<any>;
 
   stats: AdminDashboardStats;
   refreshData: () => Promise<void>;
@@ -243,6 +259,13 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     supportEmail: 'support@vortexcode.com',
     currencySymbol: '₹',
     enableAutoFulfillment: true,
+    telegramEnabled: true,
+    telegramUrl: 'https://t.me/VortexCodeSupport',
+    contactEnabled: true,
+    contactPlatform: 'telegram' as 'telegram' | 'whatsapp' | 'custom',
+    contactUrl: 'https://t.me/VortexCodeSupport',
+    contactIconUrl: '',
+    contactLabel: 'Contact Admin',
     famupigatewayBaseUrl: 'https://famupigateway.site/api',
     famupigatewayApiKey: 'Famcfc08cd92c090e3718e9ad92155eb0fc',
     famupigatewayWebhookSecret: '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
@@ -612,6 +635,37 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const updateContactSettings = async (contact: {
+    contactEnabled?: boolean;
+    contactPlatform?: 'telegram' | 'whatsapp' | 'custom';
+    contactUrl?: string;
+    contactIconUrl?: string;
+    contactLabel?: string;
+    telegramEnabled?: boolean;
+    telegramUrl?: string;
+  }) => {
+    try {
+      const updated = await api.updateContactSettings(contact);
+      if (updated) {
+        setStoreSettings((prev) => ({
+          ...prev,
+          ...updated,
+          contactEnabled: updated.contactEnabled !== undefined ? updated.contactEnabled : contact.contactEnabled,
+          contactPlatform: updated.contactPlatform || contact.contactPlatform || prev.contactPlatform,
+          contactUrl: updated.contactUrl || contact.contactUrl || prev.contactUrl,
+          contactIconUrl: updated.contactIconUrl !== undefined ? updated.contactIconUrl : contact.contactIconUrl,
+          contactLabel: updated.contactLabel || contact.contactLabel || prev.contactLabel,
+          telegramEnabled: updated.telegramEnabled !== undefined ? updated.telegramEnabled : (contact.contactEnabled ?? prev.telegramEnabled),
+          telegramUrl: updated.telegramUrl || contact.contactUrl || prev.telegramUrl,
+        }));
+      }
+      return updated;
+    } catch (err) {
+      console.error('Failed to save contact settings:', err);
+      throw err;
+    }
+  };
+
   // Dynamically compute stats strictly from actual database records
   const totalSalesRupees = orders.reduce(
     (sum, o) => sum + (o.paymentStatus === 'PAID' ? o.amountRupees : 0),
@@ -667,6 +721,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         storeSettings,
         updateStoreSettings,
         updateBranding,
+        updateContactSettings,
         stats,
         refreshData,
       }}
