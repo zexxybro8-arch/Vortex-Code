@@ -16,6 +16,7 @@ export interface CreatePaymentOrderParams {
   productName: string;
   customerName: string;
   customerEmail: string;
+  callbackUrl?: string;
 }
 
 export interface PaymentGatewayOrderResponse {
@@ -25,6 +26,9 @@ export interface PaymentGatewayOrderResponse {
   keyId?: string;
   provider: string;
   status: 'created' | 'unconfigured' | 'ready';
+  paymentUrl?: string;
+  token?: string;
+  expiresAt?: string;
 }
 
 export interface PaymentVerificationParams {

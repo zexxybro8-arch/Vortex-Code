@@ -359,6 +359,36 @@ router.post('/checkout/verify-payment', async (req, res) => {
 });
 
 /**
+ * GET /api/payment/callback
+ * Handles the browser redirect from FamGateway when a customer completes their payment.
+ * This route calls verifyAndFulfillPaymentOrder, which triggers a server-to-server check-status API call
+ * against FamGateway before assigning and delivering any code.
+ */
+router.get('/payment/callback', async (req, res) => {
+  try {
+    const orderId = req.query.order_id as string;
+    if (!orderId) {
+      return res.status(400).send('<h1>Error: order_id is required.</h1>');
+    }
+
+    const result = await verifyAndFulfillPaymentOrder({
+      orderId,
+      isSimulatedVerification: false, // Forces a live server check status query to FamGateway
+    });
+
+    if (result.success) {
+      return res.redirect(`/?payment_success=true&order_id=${orderId}`);
+    } else {
+      return res.redirect(`/?payment_failed=true&order_id=${orderId}`);
+    }
+  } catch (err: any) {
+    console.error('FamGateway redirect callback exception:', err);
+    const orderId = req.query.order_id as string || '';
+    return res.redirect(`/?payment_failed=true&order_id=${orderId}&error=${encodeURIComponent(err.message || 'Verification failed')}`);
+  }
+});
+
+/**
  * POST /api/payment/webhook
  * Incoming gateway webhook verification & idempotent fulfillment
  */

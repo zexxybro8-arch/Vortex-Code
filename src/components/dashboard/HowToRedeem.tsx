@@ -49,7 +49,7 @@ export const HowToRedeem: React.FC = () => {
           <div className="space-y-2 flex-1">
             <h3 className="text-lg font-bold text-white">Click "BUY NOW" to Claim</h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Click the <strong className="text-emerald-400">BUY NOW</strong> button on the product card. Your wallet balance or payment method processes instantly and your code is fulfilled within seconds.
+              Click the <strong className="text-emerald-400">REDEEM NOW</strong> button on the product card. The payment processes securely and your code is fulfilled within seconds.
             </p>
           </div>
         </div>

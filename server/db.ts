@@ -1111,15 +1111,10 @@ export async function verifyAndFulfillPaymentOrder(params: {
   // Signature / Authenticity Verification
   const gatewayConfig = paymentGateway.getConfig();
   if (gatewayConfig.isConfigured) {
-    const verifyResult = paymentGateway.verifySignature({
-      orderId: order.id,
-      gatewayOrderId: params.gatewayOrderId,
-      gatewayPaymentId: params.gatewayPaymentId,
-      gatewaySignature: params.gatewaySignature,
-    });
+    const verifyResult = await paymentGateway.checkPaymentStatus(order.id);
 
     if (!verifyResult.isValid) {
-      throw new Error(`Payment verification failed: ${verifyResult.error || 'Invalid signature.'}`);
+      throw new Error(`Payment verification failed: ${verifyResult.error || 'Payment not completed or failed.'}`);
     }
   } else if (!params.isSimulatedVerification) {
     throw new Error('Payment Gateway not configured. Live transactions require configured gateway credentials.');

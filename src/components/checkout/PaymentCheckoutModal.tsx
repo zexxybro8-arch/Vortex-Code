@@ -240,19 +240,12 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                 </div>
               </div>
 
-              {/* Price & Balance Breakdown */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-900 font-mono">
+              {/* Price Breakdown */}
+              <div className="pt-2 border-t border-slate-900 font-mono">
                 <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
                   <div className="text-[9px] font-bold text-slate-400 uppercase">AMOUNT PAYABLE</div>
                   <div className="text-lg font-black text-white">
                     ₹{order.amount} <span className="text-[10px] text-slate-400 font-normal">INR</span>
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30">
-                  <div className="text-[9px] font-bold text-emerald-400 uppercase">BALANCE VALUE</div>
-                  <div className="text-lg font-black text-emerald-400">
-                    ₹{order.rewardValue?.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
@@ -279,37 +272,65 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                 </span>
               </div>
 
-              {/* UPI QR PAYMENT CODE DISPLAY */}
-              <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center space-y-3 text-center">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-emerald-400" />
-                  <span>Scan & Pay via UPI / QR</span>
-                </div>
-
-                {/* Dynamically generated UPI QR Code image matching exact DB order amount */}
-                <div className="p-3 bg-white rounded-2xl shadow-lg border border-slate-200">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      `upi://pay?pa=vortexcode@upi&pn=VortexCode&am=${order.amount}&cu=INR&tn=${order.orderNumber}`
-                    )}`}
-                    alt="Payment QR Code"
-                    className="w-40 h-40 object-contain"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs font-mono font-extrabold text-emerald-400">
-                    AMOUNT: ₹{order.amount} INR
+              {isGatewayReady ? (
+                /* LIVE GATEWAY MODE */
+                <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center space-y-4 text-center">
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span>Real-time Secure Payment Gateway</span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400">
-                    UPI ID: <strong className="text-slate-200">vortexcode@upi</strong>
+
+                  <p className="text-xs text-slate-300 max-w-sm">
+                    Please click the button below to proceed to the secure FamGateway payment page to complete your transaction of <strong className="text-white">₹{order.amount}</strong>.
+                  </p>
+
+                  <a
+                    href={checkoutData.gatewayOrder?.paymentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-4 px-4 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/35 hover:scale-[1.01]"
+                  >
+                    <span>Proceed to Pay (Open Gateway)</span>
+                    <ExternalLink className="w-4 h-4 shrink-0" />
+                  </a>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 text-[10px] text-emerald-300 border border-emerald-500/20 max-w-sm leading-relaxed">
+                    ℹ️ <strong>Status:</strong> Once the payment is completed on the gateway page, return to this window and click the verification button below to fetch and deliver your code instantly.
                   </div>
                 </div>
+              ) : (
+                /* UPI QR PAYMENT CODE DISPLAY (SIMULATION MODE) */
+                <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center space-y-3 text-center">
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span>Scan & Pay via UPI / QR (Simulation Mode)</span>
+                  </div>
 
-                <div className="p-2.5 rounded-xl bg-slate-950 text-[10px] text-amber-300 border border-amber-500/20 max-w-sm leading-relaxed">
-                  ⚠️ <strong>Notice:</strong> Scanning or opening this QR code does NOT automatically deliver a code or mark payment as completed. Payment must be verified server-side.
+                  {/* Dynamically generated UPI QR Code image matching exact DB order amount */}
+                  <div className="p-3 bg-white rounded-2xl shadow-lg border border-slate-200">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                        `upi://pay?pa=vortexcode@upi&pn=VortexCode&am=${order.amount}&cu=INR&tn=${order.orderNumber}`
+                      )}`}
+                      alt="Payment QR Code"
+                      className="w-40 h-40 object-contain"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="text-xs font-mono font-extrabold text-emerald-400">
+                      AMOUNT: ₹{order.amount} INR
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-400">
+                      UPI ID: <strong className="text-slate-200">vortexcode@upi</strong>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 text-[10px] text-amber-300 border border-amber-500/20 max-w-sm leading-relaxed">
+                    ⚠️ <strong>Notice:</strong> Scanning or opening this QR code does NOT automatically deliver a code or mark payment as completed. Payment must be verified server-side.
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* PAYMENT VERIFICATION ACTION */}
               <div className="pt-2 space-y-2">

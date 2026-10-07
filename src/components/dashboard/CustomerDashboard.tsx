@@ -102,6 +102,22 @@ export const CustomerDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchLiveDatabaseData]);
 
+  useEffect(() => {
+    // Check for payment callback params from the redirect url
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment_success') === 'true') {
+      addToast('success', 'Payment verified successfully! Your recharge code has been delivered to your Vault.');
+      setActiveTab('my-orders'); // Switch to My Orders / Vault tab to view code immediately
+      refreshCustomerOrders();
+      // Clean query params so they don't persist on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('payment_failed') === 'true') {
+      const err = params.get('error') || 'Payment failed or cancelled';
+      addToast('error', `Checkout failed: ${err}`);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [addToast, refreshCustomerOrders]);
+
   const defaultDenominations = ['ALL VALUES', '₹100', '₹120', '₹150', '₹200', '₹300', '₹500', '₹700', '₹900'];
   const extraDenoms = products
     .map((p) => p.denomination)
@@ -154,7 +170,7 @@ export const CustomerDashboard: React.FC = () => {
             key: `code_${c.id}`,
             product: prod,
             codeRecord: c,
-            maskedCode: c.codeMasked || 'XXXX XXXX **** ****',
+            maskedCode: c.code || c.codeMasked || 'XXXX XXXX **** ****',
             isOutOfStock: false,
             availableStockCount: prod.stock ?? prodUnusedCodes.length,
           });
@@ -191,7 +207,7 @@ export const CustomerDashboard: React.FC = () => {
           key: `code_${c.id}`,
           product: matchingProd!,
           codeRecord: c,
-          maskedCode: c.codeMasked || 'XXXX XXXX **** ****',
+          maskedCode: c.code || c.codeMasked || 'XXXX XXXX **** ****',
           isOutOfStock: false,
           availableStockCount: matchingProd!.stock ?? denomUnusedCodes.length,
         });
@@ -232,13 +248,20 @@ export const CustomerDashboard: React.FC = () => {
       });
 
       if (checkoutRes && checkoutRes.success && checkoutRes.order) {
-        setCheckoutData({
-          order: checkoutRes.order,
-          gatewayOrder: checkoutRes.gatewayOrder,
-          gatewayConfig: checkoutRes.gatewayConfig,
-          productImage: product.image,
-        });
-        setIsCheckoutModalOpen(true);
+        const isLive = checkoutRes.gatewayConfig?.isConfigured;
+        if (isLive && checkoutRes.gatewayOrder?.paymentUrl) {
+          // Immediately redirect the user to the REAL FamGateway payment page!
+          window.location.href = checkoutRes.gatewayOrder.paymentUrl;
+        } else {
+          // Open local simulation modal in development/unconfigured mode
+          setCheckoutData({
+            order: checkoutRes.order,
+            gatewayOrder: checkoutRes.gatewayOrder,
+            gatewayConfig: checkoutRes.gatewayConfig,
+            productImage: product.image,
+          });
+          setIsCheckoutModalOpen(true);
+        }
       }
     } catch (err: any) {
       addToast('error', err.message || 'Checkout initiation failed. Please try again.');
@@ -391,26 +414,13 @@ export const CustomerDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* 2. PRICE + BALANCE (Two Side-by-Side Separate Boxes) */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* PRICE BOX */}
-                      <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
-                        <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
-                          PRICE
-                        </div>
-                        <div className="text-lg sm:text-xl font-black text-white">
-                          ₹{prod.priceRupees}
-                        </div>
+                    {/* 2. PRICE (Single Box) */}
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
+                      <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
+                        PRICE
                       </div>
-
-                      {/* BALANCE BOX */}
-                      <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
-                        <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
-                          BALANCE
-                        </div>
-                        <div className="text-lg sm:text-xl font-black text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
-                          ₹{prod.rewardValueRupees.toLocaleString('en-IN')}
-                        </div>
+                      <div className="text-lg sm:text-xl font-black text-white">
+                        ₹{prod.priceRupees}
                       </div>
                     </div>
 
