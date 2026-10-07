@@ -19,10 +19,10 @@ const checkIsAdminRoute = (): boolean => {
   const hash = window.location.hash.toLowerCase();
 
   return (
-    path.startsWith('/admin') ||
-    search.includes('admin') ||
-    search.includes('route=/admin') ||
-    hash.includes('admin')
+    path.startsWith('/developer') ||
+    search.includes('developer') ||
+    search.includes('route=/developer') ||
+    hash.includes('developer')
   );
 };
 
@@ -53,21 +53,12 @@ export default function App() {
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsAdminRoute(false);
-      if (window.location.pathname.startsWith('/admin')) {
-        window.history.replaceState({ route: '/dashboard' }, '', '/dashboard');
-      }
-    }
-
     const handleRouteChange = () => {
-      const path = window.location.pathname.toLowerCase();
-      if (path.startsWith('/admin') || window.location.search.includes('admin')) {
-        setIsAdminRoute(true);
-      } else {
-        setIsAdminRoute(checkIsAdminRoute());
-      }
+      setIsAdminRoute(checkIsAdminRoute());
     };
+
+    // Initialize and run on mount to detect routing immediately
+    handleRouteChange();
 
     window.addEventListener('popstate', handleRouteChange);
     window.addEventListener('hashchange', handleRouteChange);

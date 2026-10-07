@@ -142,15 +142,29 @@ const getInitialAdminTab = (): AdminTab => {
 };
 
 export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(() => ({
-    id: 'adm_sagar551',
-    name: 'SAGAR551 (Admin)',
-    email: 'sagar551@vortexcode.com',
-    role: 'Super Admin',
-    lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 16),
-  }));
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [adminTab, setAdminTabInternal] = useState<AdminTab>(getInitialAdminTab);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Validate the admin session on mount via server-side HttpOnly cookie check
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/admin/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.admin) {
+            setAdminUser(data.admin);
+          }
+        }
+      } catch (err) {
+        console.warn('Admin session validation failed or not signed in:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkSession();
+  }, []);
 
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
@@ -201,7 +215,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setAdminTab = (tab: AdminTab) => {
     setAdminTabInternal(tab);
     if (typeof window !== 'undefined') {
-      const newPath = `/admin/${tab}`;
+      const newPath = `/developer/${tab}`;
       if (window.location.pathname !== newPath) {
         window.history.pushState({ adminTab: tab }, '', newPath);
       }
@@ -218,6 +232,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Fetch real data from backend API & Database
   const refreshData = useCallback(async () => {
+    if (!adminUser) return; // Securely skip if not authenticated
     try {
       const [apiProducts, apiCodes, apiOrders, apiSettings] = await Promise.all([
         api.getProducts().catch((err) => {
@@ -253,37 +268,59 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err) {
       console.error('Error refreshing admin data from DB:', err);
     }
-  }, []);
+  }, [adminUser]);
 
   // Initial load
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    if (adminUser) {
+      refreshData();
+    }
+  }, [refreshData, adminUser]);
 
   // Periodic background synchronization every 3 seconds to ensure real-time consistency
   useEffect(() => {
+    if (!adminUser) return;
     const interval = setInterval(() => {
       refreshData();
     }, 3000);
     return () => clearInterval(interval);
-  }, [refreshData]);
+  }, [refreshData, adminUser]);
 
   const adminLogin = async (credentials: AdminLoginCredentials) => {
     setIsLoading(true);
     try {
-      const user = await adminAuthService.login(credentials);
-      setAdminUser(user);
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: credentials.identifier,
+          password: credentials.password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Administrative authentication failed');
+      }
+
+      setAdminUser(data.admin);
       setAdminTab('dashboard');
-      await refreshData();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const adminLogout = () => {
-    setAdminUser(null);
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', '/admin/login');
+  const adminLogout = async () => {
+    setIsLoading(true);
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' });
+    } catch (e) {
+      console.error('Backend logout call exception:', e);
+    } finally {
+      setAdminUser(null);
+      setIsLoading(false);
+      if (typeof window !== 'undefined') {
+        window.history.pushState({}, '', '/developer/login');
+      }
     }
   };
 

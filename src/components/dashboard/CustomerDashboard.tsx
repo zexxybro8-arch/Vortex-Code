@@ -170,7 +170,7 @@ export const CustomerDashboard: React.FC = () => {
             key: `code_${c.id}`,
             product: prod,
             codeRecord: c,
-            maskedCode: c.code || c.codeMasked || 'XXXX XXXX **** ****',
+            maskedCode: c.code || c.codeMasked || 'CSGY AGTS **** ****',
             isOutOfStock: false,
             availableStockCount: prod.stock ?? prodUnusedCodes.length,
           });
@@ -207,7 +207,7 @@ export const CustomerDashboard: React.FC = () => {
           key: `code_${c.id}`,
           product: matchingProd!,
           codeRecord: c,
-          maskedCode: c.code || c.codeMasked || 'XXXX XXXX **** ****',
+          maskedCode: c.code || c.codeMasked || 'CSGY AGTS **** ****',
           isOutOfStock: false,
           availableStockCount: matchingProd!.stock ?? denomUnusedCodes.length,
         });
@@ -414,13 +414,24 @@ export const CustomerDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* 2. PRICE (Single Box) */}
-                    <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
-                      <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
-                        PRICE
+                    {/* 2. PRICE & BALANCE (Split Grid) */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
+                        <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
+                          PRICE
+                        </div>
+                        <div className="text-lg sm:text-xl font-black text-white">
+                          ₹{prod.priceRupees}
+                        </div>
                       </div>
-                      <div className="text-lg sm:text-xl font-black text-white">
-                        ₹{prod.priceRupees}
+
+                      <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
+                        <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
+                          BALANCE
+                        </div>
+                        <div className="text-lg sm:text-xl font-black text-emerald-400">
+                          ₹{user && user.balance !== undefined ? user.balance.toLocaleString('en-IN') : '1,500'}
+                        </div>
                       </div>
                     </div>
 

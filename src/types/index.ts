@@ -12,6 +12,7 @@ export interface User {
   avatarUrl?: string;
   createdAt: string;
   security2FA: boolean;
+  balance?: number;
 }
 
 export interface StoreProduct {

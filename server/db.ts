@@ -135,7 +135,8 @@ export async function getDb(): Promise<Database> {
       password TEXT,
       googleSub TEXT,
       role TEXT NOT NULL DEFAULT 'CUSTOMER',
-      createdAt TEXT NOT NULL
+      createdAt TEXT NOT NULL,
+      balance REAL NOT NULL DEFAULT 1500.0
     );
 
     CREATE TABLE IF NOT EXISTS store_settings (
@@ -143,6 +144,12 @@ export async function getDb(): Promise<Database> {
       value TEXT NOT NULL
     );
   `);
+
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN balance REAL NOT NULL DEFAULT 1500.0;`);
+  } catch (e) {
+    // Ignore error if column already exists
+  }
 
   // Initialize store settings with default values if not present
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('storeName', 'VORTEX CODE');`);
@@ -544,7 +551,7 @@ export function maskCode(code: string): string {
     const part2 = norm.substring(4, 8);
     return `${part1} ${part2} **** ****`;
   }
-  return '**** **** **** ****';
+  return 'CSGY AGTS **** ****';
 }
 
 export async function getRedeemCodes(productId?: string, status?: string, denomination?: string) {
@@ -1191,7 +1198,7 @@ export async function getUserByEmail(email: string) {
   const db = await getDb();
   const clean = email.trim().toLowerCase();
   const res = db.exec(
-    `SELECT id, fullName, email, username, password, googleSub, role, createdAt FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?;`,
+    `SELECT id, fullName, email, username, password, googleSub, role, createdAt, balance FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?;`,
     [clean, clean]
   );
   if (res.length === 0 || res[0].values.length === 0) return null;
@@ -1207,7 +1214,7 @@ export async function getUserByEmail(email: string) {
 export async function getUserByGoogleSub(sub: string) {
   const db = await getDb();
   const res = db.exec(
-    `SELECT id, fullName, email, username, password, googleSub, role, createdAt FROM users WHERE googleSub = ?;`,
+    `SELECT id, fullName, email, username, password, googleSub, role, createdAt, balance FROM users WHERE googleSub = ?;`,
     [sub]
   );
   if (res.length === 0 || res[0].values.length === 0) return null;
@@ -1227,15 +1234,17 @@ export async function createUser(params: {
   password?: string;
   googleSub?: string;
   role?: string;
+  balance?: number;
 }) {
   const db = await getDb();
   const id = `usr_${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
   const role = params.role || 'CUSTOMER';
+  const balance = params.balance !== undefined ? params.balance : 1500.0;
 
   db.run(
-    `INSERT INTO users (id, fullName, email, username, password, googleSub, role, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO users (id, fullName, email, username, password, googleSub, role, createdAt, balance)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       id,
       params.fullName.trim(),
@@ -1245,6 +1254,7 @@ export async function createUser(params: {
       params.googleSub || null,
       role,
       now,
+      balance,
     ]
   );
   saveDb();
@@ -1257,6 +1267,7 @@ export async function createUser(params: {
     googleSub: params.googleSub,
     role,
     createdAt: now,
+    balance,
   };
 }
 

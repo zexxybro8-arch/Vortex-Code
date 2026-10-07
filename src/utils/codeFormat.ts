@@ -56,7 +56,7 @@ export function formatMaskedCode(raw: string): string {
     const part2 = norm.substring(4, 8);
     return `${part1} ${part2} **** ****`;
   }
-  return '**** **** **** ****';
+  return 'CSGY AGTS **** ****';
 }
 
 export function generate16CharKey(): string {

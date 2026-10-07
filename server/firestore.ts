@@ -86,9 +86,9 @@ export async function restoreDbFromFirestore(db: any): Promise<boolean> {
     usersSnap.forEach((doc) => {
       const u = doc.data();
       db.run(
-        `INSERT OR REPLACE INTO users (id, fullName, email, username, password, googleSub, role, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-        [u.id, u.fullName, u.email, u.username, u.password, u.googleSub, u.role, u.createdAt]
+        `INSERT OR REPLACE INTO users (id, fullName, email, username, password, googleSub, role, createdAt, balance)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [u.id, u.fullName, u.email, u.username, u.password, u.googleSub, u.role, u.createdAt, u.balance !== undefined ? u.balance : 1500.0]
       );
     });
 

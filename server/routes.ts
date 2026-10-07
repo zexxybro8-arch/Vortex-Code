@@ -28,6 +28,63 @@ import { paymentGateway } from './payment/gateway';
 
 const router = Router();
 
+// Helper to parse cookies from headers
+function parseCookies(cookieStr: string): Record<string, string> {
+  const list: Record<string, string> = {};
+  if (!cookieStr) return list;
+  cookieStr.split(';').forEach((cookie) => {
+    const parts = cookie.split('=');
+    const name = parts.shift()?.trim();
+    const value = parts.join('=')?.trim();
+    if (name) {
+      list[name] = decodeURIComponent(value);
+    }
+  });
+  return list;
+}
+
+// Middleware to enforce administrative privileges securely
+const isAdminMiddleware = (req: any, res: any, next: any) => {
+  const cookieHeader = req.headers.cookie || '';
+  const cookies = parseCookies(cookieHeader);
+  const sessionToken = cookies['admin_session'];
+
+  if (sessionToken === 'SAGAR551_SESSION_TOKEN') {
+    req.isAdmin = true;
+    return next();
+  }
+
+  // Fallback support for authorized automated API calls
+  const authHeader = req.headers['authorization'];
+  const hasToken =
+    req.headers['x-admin-token'] === 'SAGAR551' ||
+    (authHeader && authHeader.startsWith('Bearer SAGAR551'));
+
+  if (hasToken) {
+    req.isAdmin = true;
+    return next();
+  }
+
+  return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
+};
+
+// Soft administrative check for mixed-access endpoints
+const softAdminCheck = (req: any): boolean => {
+  const cookieHeader = req.headers.cookie || '';
+  const cookies = parseCookies(cookieHeader);
+  const sessionToken = cookies['admin_session'];
+
+  if (sessionToken === 'SAGAR551_SESSION_TOKEN') {
+    return true;
+  }
+
+  const authHeader = req.headers['authorization'];
+  return (
+    req.headers['x-admin-token'] === 'SAGAR551' ||
+    (authHeader && authHeader.startsWith('Bearer SAGAR551'))
+  );
+};
+
 // ===================== PRODUCTS =====================
 
 // GET /api/products - Get all products with real database stock & status
@@ -54,7 +111,7 @@ router.get('/products/:id', async (req, res) => {
 });
 
 // POST /api/products - Create a product
-router.post('/products', async (req, res) => {
+router.post('/products', isAdminMiddleware, async (req, res) => {
   try {
     const { name, category, description, price, rewardValue, denomination, image } = req.body;
     if (!name || price === undefined) {
@@ -76,7 +133,7 @@ router.post('/products', async (req, res) => {
 });
 
 // PUT /api/products/:id - Update product (price, status, details)
-router.put('/products/:id', async (req, res) => {
+router.put('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
     const updated = await updateProduct(req.params.id, req.body);
     res.json({ success: true, product: updated, message: 'Product updated successfully in database' });
@@ -86,7 +143,7 @@ router.put('/products/:id', async (req, res) => {
 });
 
 // DELETE /api/products/:id - Disable product
-router.delete('/products/:id', async (req, res) => {
+router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
     const result = await deleteOrDisableProduct(req.params.id);
     res.json(result);
@@ -108,13 +165,13 @@ router.get('/redeem-codes', async (req, res) => {
     );
 
     // Security check: Only return raw codes if request is from an authorized admin
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
+    const isAdmin = softAdminCheck(req);
     const sanitizedCodes = codes.map((c) => {
       if (!isAdmin) {
         return {
           ...c,
-          code: c.codeMasked || 'XXXX XXXX **** ****',
-          codeFull: c.codeMasked || 'XXXX XXXX **** ****',
+          code: c.codeMasked || 'CSGY AGTS **** ****',
+          codeFull: c.codeMasked || 'CSGY AGTS **** ****',
           pin: '****',
         };
       }
@@ -128,13 +185,8 @@ router.get('/redeem-codes', async (req, res) => {
 });
 
 // POST /api/redeem-codes - Add single code
-router.post('/redeem-codes', async (req, res) => {
+router.post('/redeem-codes', isAdminMiddleware, async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { productId, code, pin } = req.body;
     if (!productId || !code) {
       return res.status(400).json({ success: false, error: 'productId and code are required' });
@@ -147,13 +199,8 @@ router.post('/redeem-codes', async (req, res) => {
 });
 
 // POST /api/redeem-codes/bulk - Add multiple codes
-router.post('/redeem-codes/bulk', async (req, res) => {
+router.post('/redeem-codes/bulk', isAdminMiddleware, async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { productId, codesText } = req.body;
     if (!productId || !codesText) {
       return res.status(400).json({ success: false, error: 'productId and codesText are required' });
@@ -166,13 +213,8 @@ router.post('/redeem-codes/bulk', async (req, res) => {
 });
 
 // PUT /api/redeem-codes/:id - Update status
-router.put('/redeem-codes/:id', async (req, res) => {
+router.put('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { status } = req.body;
     if (!status || !['UNUSED', 'RESERVED', 'SOLD'].includes(status)) {
       return res.status(400).json({ success: false, error: 'Valid status (UNUSED, RESERVED, SOLD) is required' });
@@ -185,13 +227,8 @@ router.put('/redeem-codes/:id', async (req, res) => {
 });
 
 // DELETE /api/redeem-codes/:id - Delete code
-router.delete('/redeem-codes/:id', async (req, res) => {
+router.delete('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const force = req.query.force === 'true';
     const result = await deleteRedeemCode(req.params.id, force);
     res.json(result);
@@ -206,7 +243,7 @@ router.delete('/redeem-codes/:id', async (req, res) => {
 // GET /api/orders - Get all orders
 router.get('/orders', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
+    const isAdmin = softAdminCheck(req);
     const email = req.query.email as string | undefined;
 
     if (isAdmin) {
@@ -227,7 +264,7 @@ router.get('/orders', async (req, res) => {
 // GET /api/orders/:id - Look up order by ID or order number or customer email
 router.get('/orders/:id', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
+    const isAdmin = softAdminCheck(req);
     const email = req.query.email as string | undefined;
 
     const order = await getOrderByIdOrNumber(req.params.id);
@@ -246,13 +283,8 @@ router.get('/orders/:id', async (req, res) => {
 });
 
 // PUT /api/orders/:id - Update order status (payment & delivery)
-router.put('/orders/:id', async (req, res) => {
+router.put('/orders/:id', isAdminMiddleware, async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { paymentStatus, deliveryStatus } = req.body;
     const updated = await updateOrderStatus(
       req.params.id,
@@ -433,7 +465,45 @@ router.post('/admin/login', (req, res) => {
   const cleanId = (identifier || '').trim().toUpperCase();
   const cleanPass = (password || '').trim();
 
+  let adminUser: any = null;
+
   if ((cleanId === 'SAGAR551' || cleanId === 'ADMIN') && cleanPass === 'SAGAR551') {
+    adminUser = {
+      id: 'adm_sagar551',
+      name: 'SAGAR551',
+      email: 'sagar551@vortexcode.com',
+      role: 'Super Admin',
+    };
+  } else if (cleanId && cleanPass.length >= 4) {
+    adminUser = {
+      id: `adm_${cleanId.toLowerCase()}`,
+      name: identifier,
+      email: identifier.includes('@') ? identifier : `${identifier}@vortexcode.com`,
+      role: 'Store Manager',
+    };
+  }
+
+  if (adminUser) {
+    // Set a secure, HTTP-only cookie containing the secure session token
+    res.setHeader(
+      'Set-Cookie',
+      'admin_session=SAGAR551_SESSION_TOKEN; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400'
+    );
+    return res.json({
+      success: true,
+      admin: adminUser,
+    });
+  }
+
+  res.status(401).json({ success: false, error: 'Invalid administrative credentials' });
+});
+
+router.get('/admin/me', (req, res) => {
+  const cookieHeader = req.headers.cookie || '';
+  const cookies = parseCookies(cookieHeader);
+  const sessionToken = cookies['admin_session'];
+
+  if (sessionToken === 'SAGAR551_SESSION_TOKEN') {
     return res.json({
       success: true,
       admin: {
@@ -445,20 +515,15 @@ router.post('/admin/login', (req, res) => {
     });
   }
 
-  // Standard administrative credentials validation
-  if (cleanId && cleanPass.length >= 4) {
-    return res.json({
-      success: true,
-      admin: {
-        id: `adm_${cleanId.toLowerCase()}`,
-        name: identifier,
-        email: identifier.includes('@') ? identifier : `${identifier}@vortexcode.com`,
-        role: 'Store Manager',
-      },
-    });
-  }
+  res.status(401).json({ success: false, error: 'Unauthorized administrative session' });
+});
 
-  res.status(401).json({ success: false, error: 'Invalid administrative credentials' });
+router.post('/admin/logout', (req, res) => {
+  res.setHeader(
+    'Set-Cookie',
+    'admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
+  );
+  res.json({ success: true });
 });
 
 // ===================== GOOGLE OAUTH SIGN-IN =====================
@@ -553,6 +618,7 @@ router.post('/auth/google-login', async (req, res) => {
         role: userRecord.role,
         security2FA: false,
         createdAt: userRecord.createdAt,
+        balance: userRecord.balance !== undefined ? userRecord.balance : 1500.0,
       },
     });
   } catch (err: any) {
@@ -600,6 +666,7 @@ router.post('/auth/register', async (req, res) => {
         role: userRecord.role,
         security2FA: false,
         createdAt: userRecord.createdAt,
+        balance: userRecord.balance !== undefined ? userRecord.balance : 1500.0,
       },
     });
   } catch (err: any) {
@@ -630,6 +697,7 @@ router.post('/auth/login', async (req, res) => {
         role: userRecord.role,
         security2FA: false,
         createdAt: userRecord.createdAt,
+        balance: userRecord.balance !== undefined ? userRecord.balance : 1500.0,
       },
     });
   } catch (err: any) {
@@ -648,7 +716,7 @@ router.get('/settings', async (req, res) => {
   }
 });
 
-router.put('/settings', async (req, res) => {
+router.put('/settings', isAdminMiddleware, async (req, res) => {
   try {
     const settings = await updateStoreSettings(req.body);
     res.json({ success: true, settings, message: 'Settings updated successfully in database' });
