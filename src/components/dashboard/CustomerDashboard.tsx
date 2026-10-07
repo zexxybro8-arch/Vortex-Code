@@ -36,19 +36,24 @@ export const CustomerDashboard: React.FC = () => {
   // Store Filters State
   const [selectedDenomination, setSelectedDenomination] = useState<string>('ALL VALUES');
   const [buyingProductId, setBuyingProductId] = useState<string | null>(null);
+  const [buyingCodeId, setBuyingCodeId] = useState<string | null>(null);
 
   // Payment Checkout Modal State
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
-  // Live Products from single source of truth (Database)
+  // Live Products and Unused Redeem Codes from single source of truth (Database)
   const [products, setProducts] = useState<StoreProduct[]>([]);
+  const [unusedCodes, setUnusedCodes] = useState<ApiRedeemCode[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
 
   const fetchLiveDatabaseData = useCallback(async () => {
     try {
       // 1. Fetch live products with exact database computed stock
-      const apiProds = await api.getProducts();
+      const [apiProds, apiCodes] = await Promise.all([
+        api.getProducts(),
+        api.getRedeemCodes(undefined, 'UNUSED'),
+      ]);
 
       if (apiProds) {
         const mapped: StoreProduct[] = apiProds.map((p) => {
@@ -79,6 +84,10 @@ export const CustomerDashboard: React.FC = () => {
         });
         setProducts(mapped);
       }
+
+      if (apiCodes) {
+        setUnusedCodes(apiCodes);
+      }
     } catch (err) {
       console.error('Error fetching live database inventory in CustomerDashboard:', err);
     } finally {
@@ -102,7 +111,7 @@ export const CustomerDashboard: React.FC = () => {
   // Helper to get total UNUSED stock count for any denomination button
   const getDenominationStockCount = (denom: string): number => {
     if (denom === 'ALL VALUES') {
-      return products.reduce((sum, p) => sum + (p.enabled ? (p.stock ?? 0) : 0), 0);
+      return unusedCodes.length;
     }
     const matchingProd = products.find((p) => p.denomination === denom);
     if (!matchingProd || matchingProd.enabled === false) return 0;
@@ -111,10 +120,12 @@ export const CustomerDashboard: React.FC = () => {
 
   // Build the items to display based on selected denomination
   // For a selected denomination:
-  // Return exactly ONE product card across all active products.
+  // Return ALL records where status = "UNUSED" AND matching product/denomination
+  // If 0 UNUSED codes, show the out-of-stock representation for that product
   interface DisplayCardItem {
     key: string;
     product: StoreProduct;
+    codeRecord?: ApiRedeemCode;
     maskedCode: string;
     isOutOfStock: boolean;
     availableStockCount: number;
@@ -122,23 +133,73 @@ export const CustomerDashboard: React.FC = () => {
 
   const displayItems: DisplayCardItem[] = [];
 
-  const filteredProducts = products.filter((prod) => {
-    if (selectedDenomination === 'ALL VALUES') return true;
-    return prod.denomination === selectedDenomination;
-  });
+  if (selectedDenomination === 'ALL VALUES') {
+    // Show cards across all products
+    products.forEach((prod) => {
+      const prodUnusedCodes = unusedCodes.filter((c) => c.productId === prod.id);
+      const isOut = !prod.enabled || (prod.stock !== undefined && prod.stock <= 0) || prodUnusedCodes.length === 0;
 
-  filteredProducts.forEach((prod) => {
-    const isOut = !prod.enabled || (prod.stock !== undefined && prod.stock <= 0);
-    displayItems.push({
-      key: `prod_${prod.id}`,
-      product: prod,
-      maskedCode: isOut ? 'OUT OF STOCK' : 'XXXX XXXX **** ****', // Standard secure generic preview
-      isOutOfStock: isOut,
-      availableStockCount: prod.stock ?? 0,
+      if (isOut) {
+        displayItems.push({
+          key: `out_${prod.id}`,
+          product: prod,
+          maskedCode: 'OUT OF STOCK',
+          isOutOfStock: true,
+          availableStockCount: 0,
+        });
+      } else {
+        // Display each UNUSED code from the database for this product
+        prodUnusedCodes.forEach((c) => {
+          displayItems.push({
+            key: `code_${c.id}`,
+            product: prod,
+            codeRecord: c,
+            maskedCode: c.codeMasked || formatMaskedCode(c.code),
+            isOutOfStock: false,
+            availableStockCount: prod.stock ?? prodUnusedCodes.length,
+          });
+        });
+      }
     });
-  });
+  } else {
+    // Specific denomination selected (e.g. ₹100 or ₹120)
+    const matchingProd = products.find((p) => p.denomination === selectedDenomination);
+    const denomUnusedCodes = unusedCodes.filter(
+      (c) => c.denomination === selectedDenomination || (matchingProd && c.productId === matchingProd.id)
+    );
 
-  const handleBuyNow = async (product: StoreProduct) => {
+    const isOut =
+      !matchingProd ||
+      matchingProd.enabled === false ||
+      (matchingProd.stock !== undefined && matchingProd.stock <= 0) ||
+      denomUnusedCodes.length === 0;
+
+    if (isOut) {
+      if (matchingProd) {
+        displayItems.push({
+          key: `out_${matchingProd.id}`,
+          product: matchingProd,
+          maskedCode: 'OUT OF STOCK',
+          isOutOfStock: true,
+          availableStockCount: 0,
+        });
+      }
+    } else {
+      // Return ALL UNUSED codes matching this product/denomination
+      denomUnusedCodes.forEach((c) => {
+        displayItems.push({
+          key: `code_${c.id}`,
+          product: matchingProd!,
+          codeRecord: c,
+          maskedCode: c.codeMasked || formatMaskedCode(c.code),
+          isOutOfStock: false,
+          availableStockCount: matchingProd!.stock ?? denomUnusedCodes.length,
+        });
+      });
+    }
+  }
+
+  const handleBuyNow = async (product: StoreProduct, codeId?: string) => {
     if (product.enabled === false) {
       addToast('error', 'This item is currently unavailable.');
       return;
@@ -154,15 +215,14 @@ export const CustomerDashboard: React.FC = () => {
       return;
     }
 
-    // Force clear previous checkout and fulfillment states before creating a new unique order
-    setCheckoutData(null);
-    setIsCheckoutModalOpen(false);
     setBuyingProductId(product.id);
+    if (codeId) setBuyingCodeId(codeId);
 
     try {
       // 1. Identify product in DB & create checkout record with server-verified price
       const checkoutRes = await api.createCheckoutOrder({
         productId: product.id,
+        codeId,
         customerName: user.fullName || user.username || 'Verified Customer',
         customerEmail: user.email,
         customerId: user.id,
@@ -181,6 +241,7 @@ export const CustomerDashboard: React.FC = () => {
       addToast('error', err.message || 'Checkout initiation failed. Please try again.');
     } finally {
       setBuyingProductId(null);
+      setBuyingCodeId(null);
     }
   };
 
@@ -298,7 +359,9 @@ export const CustomerDashboard: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {displayItems.map((item) => {
                 const prod = item.product;
-                const isBuying = buyingProductId === prod.id;
+                const isBuying =
+                  (buyingProductId === prod.id && (!item.codeRecord || buyingCodeId === item.codeRecord.id)) ||
+                  (buyingCodeId !== null && item.codeRecord && buyingCodeId === item.codeRecord.id);
 
                 return (
                   <div
@@ -390,7 +453,7 @@ export const CustomerDashboard: React.FC = () => {
                     {/* 4. REDEEM BUTTON (Large Full-Width Horizontally Centered Cyber Button) */}
                     <button
                       type="button"
-                      onClick={() => handleBuyNow(prod)}
+                      onClick={() => handleBuyNow(prod, item.codeRecord?.id)}
                       disabled={isBuying || item.isOutOfStock}
                       className={`w-full py-3 px-4 rounded-2xl font-extrabold text-xs sm:text-sm tracking-wider transition-all flex items-center justify-center cursor-pointer shadow-lg ${
                         item.isOutOfStock
@@ -503,10 +566,7 @@ export const CustomerDashboard: React.FC = () => {
 
       <PaymentCheckoutModal
         isOpen={isCheckoutModalOpen}
-        onClose={() => {
-          setIsCheckoutModalOpen(false);
-          setCheckoutData(null);
-        }}
+        onClose={() => setIsCheckoutModalOpen(false)}
         checkoutData={checkoutData}
         onPaymentSuccess={async () => {
           await fetchLiveDatabaseData();

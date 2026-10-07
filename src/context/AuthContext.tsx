@@ -101,13 +101,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshCustomerOrders = useCallback(async () => {
     try {
-      if (!user) {
-        setOrders([]);
-        return;
-      }
-      const apiOrders = await api.getOrders(user.email);
+      const apiOrders = await api.getOrders();
       if (apiOrders) {
-        const mappedOrders: OrderItem[] = apiOrders.map((o) => ({
+        // Filter orders for the current user if user email exists, or show user's orders
+        const userOrders = user
+          ? apiOrders.filter((o) => o.customerEmail?.toLowerCase() === user.email?.toLowerCase())
+          : apiOrders;
+
+        const mappedOrders: OrderItem[] = userOrders.map((o) => ({
           id: o.id,
           orderNumber: o.orderNumber,
           codeTitle: o.productName,

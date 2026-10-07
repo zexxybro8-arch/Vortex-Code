@@ -106,22 +106,7 @@ router.get('/redeem-codes', async (req, res) => {
       status as string | undefined,
       denomination as string | undefined
     );
-
-    // Security check: Only return raw codes if request is from an authorized admin
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    const sanitizedCodes = codes.map((c) => {
-      if (!isAdmin) {
-        return {
-          ...c,
-          code: c.codeMasked || 'XXXX XXXX **** ****',
-          codeFull: c.codeMasked || 'XXXX XXXX **** ****',
-          pin: '****',
-        };
-      }
-      return c;
-    });
-
-    res.json({ success: true, codes: sanitizedCodes });
+    res.json({ success: true, codes });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to fetch redeem codes' });
   }
@@ -130,11 +115,6 @@ router.get('/redeem-codes', async (req, res) => {
 // POST /api/redeem-codes - Add single code
 router.post('/redeem-codes', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { productId, code, pin } = req.body;
     if (!productId || !code) {
       return res.status(400).json({ success: false, error: 'productId and code are required' });
@@ -149,11 +129,6 @@ router.post('/redeem-codes', async (req, res) => {
 // POST /api/redeem-codes/bulk - Add multiple codes
 router.post('/redeem-codes/bulk', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { productId, codesText } = req.body;
     if (!productId || !codesText) {
       return res.status(400).json({ success: false, error: 'productId and codesText are required' });
@@ -168,11 +143,6 @@ router.post('/redeem-codes/bulk', async (req, res) => {
 // PUT /api/redeem-codes/:id - Update status
 router.put('/redeem-codes/:id', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { status } = req.body;
     if (!status || !['UNUSED', 'RESERVED', 'SOLD'].includes(status)) {
       return res.status(400).json({ success: false, error: 'Valid status (UNUSED, RESERVED, SOLD) is required' });
@@ -187,11 +157,6 @@ router.put('/redeem-codes/:id', async (req, res) => {
 // DELETE /api/redeem-codes/:id - Delete code
 router.delete('/redeem-codes/:id', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const force = req.query.force === 'true';
     const result = await deleteRedeemCode(req.params.id, force);
     res.json(result);
@@ -206,19 +171,8 @@ router.delete('/redeem-codes/:id', async (req, res) => {
 // GET /api/orders - Get all orders
 router.get('/orders', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    const email = req.query.email as string | undefined;
-
-    if (isAdmin) {
-      const orders = await getAllOrders();
-      return res.json({ success: true, orders });
-    } else if (email) {
-      const allOrders = await getAllOrders();
-      const filtered = allOrders.filter(o => o.customerEmail?.toLowerCase() === email.toLowerCase());
-      return res.json({ success: true, orders: filtered });
-    } else {
-      return res.status(401).json({ success: false, error: 'Unauthenticated orders access' });
-    }
+    const orders = await getAllOrders();
+    res.json({ success: true, orders });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to fetch orders' });
   }
@@ -227,19 +181,11 @@ router.get('/orders', async (req, res) => {
 // GET /api/orders/:id - Look up order by ID or order number or customer email
 router.get('/orders/:id', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    const email = req.query.email as string | undefined;
-
     const order = await getOrderByIdOrNumber(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
-
-    if (isAdmin || (email && order.customerEmail?.toLowerCase() === email.toLowerCase())) {
-      return res.json({ success: true, order });
-    }
-
-    return res.status(401).json({ success: false, error: 'Unauthorized access to this order' });
+    res.json({ success: true, order });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to fetch order' });
   }
@@ -248,11 +194,6 @@ router.get('/orders/:id', async (req, res) => {
 // PUT /api/orders/:id - Update order status (payment & delivery)
 router.put('/orders/:id', async (req, res) => {
   try {
-    const isAdmin = req.headers['x-admin-token'] === 'SAGAR551' || req.headers['authorization'] === 'Bearer SAGAR551';
-    if (!isAdmin) {
-      return res.status(401).json({ success: false, error: 'Unauthorized administrative operation' });
-    }
-
     const { paymentStatus, deliveryStatus } = req.body;
     const updated = await updateOrderStatus(
       req.params.id,

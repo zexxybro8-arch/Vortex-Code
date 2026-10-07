@@ -74,14 +74,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
     }
   }, [isOpen, checkoutData?.order?.id]);
 
-  const handleClose = () => {
-    setFulfilledOrder(null);
-    setErrorMessage(null);
-    setCopied(false);
-    setIsVerifying(false);
-    onClose();
-  };
-
   if (!isOpen || !checkoutData) return null;
 
   const { order, gatewayConfig, productImage } = checkoutData;
@@ -145,7 +137,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
 
           <button
             type="button"
-            onClick={handleClose}
+            onClick={onClose}
             className="p-2 text-slate-400 hover:text-white bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -199,7 +191,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  handleClose();
+                  onClose();
                   setCurrentView('vault');
                 }}
                 className="flex-1 py-3 px-4 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
@@ -209,7 +201,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={onClose}
                 className="py-3 px-5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
               >
                 Close
