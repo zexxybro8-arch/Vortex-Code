@@ -60,25 +60,6 @@ export function saveDb() {
   fs.writeFileSync(DB_FILE, Buffer.from(binaryArray));
 }
 
-// Write-Through sync helpers to update cloud Firestore backing state in real-time
-async function syncToFirestore(collectionName: string, id: string, record: any) {
-  try {
-    const { syncRecordToFirestore } = await import('./firestore');
-    await syncRecordToFirestore(collectionName, id, record);
-  } catch (err) {
-    console.error(`Failed to sync to Firestore for ${collectionName}:`, err);
-  }
-}
-
-async function deleteFromFirestore(collectionName: string, id: string) {
-  try {
-    const { deleteRecordFromFirestore } = await import('./firestore');
-    await deleteRecordFromFirestore(collectionName, id);
-  } catch (err) {
-    console.error(`Failed to delete from Firestore for ${collectionName}:`, err);
-  }
-}
-
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
 
@@ -176,19 +157,6 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('supportEmail', 'support@vortexcode.com');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('currencySymbol', '₹');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('enableAutoFulfillment', 'true');`);
-
-  // Attempt to restore SQLite state from Firestore cloud backups first (cloud write-through survival)
-  try {
-    const { restoreDbFromFirestore } = await import('./firestore');
-    const restored = await restoreDbFromFirestore(dbInstance);
-    if (restored) {
-      console.log('✅ SQLite successfully restored/synced from Cloud Firestore.');
-    } else {
-      console.log('Firestore backup was empty or could not be loaded. Relying on local/fallback data.');
-    }
-  } catch (err) {
-    console.error('Failed to restore from Firestore at startup:', err);
-  }
 
   // Check if products table is empty or needs normalization
   const prodCheck = dbInstance.exec(`SELECT count(*) as count FROM products;`);
@@ -491,25 +459,7 @@ export async function createProduct(data: {
     [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, now, now]
   );
   saveDb();
-
-  const created = await getProductById(id);
-  if (created) {
-    await syncToFirestore('vortex_products', id, {
-      id: created.id,
-      name: created.name,
-      category: created.category,
-      description: created.description,
-      price: created.priceRupees,
-      reward_value: created.rewardValueRupees,
-      denomination: created.denomination,
-      enabled: created.enabled ? 1 : 0,
-      image: created.image,
-      created_at: now,
-      updated_at: now,
-    });
-  }
-
-  return created;
+  return getProductById(id);
 }
 
 export async function updateProduct(
@@ -573,7 +523,7 @@ export function validateCode(raw: string): { valid: boolean; normalized: string;
     return {
       valid: false,
       normalized,
-      error: `Redeem code must contain exactly 16 characters (got ${normalized.length} characters: "${normalized}"). Example format: CSGY AGTS **** ****`,
+      error: `Redeem code must contain exactly 16 characters (got ${normalized.length} characters: "${normalized}"). Format: XXXX XXXX XXXX XXXX`,
     };
   }
   if (!/^[A-Z0-9]{16}$/.test(normalized)) {
@@ -600,10 +550,6 @@ export function maskCode(code: string): string {
     const part1 = norm.substring(0, 4);
     const part2 = norm.substring(4, 8);
     return `${part1} ${part2} **** ****`;
-  }
-  if (norm.length >= 4) {
-    const part1 = norm.substring(0, 4);
-    return `${part1} XXXX **** ****`;
   }
   return 'CSGY AGTS **** ****';
 }
@@ -1014,32 +960,6 @@ export async function purchaseProductDirect(params: {
   };
 }
 
-export function releaseExpiredReservations() {
-  if (!dbInstance) return;
-  const expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
-  const cutoffTime = new Date(Date.now() - expiryMinutes * 60 * 1000).toISOString();
-
-  dbInstance.run(
-    `UPDATE redeem_codes 
-     SET status = 'UNUSED', order_id = NULL 
-     WHERE status = 'RESERVED' 
-       AND (
-         order_id IN (
-           SELECT id FROM orders WHERE payment_status = 'PENDING' AND created_at < ?
-         )
-         OR order_id IS NULL
-       );`,
-    [cutoffTime]
-  );
-
-  dbInstance.run(
-    `UPDATE orders 
-     SET payment_status = 'CANCELLED', delivery_status = 'EXPIRED', updated_at = ? 
-     WHERE payment_status = 'PENDING' AND created_at < ?;`,
-    [new Date().toISOString(), cutoffTime]
-  );
-}
-
 /**
  * 1. Identify product in DB & lookup verified price from DB (NEVER trust frontend price)
  * 2. Verify stock exists (count UNUSED codes)
@@ -1054,10 +974,6 @@ export async function createPendingCheckoutOrder(params: {
   customerId?: string;
 }) {
   const db = await getDb();
-
-  // Release any expired code reservations before checking stock
-  releaseExpiredReservations();
-
   const product = await getProductById(params.productId);
   if (!product) {
     throw new Error('Product not found in database.');
@@ -1097,13 +1013,7 @@ export async function createPendingCheckoutOrder(params: {
   // Amount MUST come strictly from product.price in DB
   const verifiedAmount = product.price;
 
-  // Lock/reserve selected code for this pending order
-  db.run(
-    `UPDATE redeem_codes SET status = 'RESERVED', order_id = ? WHERE id = ? AND status = 'UNUSED';`,
-    [orderId, availableCodeId]
-  );
-
-  // Insert PENDING order record (No unmasked code delivered yet!)
+  // Insert PENDING order record (No code delivered yet!)
   db.run(
     `INSERT INTO orders (
       id, 
@@ -1121,7 +1031,7 @@ export async function createPendingCheckoutOrder(params: {
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', ?, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1130,7 +1040,6 @@ export async function createPendingCheckoutOrder(params: {
       params.customerName || 'Customer',
       params.customerEmail || 'customer@vortexcode.com',
       verifiedAmount,
-      availableCodeId,
       now,
       now,
     ]
@@ -1138,7 +1047,10 @@ export async function createPendingCheckoutOrder(params: {
 
   saveDb();
 
-  // Initialize Payment Gateway Intent
+  // Initialize Payment Gateway Intent with latest DB credentials
+  const storeSettings = await getStoreSettings();
+  paymentGateway.updateCredentials(storeSettings);
+
   const gatewayOrder = await paymentGateway.createGatewayOrder({
     orderId,
     orderNumber,
@@ -1206,7 +1118,10 @@ export async function verifyAndFulfillPaymentOrder(params: {
     };
   }
 
-  // Signature / Authenticity Verification
+  // Signature / Authenticity Verification with latest DB credentials
+  const storeSettings = await getStoreSettings();
+  paymentGateway.updateCredentials(storeSettings);
+
   const gatewayConfig = paymentGateway.getConfig();
   if (gatewayConfig.isConfigured) {
     const verifyResult = await paymentGateway.checkPaymentStatus(order.id);
@@ -1218,22 +1133,13 @@ export async function verifyAndFulfillPaymentOrder(params: {
     throw new Error('Payment Gateway not configured. Live transactions require configured gateway credentials.');
   }
 
-  // Fetch reserved code for this order or fallback to any UNUSED code for product
-  let codeRes = db.exec(
+  // Atomically select ONE UNUSED code for this product from DB
+  const codeRes = db.exec(
     `SELECT id, code, pin FROM redeem_codes 
-     WHERE (order_id = ? OR id = ?) AND status IN ('RESERVED', 'UNUSED') 
+     WHERE product_id = ? AND status = 'UNUSED' 
      LIMIT 1;`,
-    [order.id, order.deliveredCodeId || '']
+    [order.productId]
   );
-
-  if (codeRes.length === 0 || codeRes[0].values.length === 0) {
-    codeRes = db.exec(
-      `SELECT id, code, pin FROM redeem_codes 
-       WHERE product_id = ? AND status = 'UNUSED' 
-       LIMIT 1;`,
-      [order.productId]
-    );
-  }
 
   const now = new Date().toISOString();
 
@@ -1380,6 +1286,11 @@ export async function getStoreSettings() {
     supportEmail: 'support@vortexcode.com',
     currencySymbol: '₹',
     enableAutoFulfillment: true,
+    famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
+    famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || '',
+    famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '',
+    famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5,
+    appUrl: process.env.APP_URL || 'https://vortexcode.shop',
   };
 
   if (res.length > 0 && res[0].values.length > 0) {
@@ -1388,6 +1299,8 @@ export async function getStoreSettings() {
       const val = row[1] as string;
       if (key === 'enableAutoFulfillment') {
         settings[key] = val === 'true';
+      } else if (key === 'famupigatewayExpiryMinutes') {
+        settings[key] = Number(val) || 5;
       } else {
         settings[key] = val;
       }

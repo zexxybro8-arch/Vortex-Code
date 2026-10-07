@@ -1,5 +1,5 @@
 export interface PaymentGatewayConfig {
-  provider: 'razorpay' | 'cashfree' | 'stripe' | 'custom';
+  provider: 'razorpay' | 'cashfree' | 'stripe' | 'famupigateway' | 'custom';
   isConfigured: boolean;
   currency: string;
   publicKey?: string;

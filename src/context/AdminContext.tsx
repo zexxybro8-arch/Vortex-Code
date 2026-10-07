@@ -115,6 +115,11 @@ interface AdminContextType {
     supportEmail: string;
     currencySymbol: string;
     enableAutoFulfillment: boolean;
+    famupigatewayBaseUrl: string;
+    famupigatewayApiKey: string;
+    famupigatewayWebhookSecret: string;
+    famupigatewayExpiryMinutes: number;
+    appUrl: string;
   };
   updateStoreSettings: (newSettings: any) => void;
 
@@ -210,6 +215,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     supportEmail: 'support@vortexcode.com',
     currencySymbol: '₹',
     enableAutoFulfillment: true,
+    famupigatewayBaseUrl: 'https://famupigateway.site/api',
+    famupigatewayApiKey: '',
+    famupigatewayWebhookSecret: '',
+    famupigatewayExpiryMinutes: 5,
+    appUrl: 'https://vortexcode.shop',
   });
 
   const setAdminTab = (tab: AdminTab) => {

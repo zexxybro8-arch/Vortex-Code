@@ -324,7 +324,7 @@ export const api = {
     isOutOfStock?: boolean;
     error?: string;
   }> {
-    const res = await fetch('/api/checkout/create-order', {
+    const res = await fetch('/api/payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
