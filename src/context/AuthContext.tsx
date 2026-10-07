@@ -105,20 +105,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setOrders([]);
         return;
       }
-      const apiOrders = await api.getOrders(user.email);
+      const apiOrders = await api.getMyOrders(user.email, user.id);
       if (apiOrders) {
         const mappedOrders: OrderItem[] = apiOrders.map((o) => ({
           id: o.id,
           orderNumber: o.orderNumber,
           codeTitle: o.productName,
-          priceRupees: Number(o.amount),
-          rewardValueRupees: Number(o.amount * 15),
-          codeValue: Number(o.amount * 15),
-          redeemCode: o.paymentStatus === 'PAID' && o.deliveredCode ? o.deliveredCode : 'PAYMENT PENDING',
-          pin: o.paymentStatus === 'PAID' ? o.deliveredPin || '' : '',
+          priceRupees: Number(o.pricePaid || o.amount),
+          rewardValueRupees: Number(o.balance || o.amount * 15),
+          codeValue: Number(o.balance || o.amount * 15),
+          redeemCode: o.deliveredCode || 'XXXX XXXX XXXX XXXX',
+          pin: o.deliveredPin || '',
           category: 'GOOGLE PLAY',
           purchaseDate: o.createdAt ? o.createdAt.substring(0, 16).replace('T', ' ') : new Date().toISOString().substring(0, 16),
-          status: o.paymentStatus === 'PAID' && o.deliveryStatus === 'DELIVERED' ? 'Completed' : 'Processing',
+          status: 'Completed',
           paymentMethod: o.paymentMethod || 'Direct Payment Gateway',
         }));
         setOrders(mappedOrders);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from './Logo';
+import { MyOrdersModal } from './MyOrdersModal';
 import {
   ShoppingBag,
   Menu,
@@ -15,9 +16,11 @@ import {
 export const Header: React.FC = () => {
   const { user, currentView, setCurrentView, logout, orders } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [myOrdersModalOpen, setMyOrdersModalOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/90 shadow-2xl transition-all">
+    <>
+      <header className="sticky top-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/90 shadow-2xl transition-all">
       <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* LEFT AREA: Mobile Hamburger (LEFT on mobile) + Brand (Logo & Text) */}
@@ -80,12 +83,12 @@ export const Header: React.FC = () => {
         {/* RIGHT AREA: Cart / Orders Icon moved slightly inward from edge (LEFT) & aligned slightly UP */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 mr-1.5 sm:mr-3 md:mr-4">
           
-          {/* Cart / Orders Button (Always on the RIGHT, positioned slightly inward and vertically centered/higher) */}
+          {/* Cart / Orders Button (Always on the RIGHT, opens My Orders / Redemption History modal) */}
           <button
-            onClick={() => setCurrentView('dashboard')}
+            onClick={() => setMyOrdersModalOpen(true)}
             className="relative -translate-y-0.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-200 transition-all cursor-pointer shadow-md flex items-center gap-1.5 shrink-0"
-            title="My Orders & Cart"
-            aria-label="View Cart and Orders"
+            title="My Orders & Redemption History"
+            aria-label="View My Orders and Redemption History"
           >
             <ShoppingBag className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="hidden lg:inline text-xs font-mono font-bold text-slate-300">Orders</span>
@@ -227,6 +230,12 @@ export const Header: React.FC = () => {
         </div>
       )}
 
-    </header>
+      </header>
+
+      <MyOrdersModal
+        isOpen={myOrdersModalOpen}
+        onClose={() => setMyOrdersModalOpen(false)}
+      />
+    </>
   );
 };

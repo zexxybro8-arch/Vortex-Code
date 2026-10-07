@@ -173,6 +173,12 @@ export async function getDb(): Promise<Database> {
     // Ignore error if column already exists
   }
 
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN customer_id TEXT;`);
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
     const tableSqlRes = dbInstance.exec(`SELECT sql FROM sqlite_master WHERE name = 'redeem_codes';`);
@@ -1188,6 +1194,60 @@ export async function getAllOrders() {
   });
 }
 
+/**
+ * Fetch ONLY successfully PAID and completed purchases belonging strictly to the customer.
+ * Pending, failed, or cancelled transactions are excluded.
+ */
+export async function getCustomerPaidOrders(customerEmail: string, customerId?: string) {
+  const db = await getDb();
+  const cleanEmail = (customerEmail || '').trim().toLowerCase();
+  const cleanId = (customerId || '').trim();
+
+  if (!cleanEmail && !cleanId) return [];
+
+  const res = db.exec(`
+    SELECT 
+      o.id, 
+      o.order_number as orderNumber, 
+      o.product_id as productId, 
+      o.product_name as productName, 
+      o.customer_name as customerName, 
+      o.customer_email as customerEmail, 
+      o.customer_id as customerId,
+      o.amount, 
+      o.payment_status as paymentStatus, 
+      o.delivery_status as deliveryStatus, 
+      o.delivered_code_id as deliveredCodeId, 
+      o.delivered_code as deliveredCode, 
+      o.delivered_pin as deliveredPin, 
+      o.payment_method as paymentMethod, 
+      o.gateway_order_id as gatewayOrderId,
+      o.gateway_payment_id as gatewayPaymentId,
+      o.created_at as createdAt, 
+      o.updated_at as updatedAt,
+      p.denomination as denomination,
+      p.reward_value as rewardValue
+    FROM orders o
+    LEFT JOIN products p ON o.product_id = p.id
+    WHERE (
+      (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = ?)
+      OR (o.customer_id IS NOT NULL AND o.customer_id = ? AND ? != '')
+    )
+    AND o.payment_status = 'PAID'
+    ORDER BY o.created_at DESC;
+  `, [cleanEmail, cleanId, cleanId]);
+
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
+}
+
 export async function getOrderByIdOrNumber(identifier: string) {
   const db = await getDb();
   const clean = identifier.trim();
@@ -1255,6 +1315,7 @@ export async function purchaseProductDirect(params: {
   codeId?: string;
   customerName: string;
   customerEmail: string;
+  customerId?: string;
   paymentMethod?: string;
 }) {
   const db = await getDb();
@@ -1325,8 +1386,8 @@ export async function purchaseProductDirect(params: {
 
   // 2. Insert order
   db.run(
-    `INSERT INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, amount, payment_status, delivery_status, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'PAID', 'DELIVERED', ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, customer_id, amount, payment_status, delivery_status, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PAID', 'DELIVERED', ?, ?, ?, ?, ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1334,6 +1395,7 @@ export async function purchaseProductDirect(params: {
       product.name,
       params.customerName || 'Customer',
       params.customerEmail || 'customer@example.com',
+      params.customerId || null,
       product.price,
       assignedCodeId,
       formatFullCode(assignedCode),
@@ -1432,6 +1494,7 @@ export async function createPendingCheckoutOrder(params: {
       product_name, 
       customer_name, 
       customer_email, 
+      customer_id,
       amount, 
       payment_status, 
       delivery_status, 
@@ -1441,7 +1504,7 @@ export async function createPendingCheckoutOrder(params: {
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1449,6 +1512,7 @@ export async function createPendingCheckoutOrder(params: {
       product.name,
       params.customerName || 'Customer',
       params.customerEmail || 'customer@vortexcode.com',
+      params.customerId || null,
       verifiedAmount,
       now,
       now,

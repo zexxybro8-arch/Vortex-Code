@@ -18,6 +18,7 @@ import {
   updateRedeemCode,
   deleteRedeemCode,
   getAllOrders,
+  getCustomerPaidOrders,
   getOrderByIdOrNumber,
   updateOrderStatus,
   purchaseProductDirect,
@@ -317,7 +318,112 @@ router.delete('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
   }
 });
 
-// ===================== ORDERS =====================
+// ===================== ORDERS & REDEMPTION HISTORY =====================
+
+// GET /api/my-orders - Securely fetch ONLY the authenticated customer's successfully completed orders
+router.get('/my-orders', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const emailQuery = (req.query.email as string || '').trim().toLowerCase();
+    const customerIdQuery = (req.query.customerId as string || '').trim();
+
+    // If no email or customer identifier provided, return empty list gracefully (e.g. unauthenticated visitor)
+    if (!emailQuery && !customerIdQuery) {
+      return res.json({
+        success: true,
+        orders: [],
+        count: 0,
+        message: 'No active session or customer identification provided.'
+      });
+    }
+
+    const paidOrders = await getCustomerPaidOrders(emailQuery, customerIdQuery);
+
+    // Format orders for the customer redemption history view
+    const formattedOrders = paidOrders.map((ord: any) => {
+      const balanceNum = ord.rewardValue !== undefined && ord.rewardValue !== null
+        ? Number(ord.rewardValue)
+        : Number(ord.amount || 100) * 15;
+
+      return {
+        id: ord.id,
+        orderNumber: ord.orderNumber,
+        productName: ord.productName || 'Google Play Recharge Code',
+        denomination: ord.denomination || `₹${ord.amount || 100}`,
+        balance: balanceNum,
+        balanceRupees: balanceNum,
+        pricePaid: Number(ord.amount),
+        amount: Number(ord.amount),
+        paymentStatus: 'PAID' as const,
+        deliveryStatus: 'DELIVERED' as const,
+        status: 'COMPLETED' as const,
+        paymentMethod: ord.paymentMethod || 'Direct Payment Gateway',
+        gatewayOrderId: ord.gatewayOrderId || null,
+        gatewayPaymentId: ord.gatewayPaymentId || null,
+        deliveredCode: ord.deliveredCode || '',
+        deliveredPin: ord.deliveredPin || '',
+        createdAt: ord.createdAt,
+        purchaseDate: ord.createdAt,
+      };
+    });
+
+    return res.json({
+      success: true,
+      orders: formattedOrders,
+      count: formattedOrders.length,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/my-orders:', err);
+    res.status(500).json({ success: false, error: 'Unable to load your redemption history.' });
+  }
+});
+
+// POST /api/my-orders/reveal - Authenticated code reveal verification
+router.post('/my-orders/reveal', async (req, res) => {
+  try {
+    const { orderId, email, customerId } = req.body || {};
+    if (!orderId) {
+      return res.status(400).json({ success: false, error: 'Order ID is required' });
+    }
+
+    const cleanOrderId = String(orderId).trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanCustomerId = (customerId || '').trim();
+
+    const order = await getOrderByIdOrNumber(cleanOrderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    // Security check: Must belong strictly to the requesting customer
+    const orderEmail = (order.customerEmail || '').trim().toLowerCase();
+    const orderCustomerId = (order.customerId || '').trim();
+
+    const isAuthorized =
+      (cleanEmail && orderEmail && cleanEmail === orderEmail) ||
+      (cleanCustomerId && orderCustomerId && cleanCustomerId === orderCustomerId) ||
+      softAdminCheck(req);
+
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, error: 'Unauthorized: You do not own this order.' });
+    }
+
+    if (order.paymentStatus !== 'PAID') {
+      return res.status(400).json({ success: false, error: 'Order payment is not completed.' });
+    }
+
+    return res.json({
+      success: true,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      code: order.deliveredCode || '',
+      pin: order.deliveredPin || '',
+    });
+  } catch (err: any) {
+    console.error('Error in /api/my-orders/reveal:', err);
+    res.status(500).json({ success: false, error: 'Failed to reveal code' });
+  }
+});
 
 // GET /api/orders - Get all orders
 router.get('/orders', async (req, res) => {

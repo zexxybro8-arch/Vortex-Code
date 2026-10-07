@@ -232,6 +232,28 @@ export const api = {
     }
   },
 
+  async getMyOrders(email?: string, customerId?: string): Promise<any[]> {
+    try {
+      const params = new URLSearchParams();
+      if (email) params.set('email', email);
+      if (customerId) params.set('customerId', customerId);
+
+      const data = await safeFetchJson(`/api/my-orders?${params.toString()}`);
+      return data.orders || [];
+    } catch (err) {
+      console.warn('api.getMyOrders error:', err);
+      return [];
+    }
+  },
+
+  async revealOrderCode(orderId: string, email?: string, customerId?: string): Promise<any> {
+    return safeFetchJson('/api/my-orders/reveal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, email, customerId }),
+    });
+  },
+
   async getOrder(id: string, email?: string): Promise<ApiOrder | null> {
     const params = new URLSearchParams();
     if (email) params.set('email', email);
