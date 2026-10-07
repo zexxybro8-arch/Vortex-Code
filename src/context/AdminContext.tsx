@@ -224,7 +224,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           console.error('Failed to load products from API:', err);
           return [];
         }),
-        api.getRedeemCodes().catch((err) => {
+        api.getRedeemCodes(undefined, undefined, undefined, true).catch((err) => {
           console.error('Failed to load codes from API:', err);
           return [];
         }),

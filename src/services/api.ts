@@ -84,7 +84,10 @@ export const api = {
   }): Promise<ApiProduct> {
     const res = await fetch('/api/products', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
       body: JSON.stringify(productData),
     });
     const data = await res.json();
@@ -97,7 +100,10 @@ export const api = {
   async updateProduct(id: string, updates: Partial<ApiProduct>): Promise<ApiProduct> {
     const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
       body: JSON.stringify(updates),
     });
     const data = await res.json();
@@ -110,6 +116,9 @@ export const api = {
   async deleteProduct(id: string): Promise<{ success: boolean; message: string }> {
     const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      headers: {
+        'x-admin-token': 'SAGAR551'
+      }
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -119,14 +128,21 @@ export const api = {
   },
 
   // Redeem Codes
-  async getRedeemCodes(productId?: string, status?: string, denomination?: string): Promise<ApiRedeemCode[]> {
+  async getRedeemCodes(productId?: string, status?: string, denomination?: string, isAdmin: boolean = false): Promise<ApiRedeemCode[]> {
     try {
       const params = new URLSearchParams();
       if (productId) params.set('productId', productId);
       if (status) params.set('status', status);
       if (denomination && denomination !== 'ALL VALUES') params.set('denomination', denomination);
 
-      const res = await fetch(`/api/redeem-codes?${params.toString()}`);
+      const headers: Record<string, string> = {};
+      if (isAdmin) {
+        headers['x-admin-token'] = 'SAGAR551';
+      }
+
+      const res = await fetch(`/api/redeem-codes?${params.toString()}`, {
+        headers
+      });
       if (!res.ok) throw new Error('Failed to fetch redeem codes from database');
       const data = await res.json();
       return data.codes || [];
@@ -143,7 +159,10 @@ export const api = {
   }): Promise<any> {
     const res = await fetch('/api/redeem-codes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
       body: JSON.stringify(codeData),
     });
     const data = await res.json();
@@ -156,7 +175,10 @@ export const api = {
   async addBulkRedeemCodes(productId: string, codesText: string): Promise<{ success: boolean; addedCount: number; message: string }> {
     const res = await fetch('/api/redeem-codes/bulk', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
       body: JSON.stringify({ productId, codesText }),
     });
     const data = await res.json();
@@ -169,7 +191,10 @@ export const api = {
   async updateRedeemCodeStatus(id: string, status: 'UNUSED' | 'RESERVED' | 'SOLD'): Promise<any> {
     const res = await fetch(`/api/redeem-codes/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
       body: JSON.stringify({ status }),
     });
     const data = await res.json();
@@ -183,6 +208,9 @@ export const api = {
     const url = `/api/redeem-codes/${encodeURIComponent(id)}${force ? '?force=true' : ''}`;
     const res = await fetch(url, {
       method: 'DELETE',
+      headers: {
+        'x-admin-token': 'SAGAR551'
+      }
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -192,9 +220,20 @@ export const api = {
   },
 
   // Orders
-  async getOrders(): Promise<ApiOrder[]> {
+  async getOrders(email?: string): Promise<ApiOrder[]> {
     try {
-      const res = await fetch('/api/orders');
+      const params = new URLSearchParams();
+      if (email) params.set('email', email);
+
+      const headers: Record<string, string> = {};
+      // If we don't have an email, then it's an admin requesting all orders
+      if (!email) {
+        headers['x-admin-token'] = 'SAGAR551';
+      }
+
+      const res = await fetch(`/api/orders?${params.toString()}`, {
+        headers
+      });
       if (!res.ok) throw new Error('Failed to fetch orders from database');
       const data = await res.json();
       return data.orders || [];
@@ -204,8 +243,18 @@ export const api = {
     }
   },
 
-  async getOrder(id: string): Promise<ApiOrder | null> {
-    const res = await fetch(`/api/orders/${encodeURIComponent(id)}`);
+  async getOrder(id: string, email?: string): Promise<ApiOrder | null> {
+    const params = new URLSearchParams();
+    if (email) params.set('email', email);
+
+    const headers: Record<string, string> = {};
+    if (!email) {
+      headers['x-admin-token'] = 'SAGAR551';
+    }
+
+    const res = await fetch(`/api/orders/${encodeURIComponent(id)}?${params.toString()}`, {
+      headers
+    });
     if (!res.ok) {
       if (res.status === 404) return null;
       throw new Error('Failed to fetch order');
@@ -217,7 +266,10 @@ export const api = {
   async updateOrderStatus(id: string, paymentStatus: string, deliveryStatus: string): Promise<any> {
     const res = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
       body: JSON.stringify({ paymentStatus, deliveryStatus }),
     });
     const data = await res.json();
