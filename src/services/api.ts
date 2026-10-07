@@ -348,7 +348,10 @@ export const api = {
   async updateStoreSettings(settings: Record<string, any>): Promise<any> {
     const data = await safeFetchJson('/api/settings', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
       body: JSON.stringify(settings),
     });
     return data.settings;
@@ -357,7 +360,10 @@ export const api = {
   async updateBranding(branding: { logoUrl: string; websiteName: string; tagline: string }): Promise<any> {
     const data = await safeFetchJson('/api/admin/branding', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
       body: JSON.stringify(branding),
     });
     return data.settings;

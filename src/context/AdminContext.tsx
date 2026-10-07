@@ -373,7 +373,6 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Real Database Product Actions
   const addProduct = async (prodData: Omit<StoreProduct, 'id'>) => {
-    setIsLoading(true);
     try {
       await api.createProduct({
         name: prodData.name,
@@ -385,13 +384,13 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         image: prodData.image,
       });
       await refreshData();
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to create product:', err);
+      throw err;
     }
   };
 
   const updateProduct = async (id: string, updated: Partial<StoreProduct>) => {
-    setIsLoading(true);
     try {
       const payload: any = {};
       if (updated.name !== undefined) payload.name = updated.name;
@@ -412,18 +411,19 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       await api.updateProduct(id, payload);
       await refreshData();
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to update product:', err);
+      throw err;
     }
   };
 
   const deleteProduct = async (id: string) => {
-    setIsLoading(true);
     try {
       await api.deleteProduct(id);
       await refreshData();
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to delete product:', err);
+      throw err;
     }
   };
 
@@ -434,24 +434,24 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     pin?: string,
     status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'
   ) => {
-    setIsLoading(true);
     try {
       const result = await api.addRedeemCode({ productId, code, pin, status });
       await refreshData();
       return result;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to add redeem code:', err);
+      throw err;
     }
   };
 
   const addBulkRedeemCodes = async (productId: string, codesText: string) => {
-    setIsLoading(true);
     try {
       const result = await api.addBulkRedeemCodes(productId, codesText);
       await refreshData();
       return result;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to add bulk codes:', err);
+      throw err;
     }
   };
 
@@ -464,18 +464,17 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       productId?: string;
     }
   ) => {
-    setIsLoading(true);
     try {
       const result = await api.updateRedeemCode(id, updates);
       await refreshData();
       return result;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to update redeem code:', err);
+      throw err;
     }
   };
 
   const addRedeemCodes = async (newCodes: Omit<AdminRedeemCode, 'id'>[]) => {
-    setIsLoading(true);
     try {
       for (const c of newCodes) {
         const targetProd =
@@ -492,19 +491,20 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
       await refreshData();
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to add redeem codes:', err);
+      throw err;
     }
   };
 
   const deleteRedeemCode = async (id: string, force?: boolean) => {
-    setIsLoading(true);
     try {
       const result = await api.deleteRedeemCode(id, force);
       await refreshData();
       return result;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to delete redeem code:', err);
+      throw err;
     }
   };
 
@@ -514,12 +514,12 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     paymentStatus: 'PAID' | 'PENDING' | 'REFUNDED',
     deliveryStatus: 'DELIVERED' | 'PROCESSING' | 'FAILED'
   ) => {
-    setIsLoading(true);
     try {
       await api.updateOrderStatus(id, paymentStatus, deliveryStatus);
       await refreshData();
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+      throw err;
     }
   };
 
@@ -536,24 +536,24 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     enabled?: boolean;
     sortOrder?: number;
   }) => {
-    setIsLoading(true);
     try {
       const created = await api.createCategory(catData);
       await refreshData();
       return created;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to create category:', err);
+      throw err;
     }
   };
 
   const updateCategory = async (id: string, updates: Partial<AdminCategory>) => {
-    setIsLoading(true);
     try {
       const updated = await api.updateCategory(id, updates);
       await refreshData();
       return updated;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to update category:', err);
+      throw err;
     }
   };
 
@@ -564,22 +564,22 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return toggled;
     } catch (err) {
       console.error('Failed to toggle category:', err);
+      throw err;
     }
   };
 
   const deleteCategory = async (id: string) => {
-    setIsLoading(true);
     try {
       const res = await api.deleteCategory(id);
       await refreshData();
       return res;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to delete category:', err);
+      throw err;
     }
   };
 
   const updateStoreSettings = async (newSettings: any) => {
-    setIsLoading(true);
     try {
       const merged = { ...storeSettings, ...newSettings };
       const updated = await api.updateStoreSettings(merged);
@@ -588,21 +588,27 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } catch (err: any) {
       console.error('Failed to save settings:', err);
-    } finally {
-      setIsLoading(false);
+      throw err;
     }
   };
 
   const updateBranding = async (branding: { logoUrl: string; websiteName: string; tagline: string }) => {
-    setIsLoading(true);
     try {
       const updated = await api.updateBranding(branding);
       if (updated) {
-        setStoreSettings((prev) => ({ ...prev, ...updated }));
+        setStoreSettings((prev) => ({
+          ...prev,
+          logoUrl: updated.logoUrl !== undefined ? updated.logoUrl : branding.logoUrl,
+          websiteName: updated.websiteName || branding.websiteName,
+          storeName: updated.websiteName || branding.websiteName,
+          tagline: updated.tagline || branding.tagline,
+          subtitle: updated.tagline || branding.tagline,
+        }));
       }
       return updated;
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to save branding:', err);
+      throw err;
     }
   };
 
