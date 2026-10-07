@@ -46,19 +46,47 @@ export const CustomerDashboard: React.FC = () => {
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [unusedCodes, setUnusedCodes] = useState<ApiRedeemCode[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+
+  // Request counter ref to prevent race conditions from out-of-order async responses
+  const fetchRequestIdRef = React.useRef(0);
+
+  // Helper to match unused redeem codes to a product deterministically
+  const getUnusedCodesForProduct = useCallback(
+    (prod: StoreProduct, codes: ApiRedeemCode[]): ApiRedeemCode[] => {
+      if (!prod || prod.enabled === false) return [];
+      return codes.filter((c) => {
+        if (c.status && c.status !== 'UNUSED') return false;
+        if (c.productId && c.productId === prod.id) return true;
+        if (
+          c.denomination &&
+          (c.denomination === prod.denomination ||
+            c.denomination === `₹${prod.priceRupees}` ||
+            Number(c.price) === prod.priceRupees)
+        ) {
+          return true;
+        }
+        return false;
+      });
+    },
+    []
+  );
 
   const fetchLiveDatabaseData = useCallback(async () => {
+    const currentRequestId = ++fetchRequestIdRef.current;
     try {
-      // 1. Fetch live products and securely masked unused codes
+      // Fetch live products and securely masked unused codes from single source of truth
       const [apiProds, apiCodes] = await Promise.all([
         api.getProducts(),
         api.getRedeemCodes(undefined, 'UNUSED'),
       ]);
 
-      if (apiProds) {
+      // Ignore out-of-order stale response
+      if (currentRequestId !== fetchRequestIdRef.current) return;
+
+      if (Array.isArray(apiProds)) {
         const mapped: StoreProduct[] = apiProds.map((p) => {
           const isEnabled = p.enabled !== undefined ? Boolean(p.enabled) : true;
-          // Available stock must strictly come from UNUSED codes in the database
           const stock = Number(p.stock ?? 0);
           return {
             id: p.id,
@@ -67,11 +95,7 @@ export const CustomerDashboard: React.FC = () => {
             rewardValueRupees: Number(p.rewardValue || p.price * 15),
             denomination: p.denomination || `₹${p.price}`,
             category: (p.category as any) || 'DIGITAL REWARDS',
-            stockStatus: !isEnabled
-              ? 'OUT OF STOCK'
-              : stock > 0
-              ? 'AVAILABLE'
-              : 'OUT OF STOCK',
+            stockStatus: !isEnabled ? 'OUT OF STOCK' : stock > 0 ? 'AVAILABLE' : 'OUT OF STOCK',
             deliveryInfo: '⚡ Instant Automated Vault Key Delivery',
             badge: !isEnabled ? 'DISABLED' : stock > 0 ? `${stock} Available` : 'OUT OF STOCK',
             image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
@@ -85,13 +109,26 @@ export const CustomerDashboard: React.FC = () => {
         setProducts(mapped);
       }
 
-      if (apiCodes) {
+      if (Array.isArray(apiCodes)) {
         setUnusedCodes(apiCodes);
       }
-    } catch (err) {
-      console.error('Error fetching live database inventory in CustomerDashboard:', err);
+
+      setInventoryError(null);
+    } catch (err: any) {
+      if (currentRequestId !== fetchRequestIdRef.current) return;
+      console.warn('Network sync notice in CustomerDashboard (retaining last valid inventory state):', err);
+      
+      // If no inventory is loaded yet (initial boot failure), show error state instead of fake 0 stock
+      setProducts((prev) => {
+        if (prev.length === 0) {
+          setInventoryError('Unable to load inventory from server. Retrying connection...');
+        }
+        return prev; // NEVER clear existing valid inventory state on transient errors
+      });
     } finally {
-      setIsLoadingData(false);
+      if (currentRequestId === fetchRequestIdRef.current) {
+        setIsLoadingData(false);
+      }
     }
   }, []);
 
@@ -124,20 +161,26 @@ export const CustomerDashboard: React.FC = () => {
     .filter((d) => d && !defaultDenominations.includes(d));
   const denominations = [...defaultDenominations, ...Array.from(new Set(extraDenoms))];
 
-  // Helper to get total UNUSED stock count for any denomination button
-  const getDenominationStockCount = (denom: string): number => {
+  // Helper to get total UNUSED stock count for any denomination button with 100% mathematical consistency
+  const getDenominationStockCount = useCallback((denom: string): number => {
     if (denom === 'ALL VALUES') {
-      return unusedCodes.length;
+      return products.reduce((sum, p) => {
+        if (!p.enabled) return sum;
+        const pCodes = getUnusedCodesForProduct(p, unusedCodes);
+        const count = pCodes.length > 0 ? pCodes.length : (p.stock ?? 0);
+        return sum + count;
+      }, 0);
     }
-    const matchingProd = products.find((p) => p.denomination === denom);
+
+    const matchingProd = products.find(
+      (p) => p.denomination === denom || p.denomination === `₹${denom.replace(/\D/g, '')}`
+    );
     if (!matchingProd || matchingProd.enabled === false) return 0;
-    return matchingProd.stock ?? 0;
-  };
+    const pCodes = getUnusedCodesForProduct(matchingProd, unusedCodes);
+    return pCodes.length > 0 ? pCodes.length : (matchingProd.stock ?? 0);
+  }, [products, unusedCodes, getUnusedCodesForProduct]);
 
   // Build the items to display based on selected denomination
-  // For a selected denomination:
-  // Return records where status = "UNUSED" AND matching product/denomination
-  // Each card displays its unique securely masked prefix, e.g. CSGY AGTS **** ****
   interface DisplayCardItem {
     key: string;
     product: StoreProduct;
@@ -149,22 +192,30 @@ export const CustomerDashboard: React.FC = () => {
 
   const displayItems: DisplayCardItem[] = [];
 
-  if (selectedDenomination === 'ALL VALUES') {
-    // Show cards across all products
-    products.forEach((prod) => {
-      const prodUnusedCodes = unusedCodes.filter((c) => c.productId === prod.id);
-      const isOut = !prod.enabled || (prod.stock !== undefined && prod.stock <= 0) || prodUnusedCodes.length === 0;
+  const targetProducts =
+    selectedDenomination === 'ALL VALUES'
+      ? products
+      : products.filter(
+          (p) =>
+            p.denomination === selectedDenomination ||
+            p.denomination === `₹${selectedDenomination.replace(/\D/g, '')}`
+        );
 
-      if (isOut) {
-        displayItems.push({
-          key: `out_${prod.id}`,
-          product: prod,
-          maskedCode: 'OUT OF STOCK',
-          isOutOfStock: true,
-          availableStockCount: 0,
-        });
-      } else {
-        // Display each UNUSED code from the database for this product
+  targetProducts.forEach((prod) => {
+    const prodUnusedCodes = getUnusedCodesForProduct(prod, unusedCodes);
+    const totalStock = prodUnusedCodes.length > 0 ? prodUnusedCodes.length : (prod.stock ?? 0);
+    const isOut = !prod.enabled || totalStock <= 0;
+
+    if (isOut) {
+      displayItems.push({
+        key: `out_${prod.id}`,
+        product: prod,
+        maskedCode: 'OUT OF STOCK',
+        isOutOfStock: true,
+        availableStockCount: 0,
+      });
+    } else {
+      if (prodUnusedCodes.length > 0) {
         prodUnusedCodes.forEach((c) => {
           displayItems.push({
             key: `code_${c.id}`,
@@ -172,48 +223,20 @@ export const CustomerDashboard: React.FC = () => {
             codeRecord: c,
             maskedCode: c.code || c.codeMasked || 'CSGY AGTS **** ****',
             isOutOfStock: false,
-            availableStockCount: prod.stock ?? prodUnusedCodes.length,
+            availableStockCount: totalStock,
           });
         });
-      }
-    });
-  } else {
-    // Specific denomination selected (e.g. ₹100 or ₹120)
-    const matchingProd = products.find((p) => p.denomination === selectedDenomination);
-    const denomUnusedCodes = unusedCodes.filter(
-      (c) => c.denomination === selectedDenomination || (matchingProd && c.productId === matchingProd.id)
-    );
-
-    const isOut =
-      !matchingProd ||
-      matchingProd.enabled === false ||
-      (matchingProd.stock !== undefined && matchingProd.stock <= 0) ||
-      denomUnusedCodes.length === 0;
-
-    if (isOut) {
-      if (matchingProd) {
+      } else {
         displayItems.push({
-          key: `out_${matchingProd.id}`,
-          product: matchingProd,
-          maskedCode: 'OUT OF STOCK',
-          isOutOfStock: true,
-          availableStockCount: 0,
-        });
-      }
-    } else {
-      // Return ALL UNUSED codes matching this product/denomination
-      denomUnusedCodes.forEach((c) => {
-        displayItems.push({
-          key: `code_${c.id}`,
-          product: matchingProd!,
-          codeRecord: c,
-          maskedCode: c.code || c.codeMasked || 'CSGY AGTS **** ****',
+          key: `prod_${prod.id}`,
+          product: prod,
+          maskedCode: 'CSGY AGTS **** ****',
           isOutOfStock: false,
-          availableStockCount: matchingProd!.stock ?? denomUnusedCodes.length,
+          availableStockCount: totalStock,
         });
-      });
+      }
     }
-  }
+  });
 
   const handleBuyNow = async (product: StoreProduct, codeId?: string) => {
     if (product.enabled === false) {
@@ -380,6 +403,20 @@ export const CustomerDashboard: React.FC = () => {
                 })}
               </div>
             </div>
+
+            {/* INVENTORY ERROR STATE */}
+            {inventoryError && products.length === 0 && (
+              <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-center space-y-3 font-mono">
+                <AlertCircle className="w-8 h-8 text-rose-400 mx-auto animate-bounce" />
+                <p className="text-sm font-bold">{inventoryError}</p>
+                <button
+                  onClick={() => fetchLiveDatabaseData()}
+                  className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Retry Connecting to Database
+                </button>
+              </div>
+            )}
 
             {/* PRODUCT / REDEEM CODE CARDS GRID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

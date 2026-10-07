@@ -55,15 +55,15 @@ export interface ApiOrder {
 export const api = {
   // Products
   async getProducts(): Promise<ApiProduct[]> {
-    try {
-      const res = await fetch('/api/products');
-      if (!res.ok) throw new Error('Failed to fetch products from database');
-      const data = await res.json();
-      return data.products || [];
-    } catch (err) {
-      console.warn('api.getProducts connection notice:', err);
-      return [];
+    const res = await fetch('/api/products');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch products from database: HTTP ${res.status}`);
     }
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch products from database');
+    }
+    return data.products || [];
   },
 
   async getProduct(id: string): Promise<ApiProduct> {
@@ -129,27 +129,27 @@ export const api = {
 
   // Redeem Codes
   async getRedeemCodes(productId?: string, status?: string, denomination?: string, isAdmin: boolean = false): Promise<ApiRedeemCode[]> {
-    try {
-      const params = new URLSearchParams();
-      if (productId) params.set('productId', productId);
-      if (status) params.set('status', status);
-      if (denomination && denomination !== 'ALL VALUES') params.set('denomination', denomination);
+    const params = new URLSearchParams();
+    if (productId) params.set('productId', productId);
+    if (status) params.set('status', status);
+    if (denomination && denomination !== 'ALL VALUES') params.set('denomination', denomination);
 
-      const headers: Record<string, string> = {};
-      if (isAdmin) {
-        headers['x-admin-token'] = 'SAGAR551';
-      }
-
-      const res = await fetch(`/api/redeem-codes?${params.toString()}`, {
-        headers
-      });
-      if (!res.ok) throw new Error('Failed to fetch redeem codes from database');
-      const data = await res.json();
-      return data.codes || [];
-    } catch (err) {
-      console.warn('api.getRedeemCodes connection notice:', err);
-      return [];
+    const headers: Record<string, string> = {};
+    if (isAdmin) {
+      headers['x-admin-token'] = 'SAGAR551';
     }
+
+    const res = await fetch(`/api/redeem-codes?${params.toString()}`, {
+      headers
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch redeem codes from database: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch redeem codes from database');
+    }
+    return data.codes || [];
   },
 
   async addRedeemCode(codeData: {
