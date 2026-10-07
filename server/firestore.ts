@@ -20,9 +20,19 @@ export function getFirestore(): Firestore {
     console.error('Error reading firebase config, using fallback projectId:', err);
   }
 
-  firestoreInstance = new Firestore({
-    projectId,
-  });
+  const options: any = { projectId };
+  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
+
+  if (serviceAccountEnv) {
+    try {
+      options.credentials = JSON.parse(serviceAccountEnv);
+      console.log('Using service account credentials from FIREBASE_SERVICE_ACCOUNT env var.');
+    } catch (err) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:', err);
+    }
+  }
+
+  firestoreInstance = new Firestore(options);
 
   console.log(`Firestore client initialized successfully for project: ${projectId}`);
   return firestoreInstance;

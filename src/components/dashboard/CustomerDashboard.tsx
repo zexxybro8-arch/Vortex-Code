@@ -430,7 +430,7 @@ export const CustomerDashboard: React.FC = () => {
                           BALANCE
                         </div>
                         <div className="text-lg sm:text-xl font-black text-emerald-400">
-                          ₹{user && user.balance !== undefined ? user.balance.toLocaleString('en-IN') : '1,500'}
+                          ₹{prod.rewardValueRupees.toLocaleString('en-IN')}
                         </div>
                       </div>
                     </div>

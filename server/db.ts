@@ -60,6 +60,25 @@ export function saveDb() {
   fs.writeFileSync(DB_FILE, Buffer.from(binaryArray));
 }
 
+// Write-Through sync helpers to update cloud Firestore backing state in real-time
+async function syncToFirestore(collectionName: string, id: string, record: any) {
+  try {
+    const { syncRecordToFirestore } = await import('./firestore');
+    await syncRecordToFirestore(collectionName, id, record);
+  } catch (err) {
+    console.error(`Failed to sync to Firestore for ${collectionName}:`, err);
+  }
+}
+
+async function deleteFromFirestore(collectionName: string, id: string) {
+  try {
+    const { deleteRecordFromFirestore } = await import('./firestore');
+    await deleteRecordFromFirestore(collectionName, id);
+  } catch (err) {
+    console.error(`Failed to delete from Firestore for ${collectionName}:`, err);
+  }
+}
+
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
 
@@ -157,6 +176,19 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('supportEmail', 'support@vortexcode.com');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('currencySymbol', '₹');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('enableAutoFulfillment', 'true');`);
+
+  // Attempt to restore SQLite state from Firestore cloud backups first (cloud write-through survival)
+  try {
+    const { restoreDbFromFirestore } = await import('./firestore');
+    const restored = await restoreDbFromFirestore(dbInstance);
+    if (restored) {
+      console.log('✅ SQLite successfully restored/synced from Cloud Firestore.');
+    } else {
+      console.log('Firestore backup was empty or could not be loaded. Relying on local/fallback data.');
+    }
+  } catch (err) {
+    console.error('Failed to restore from Firestore at startup:', err);
+  }
 
   // Check if products table is empty or needs normalization
   const prodCheck = dbInstance.exec(`SELECT count(*) as count FROM products;`);
@@ -459,7 +491,25 @@ export async function createProduct(data: {
     [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, now, now]
   );
   saveDb();
-  return getProductById(id);
+
+  const created = await getProductById(id);
+  if (created) {
+    await syncToFirestore('vortex_products', id, {
+      id: created.id,
+      name: created.name,
+      category: created.category,
+      description: created.description,
+      price: created.priceRupees,
+      reward_value: created.rewardValueRupees,
+      denomination: created.denomination,
+      enabled: created.enabled ? 1 : 0,
+      image: created.image,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
+  return created;
 }
 
 export async function updateProduct(
@@ -523,7 +573,7 @@ export function validateCode(raw: string): { valid: boolean; normalized: string;
     return {
       valid: false,
       normalized,
-      error: `Redeem code must contain exactly 16 characters (got ${normalized.length} characters: "${normalized}"). Format: XXXX XXXX XXXX XXXX`,
+      error: `Redeem code must contain exactly 16 characters (got ${normalized.length} characters: "${normalized}"). Example format: CSGY AGTS **** ****`,
     };
   }
   if (!/^[A-Z0-9]{16}$/.test(normalized)) {
