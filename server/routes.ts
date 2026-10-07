@@ -1012,6 +1012,12 @@ router.put('/admin/branding', isAdminMiddleware, async (req, res) => {
 
 // ===================== CONTACT & CUSTOMER SUPPORT SETTINGS =====================
 
+function clampNumber(val: any, min: number, max: number, defaultVal: number): number {
+  const n = Number(val);
+  if (isNaN(n)) return defaultVal;
+  return Math.min(Math.max(Math.round(n), min), max);
+}
+
 function normalizeContactConfig(body: any): {
   valid: boolean;
   contactEnabled: boolean;
@@ -1019,6 +1025,12 @@ function normalizeContactConfig(body: any): {
   contactUrl: string;
   contactIconUrl: string;
   contactLabel: string;
+  contactWidgetSize: number;
+  contactWidgetRight: number;
+  contactWidgetBottom: number;
+  contactWidgetMobileSize: number;
+  contactWidgetMobileRight: number;
+  contactWidgetMobileBottom: number;
   error?: string;
 } {
   const contactEnabled =
@@ -1037,6 +1049,13 @@ function normalizeContactConfig(body: any): {
   let contactIconUrl = (body.contactIconUrl || '').trim();
   let contactLabel = (body.contactLabel || 'Contact Admin').trim();
 
+  const contactWidgetSize = clampNumber(body.contactWidgetSize, 40, 100, 60);
+  const contactWidgetRight = clampNumber(body.contactWidgetRight, 0, 100, 30);
+  const contactWidgetBottom = clampNumber(body.contactWidgetBottom, 0, 300, 30);
+  const contactWidgetMobileSize = clampNumber(body.contactWidgetMobileSize, 40, 100, 55);
+  const contactWidgetMobileRight = clampNumber(body.contactWidgetMobileRight, 0, 100, 35);
+  const contactWidgetMobileBottom = clampNumber(body.contactWidgetMobileBottom, 60, 300, 110);
+
   // Validate contactIconUrl if provided
   if (contactIconUrl) {
     if (/^(javascript:|data:|vbscript:)/i.test(contactIconUrl)) {
@@ -1047,6 +1066,12 @@ function normalizeContactConfig(body: any): {
         contactUrl: '',
         contactIconUrl: '',
         contactLabel,
+        contactWidgetSize,
+        contactWidgetRight,
+        contactWidgetBottom,
+        contactWidgetMobileSize,
+        contactWidgetMobileRight,
+        contactWidgetMobileBottom,
         error: 'Invalid icon image URL scheme',
       };
     }
@@ -1067,6 +1092,12 @@ function normalizeContactConfig(body: any): {
       contactUrl: '',
       contactIconUrl: '',
       contactLabel,
+      contactWidgetSize,
+      contactWidgetRight,
+      contactWidgetBottom,
+      contactWidgetMobileSize,
+      contactWidgetMobileRight,
+      contactWidgetMobileBottom,
       error: 'Invalid contact URL scheme',
     };
   }
@@ -1092,6 +1123,12 @@ function normalizeContactConfig(body: any): {
           contactUrl: '',
           contactIconUrl: '',
           contactLabel,
+          contactWidgetSize,
+          contactWidgetRight,
+          contactWidgetBottom,
+          contactWidgetMobileSize,
+          contactWidgetMobileRight,
+          contactWidgetMobileBottom,
           error: 'Invalid Telegram username or URL format',
         };
       }
@@ -1106,6 +1143,12 @@ function normalizeContactConfig(body: any): {
           contactUrl: '',
           contactIconUrl: '',
           contactLabel,
+          contactWidgetSize,
+          contactWidgetRight,
+          contactWidgetBottom,
+          contactWidgetMobileSize,
+          contactWidgetMobileRight,
+          contactWidgetMobileBottom,
           error: 'Telegram URL must point to t.me or telegram.me',
         };
       }
@@ -1117,6 +1160,12 @@ function normalizeContactConfig(body: any): {
         contactUrl: '',
         contactIconUrl: '',
         contactLabel,
+        contactWidgetSize,
+        contactWidgetRight,
+        contactWidgetBottom,
+        contactWidgetMobileSize,
+        contactWidgetMobileRight,
+        contactWidgetMobileBottom,
         error: 'Malformed Telegram URL',
       };
     }
@@ -1157,6 +1206,12 @@ function normalizeContactConfig(body: any): {
         contactUrl: '',
         contactIconUrl: '',
         contactLabel,
+        contactWidgetSize,
+        contactWidgetRight,
+        contactWidgetBottom,
+        contactWidgetMobileSize,
+        contactWidgetMobileRight,
+        contactWidgetMobileBottom,
         error: 'Invalid URL for Custom Contact',
       };
     }
@@ -1169,6 +1224,12 @@ function normalizeContactConfig(body: any): {
     contactUrl: normalizedUrl,
     contactIconUrl,
     contactLabel: contactLabel || 'Contact Admin',
+    contactWidgetSize,
+    contactWidgetRight,
+    contactWidgetBottom,
+    contactWidgetMobileSize,
+    contactWidgetMobileRight,
+    contactWidgetMobileBottom,
   };
 }
 
@@ -1185,6 +1246,12 @@ async function handleSaveContact(req: any, res: any) {
       contactUrl: validation.contactUrl,
       contactIconUrl: validation.contactIconUrl,
       contactLabel: validation.contactLabel,
+      contactWidgetSize: String(validation.contactWidgetSize),
+      contactWidgetRight: String(validation.contactWidgetRight),
+      contactWidgetBottom: String(validation.contactWidgetBottom),
+      contactWidgetMobileSize: String(validation.contactWidgetMobileSize),
+      contactWidgetMobileRight: String(validation.contactWidgetMobileRight),
+      contactWidgetMobileBottom: String(validation.contactWidgetMobileBottom),
       // Backward compatibility sync
       telegramEnabled: validation.contactEnabled ? 'true' : 'false',
       telegramUrl: validation.contactUrl,

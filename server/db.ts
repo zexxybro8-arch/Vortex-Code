@@ -216,6 +216,12 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactUrl', 'https://t.me/VortexCodeSupport');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconUrl', '');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactLabel', 'Contact Admin');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetSize', '60');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetRight', '30');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetBottom', '30');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileSize', '55');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileRight', '35');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileBottom', '110');`);
 
   // FamGateway Live Production Credentials
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
@@ -1776,6 +1782,12 @@ export async function getStoreSettings() {
     contactUrl: 'https://t.me/VortexCodeSupport',
     contactIconUrl: '',
     contactLabel: 'Contact Admin',
+    contactWidgetSize: 60,
+    contactWidgetRight: 30,
+    contactWidgetBottom: 30,
+    contactWidgetMobileSize: 55,
+    contactWidgetMobileRight: 35,
+    contactWidgetMobileBottom: 110,
     famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
     famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc',
     famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
@@ -1789,8 +1801,16 @@ export async function getStoreSettings() {
       const val = row[1] as string;
       if (key === 'enableAutoFulfillment' || key === 'telegramEnabled' || key === 'contactEnabled') {
         settings[key] = val === 'true';
-      } else if (key === 'famupigatewayExpiryMinutes') {
-        settings[key] = Number(val) || 5;
+      } else if (
+        key === 'famupigatewayExpiryMinutes' ||
+        key === 'contactWidgetSize' ||
+        key === 'contactWidgetRight' ||
+        key === 'contactWidgetBottom' ||
+        key === 'contactWidgetMobileSize' ||
+        key === 'contactWidgetMobileRight' ||
+        key === 'contactWidgetMobileBottom'
+      ) {
+        settings[key] = Number(val) || settings[key];
       } else {
         settings[key] = val;
       }

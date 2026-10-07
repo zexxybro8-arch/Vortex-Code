@@ -146,6 +146,12 @@ interface AdminContextType {
     contactUrl?: string;
     contactIconUrl?: string;
     contactLabel?: string;
+    contactWidgetSize?: number;
+    contactWidgetRight?: number;
+    contactWidgetBottom?: number;
+    contactWidgetMobileSize?: number;
+    contactWidgetMobileRight?: number;
+    contactWidgetMobileBottom?: number;
     famupigatewayBaseUrl: string;
     famupigatewayApiKey: string;
     famupigatewayWebhookSecret: string;
@@ -160,6 +166,12 @@ interface AdminContextType {
     contactUrl?: string;
     contactIconUrl?: string;
     contactLabel?: string;
+    contactWidgetSize?: number;
+    contactWidgetRight?: number;
+    contactWidgetBottom?: number;
+    contactWidgetMobileSize?: number;
+    contactWidgetMobileRight?: number;
+    contactWidgetMobileBottom?: number;
     telegramEnabled?: boolean;
     telegramUrl?: string;
   }) => Promise<any>;
@@ -266,6 +278,12 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactUrl: 'https://t.me/VortexCodeSupport',
     contactIconUrl: '',
     contactLabel: 'Contact Admin',
+    contactWidgetSize: 60,
+    contactWidgetRight: 30,
+    contactWidgetBottom: 30,
+    contactWidgetMobileSize: 55,
+    contactWidgetMobileRight: 35,
+    contactWidgetMobileBottom: 110,
     famupigatewayBaseUrl: 'https://famupigateway.site/api',
     famupigatewayApiKey: 'Famcfc08cd92c090e3718e9ad92155eb0fc',
     famupigatewayWebhookSecret: '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
@@ -641,6 +659,12 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactUrl?: string;
     contactIconUrl?: string;
     contactLabel?: string;
+    contactWidgetSize?: number;
+    contactWidgetRight?: number;
+    contactWidgetBottom?: number;
+    contactWidgetMobileSize?: number;
+    contactWidgetMobileRight?: number;
+    contactWidgetMobileBottom?: number;
     telegramEnabled?: boolean;
     telegramUrl?: string;
   }) => {
@@ -650,11 +674,17 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setStoreSettings((prev) => ({
           ...prev,
           ...updated,
-          contactEnabled: updated.contactEnabled !== undefined ? updated.contactEnabled : contact.contactEnabled,
+          contactEnabled: updated.contactEnabled !== undefined ? updated.contactEnabled : (contact.contactEnabled ?? prev.contactEnabled),
           contactPlatform: updated.contactPlatform || contact.contactPlatform || prev.contactPlatform,
           contactUrl: updated.contactUrl || contact.contactUrl || prev.contactUrl,
-          contactIconUrl: updated.contactIconUrl !== undefined ? updated.contactIconUrl : contact.contactIconUrl,
+          contactIconUrl: updated.contactIconUrl !== undefined ? updated.contactIconUrl : (contact.contactIconUrl ?? prev.contactIconUrl),
           contactLabel: updated.contactLabel || contact.contactLabel || prev.contactLabel,
+          contactWidgetSize: updated.contactWidgetSize !== undefined ? Number(updated.contactWidgetSize) : (contact.contactWidgetSize ?? prev.contactWidgetSize),
+          contactWidgetRight: updated.contactWidgetRight !== undefined ? Number(updated.contactWidgetRight) : (contact.contactWidgetRight ?? prev.contactWidgetRight),
+          contactWidgetBottom: updated.contactWidgetBottom !== undefined ? Number(updated.contactWidgetBottom) : (contact.contactWidgetBottom ?? prev.contactWidgetBottom),
+          contactWidgetMobileSize: updated.contactWidgetMobileSize !== undefined ? Number(updated.contactWidgetMobileSize) : (contact.contactWidgetMobileSize ?? prev.contactWidgetMobileSize),
+          contactWidgetMobileRight: updated.contactWidgetMobileRight !== undefined ? Number(updated.contactWidgetMobileRight) : (contact.contactWidgetMobileRight ?? prev.contactWidgetMobileRight),
+          contactWidgetMobileBottom: updated.contactWidgetMobileBottom !== undefined ? Number(updated.contactWidgetMobileBottom) : (contact.contactWidgetMobileBottom ?? prev.contactWidgetMobileBottom),
           telegramEnabled: updated.telegramEnabled !== undefined ? updated.telegramEnabled : (contact.contactEnabled ?? prev.telegramEnabled),
           telegramUrl: updated.telegramUrl || contact.contactUrl || prev.telegramUrl,
         }));

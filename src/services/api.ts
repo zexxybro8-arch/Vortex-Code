@@ -375,6 +375,12 @@ export const api = {
     contactUrl?: string;
     contactIconUrl?: string;
     contactLabel?: string;
+    contactWidgetSize?: number;
+    contactWidgetRight?: number;
+    contactWidgetBottom?: number;
+    contactWidgetMobileSize?: number;
+    contactWidgetMobileRight?: number;
+    contactWidgetMobileBottom?: number;
     telegramEnabled?: boolean;
     telegramUrl?: string;
   }): Promise<any> {
