@@ -221,7 +221,7 @@ export const CustomerDashboard: React.FC = () => {
             key: `code_${c.id}`,
             product: prod,
             codeRecord: c,
-            maskedCode: c.code || c.codeMasked || 'CSGY AGTS **** ****',
+            maskedCode: c.codeMasked || c.code || 'CSGY AGTS **** ****',
             isOutOfStock: false,
             availableStockCount: totalStock,
           });

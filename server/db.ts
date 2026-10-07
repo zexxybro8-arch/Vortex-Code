@@ -601,6 +601,10 @@ export function maskCode(code: string): string {
     const part2 = norm.substring(4, 8);
     return `${part1} ${part2} **** ****`;
   }
+  if (norm.length >= 4) {
+    const part1 = norm.substring(0, 4);
+    return `${part1} XXXX **** ****`;
+  }
   return 'CSGY AGTS **** ****';
 }
 
@@ -1010,6 +1014,32 @@ export async function purchaseProductDirect(params: {
   };
 }
 
+export function releaseExpiredReservations() {
+  if (!dbInstance) return;
+  const expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
+  const cutoffTime = new Date(Date.now() - expiryMinutes * 60 * 1000).toISOString();
+
+  dbInstance.run(
+    `UPDATE redeem_codes 
+     SET status = 'UNUSED', order_id = NULL 
+     WHERE status = 'RESERVED' 
+       AND (
+         order_id IN (
+           SELECT id FROM orders WHERE payment_status = 'PENDING' AND created_at < ?
+         )
+         OR order_id IS NULL
+       );`,
+    [cutoffTime]
+  );
+
+  dbInstance.run(
+    `UPDATE orders 
+     SET payment_status = 'CANCELLED', delivery_status = 'EXPIRED', updated_at = ? 
+     WHERE payment_status = 'PENDING' AND created_at < ?;`,
+    [new Date().toISOString(), cutoffTime]
+  );
+}
+
 /**
  * 1. Identify product in DB & lookup verified price from DB (NEVER trust frontend price)
  * 2. Verify stock exists (count UNUSED codes)
@@ -1024,6 +1054,10 @@ export async function createPendingCheckoutOrder(params: {
   customerId?: string;
 }) {
   const db = await getDb();
+
+  // Release any expired code reservations before checking stock
+  releaseExpiredReservations();
+
   const product = await getProductById(params.productId);
   if (!product) {
     throw new Error('Product not found in database.');
@@ -1063,7 +1097,13 @@ export async function createPendingCheckoutOrder(params: {
   // Amount MUST come strictly from product.price in DB
   const verifiedAmount = product.price;
 
-  // Insert PENDING order record (No code delivered yet!)
+  // Lock/reserve selected code for this pending order
+  db.run(
+    `UPDATE redeem_codes SET status = 'RESERVED', order_id = ? WHERE id = ? AND status = 'UNUSED';`,
+    [orderId, availableCodeId]
+  );
+
+  // Insert PENDING order record (No unmasked code delivered yet!)
   db.run(
     `INSERT INTO orders (
       id, 
@@ -1081,7 +1121,7 @@ export async function createPendingCheckoutOrder(params: {
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', ?, NULL, NULL, 'Payment Gateway', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1090,6 +1130,7 @@ export async function createPendingCheckoutOrder(params: {
       params.customerName || 'Customer',
       params.customerEmail || 'customer@vortexcode.com',
       verifiedAmount,
+      availableCodeId,
       now,
       now,
     ]
@@ -1177,13 +1218,22 @@ export async function verifyAndFulfillPaymentOrder(params: {
     throw new Error('Payment Gateway not configured. Live transactions require configured gateway credentials.');
   }
 
-  // Atomically select ONE UNUSED code for this product from DB
-  const codeRes = db.exec(
+  // Fetch reserved code for this order or fallback to any UNUSED code for product
+  let codeRes = db.exec(
     `SELECT id, code, pin FROM redeem_codes 
-     WHERE product_id = ? AND status = 'UNUSED' 
+     WHERE (order_id = ? OR id = ?) AND status IN ('RESERVED', 'UNUSED') 
      LIMIT 1;`,
-    [order.productId]
+    [order.id, order.deliveredCodeId || '']
   );
+
+  if (codeRes.length === 0 || codeRes[0].values.length === 0) {
+    codeRes = db.exec(
+      `SELECT id, code, pin FROM redeem_codes 
+       WHERE product_id = ? AND status = 'UNUSED' 
+       LIMIT 1;`,
+      [order.productId]
+    );
+  }
 
   const now = new Date().toISOString();
 

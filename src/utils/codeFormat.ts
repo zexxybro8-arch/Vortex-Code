@@ -56,6 +56,10 @@ export function formatMaskedCode(raw: string): string {
     const part2 = norm.substring(4, 8);
     return `${part1} ${part2} **** ****`;
   }
+  if (norm.length >= 4) {
+    const part1 = norm.substring(0, 4);
+    return `${part1} XXXX **** ****`;
+  }
   return 'CSGY AGTS **** ****';
 }
 
