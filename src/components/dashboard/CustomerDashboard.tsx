@@ -271,20 +271,21 @@ export const CustomerDashboard: React.FC = () => {
       });
 
       if (checkoutRes && checkoutRes.success && checkoutRes.order) {
-        const isLive = checkoutRes.gatewayConfig?.isConfigured;
-        if (isLive && checkoutRes.gatewayOrder?.paymentUrl) {
-          // Immediately redirect the user to the REAL FamGateway payment page!
-          window.location.href = checkoutRes.gatewayOrder.paymentUrl;
-        } else {
-          // Open local simulation modal in development/unconfigured mode
-          setCheckoutData({
-            order: checkoutRes.order,
-            gatewayOrder: checkoutRes.gatewayOrder,
-            gatewayConfig: checkoutRes.gatewayConfig,
-            productImage: product.image,
-          });
-          setIsCheckoutModalOpen(true);
+        const paymentUrl = checkoutRes.gatewayOrder?.paymentUrl;
+        if (paymentUrl && typeof paymentUrl === 'string' && paymentUrl.trim().length > 0) {
+          // Immediately redirect the user to the Payment Gateway page!
+          window.location.href = paymentUrl;
+          return;
         }
+
+        // Open local checkout modal as fallback if no external redirect URL returned
+        setCheckoutData({
+          order: checkoutRes.order,
+          gatewayOrder: checkoutRes.gatewayOrder,
+          gatewayConfig: checkoutRes.gatewayConfig,
+          productImage: product.image,
+        });
+        setIsCheckoutModalOpen(true);
       }
     } catch (err: any) {
       addToast('error', err.message || 'Checkout initiation failed. Please try again.');

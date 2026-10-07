@@ -158,6 +158,13 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('currencySymbol', '₹');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('enableAutoFulfillment', 'true');`);
 
+  // FamGateway Live Production Credentials
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayApiKey', 'Famcfc08cd92c090e3718e9ad92155eb0fc');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayWebhookSecret', '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayExpiryMinutes', '5');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
+
   // Check if products table is empty or needs normalization
   const prodCheck = dbInstance.exec(`SELECT count(*) as count FROM products;`);
   const prodCount = prodCheck.length > 0 && prodCheck[0].values.length > 0 ? (prodCheck[0].values[0][0] as number) : 0;
@@ -1287,8 +1294,8 @@ export async function getStoreSettings() {
     currencySymbol: '₹',
     enableAutoFulfillment: true,
     famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
-    famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || '',
-    famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '',
+    famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc',
+    famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
     famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5,
     appUrl: process.env.APP_URL || 'https://vortexcode.shop',
   };

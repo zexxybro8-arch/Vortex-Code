@@ -52,24 +52,43 @@ export interface ApiOrder {
   updatedAt: string;
 }
 
+/**
+ * Safe HTTP JSON fetcher that reads raw response text first
+ * to prevent 'Unexpected end of JSON input' SyntaxErrors.
+ */
+async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options);
+  const raw = await res.text();
+
+  let data: any = null;
+  try {
+    data = raw.trim() ? JSON.parse(raw) : null;
+  } catch (err) {
+    console.error(`Invalid non-JSON response from [${options?.method || 'GET'} ${url}]:`, raw.substring(0, 300));
+    throw new Error(`Server returned an invalid non-JSON response (${res.status} ${res.statusText}).`);
+  }
+
+  if (!res.ok) {
+    const errorMsg = data?.error || data?.message || `Request failed with status ${res.status} ${res.statusText}`;
+    throw new Error(errorMsg);
+  }
+
+  if (data && typeof data === 'object' && data.success === false) {
+    throw new Error(data.error || data.message || 'Operation failed on server');
+  }
+
+  return data;
+}
+
 export const api = {
   // Products
   async getProducts(): Promise<ApiProduct[]> {
-    const res = await fetch('/api/products');
-    if (!res.ok) {
-      throw new Error(`Failed to fetch products from database: HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to fetch products from database');
-    }
+    const data = await safeFetchJson('/api/products');
     return data.products || [];
   },
 
   async getProduct(id: string): Promise<ApiProduct> {
-    const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
-    if (!res.ok) throw new Error('Failed to fetch product');
-    const data = await res.json();
+    const data = await safeFetchJson(`/api/products/${encodeURIComponent(id)}`);
     return data.product;
   },
 
@@ -82,7 +101,7 @@ export const api = {
     denomination?: string;
     image?: string;
   }): Promise<ApiProduct> {
-    const res = await fetch('/api/products', {
+    const data = await safeFetchJson('/api/products', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -90,15 +109,11 @@ export const api = {
       },
       body: JSON.stringify(productData),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to create product in database');
-    }
     return data.product;
   },
 
   async updateProduct(id: string, updates: Partial<ApiProduct>): Promise<ApiProduct> {
-    const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
+    const data = await safeFetchJson(`/api/products/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
@@ -106,25 +121,16 @@ export const api = {
       },
       body: JSON.stringify(updates),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to update product in database');
-    }
     return data.product;
   },
 
   async deleteProduct(id: string): Promise<{ success: boolean; message: string }> {
-    const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
+    return safeFetchJson(`/api/products/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: {
         'x-admin-token': 'SAGAR551'
       }
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to disable product');
-    }
-    return data;
   },
 
   // Redeem Codes
@@ -139,16 +145,7 @@ export const api = {
       headers['x-admin-token'] = 'SAGAR551';
     }
 
-    const res = await fetch(`/api/redeem-codes?${params.toString()}`, {
-      headers
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch redeem codes from database: HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to fetch redeem codes from database');
-    }
+    const data = await safeFetchJson(`/api/redeem-codes?${params.toString()}`, { headers });
     return data.codes || [];
   },
 
@@ -157,7 +154,7 @@ export const api = {
     code: string;
     pin?: string;
   }): Promise<any> {
-    const res = await fetch('/api/redeem-codes', {
+    return safeFetchJson('/api/redeem-codes', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -165,15 +162,10 @@ export const api = {
       },
       body: JSON.stringify(codeData),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to add redeem code to database');
-    }
-    return data;
   },
 
   async addBulkRedeemCodes(productId: string, codesText: string): Promise<{ success: boolean; addedCount: number; message: string }> {
-    const res = await fetch('/api/redeem-codes/bulk', {
+    return safeFetchJson('/api/redeem-codes/bulk', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -181,15 +173,10 @@ export const api = {
       },
       body: JSON.stringify({ productId, codesText }),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to add bulk redeem codes to database');
-    }
-    return data;
   },
 
   async updateRedeemCodeStatus(id: string, status: 'UNUSED' | 'RESERVED' | 'SOLD'): Promise<any> {
-    const res = await fetch(`/api/redeem-codes/${encodeURIComponent(id)}`, {
+    return safeFetchJson(`/api/redeem-codes/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
@@ -197,26 +184,16 @@ export const api = {
       },
       body: JSON.stringify({ status }),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to update code status');
-    }
-    return data;
   },
 
   async deleteRedeemCode(id: string, force?: boolean): Promise<{ success: boolean; id: string; message?: string }> {
     const url = `/api/redeem-codes/${encodeURIComponent(id)}${force ? '?force=true' : ''}`;
-    const res = await fetch(url, {
+    return safeFetchJson(url, {
       method: 'DELETE',
       headers: {
         'x-admin-token': 'SAGAR551'
       }
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to delete code from database');
-    }
-    return data;
   },
 
   // Orders
@@ -226,16 +203,11 @@ export const api = {
       if (email) params.set('email', email);
 
       const headers: Record<string, string> = {};
-      // If we don't have an email, then it's an admin requesting all orders
       if (!email) {
         headers['x-admin-token'] = 'SAGAR551';
       }
 
-      const res = await fetch(`/api/orders?${params.toString()}`, {
-        headers
-      });
-      if (!res.ok) throw new Error('Failed to fetch orders from database');
-      const data = await res.json();
+      const data = await safeFetchJson(`/api/orders?${params.toString()}`, { headers });
       return data.orders || [];
     } catch (err) {
       console.warn('api.getOrders connection notice:', err);
@@ -252,19 +224,17 @@ export const api = {
       headers['x-admin-token'] = 'SAGAR551';
     }
 
-    const res = await fetch(`/api/orders/${encodeURIComponent(id)}?${params.toString()}`, {
-      headers
-    });
-    if (!res.ok) {
-      if (res.status === 404) return null;
-      throw new Error('Failed to fetch order');
+    try {
+      const data = await safeFetchJson(`/api/orders/${encodeURIComponent(id)}?${params.toString()}`, { headers });
+      return data.order || null;
+    } catch (err: any) {
+      if (err.message?.includes('404') || err.message?.includes('not found')) return null;
+      throw err;
     }
-    const data = await res.json();
-    return data.order || null;
   },
 
   async updateOrderStatus(id: string, paymentStatus: string, deliveryStatus: string): Promise<any> {
-    const res = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
+    const data = await safeFetchJson(`/api/orders/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
@@ -272,10 +242,6 @@ export const api = {
       },
       body: JSON.stringify({ paymentStatus, deliveryStatus }),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to update order status');
-    }
     return data.order;
   },
 
@@ -286,26 +252,19 @@ export const api = {
     customerEmail: string;
     paymentMethod?: string;
   }): Promise<{ success: boolean; order: any }> {
-    const res = await fetch('/api/orders', {
+    return safeFetchJson('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    const result = await res.json();
-    if (!res.ok || !result.success) {
-      throw new Error(result.error || 'Purchase failed');
-    }
-    return result;
   },
 
   // Checkout & Payment Gateway
   async getPaymentConfig(): Promise<any> {
     try {
-      const res = await fetch('/api/payment/config');
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.config;
-    } catch (err) {
+      const data = await safeFetchJson('/api/payment/config');
+      return data?.config || null;
+    } catch {
       return null;
     }
   },
@@ -324,16 +283,11 @@ export const api = {
     isOutOfStock?: boolean;
     error?: string;
   }> {
-    const res = await fetch('/api/payment', {
+    return safeFetchJson('/api/checkout/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    const result = await res.json();
-    if (!res.ok || !result.success) {
-      throw new Error(result.error || 'Failed to initiate checkout order');
-    }
-    return result;
   },
 
   async verifyPayment(data: {
@@ -348,40 +302,29 @@ export const api = {
     message?: string;
     alreadyFulfilled?: boolean;
   }> {
-    const res = await fetch('/api/checkout/verify-payment', {
+    return safeFetchJson('/api/checkout/verify-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    const result = await res.json();
-    if (!res.ok || !result.success) {
-      throw new Error(result.error || 'Payment verification failed');
-    }
-    return result;
   },
 
   // Store Settings
   async getStoreSettings(): Promise<any> {
     try {
-      const res = await fetch('/api/settings');
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.settings;
+      const data = await safeFetchJson('/api/settings');
+      return data?.settings || null;
     } catch {
       return null;
     }
   },
 
   async updateStoreSettings(settings: Record<string, any>): Promise<any> {
-    const res = await fetch('/api/settings', {
+    const data = await safeFetchJson('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to update store settings');
-    }
     return data.settings;
   },
 };

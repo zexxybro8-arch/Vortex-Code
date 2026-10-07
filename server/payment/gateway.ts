@@ -26,8 +26,8 @@ export class PaymentGatewayManager {
 
   constructor() {
     this.baseUrl = process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api';
-    this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || '';
-    this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '';
+    this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc';
+    this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f';
     this.expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
     this.isConfigured = Boolean(this.apiKey);
   }
@@ -70,19 +70,18 @@ export class PaymentGatewayManager {
    * (Amount is strictly calculated and enforced from server database)
    */
   public async createGatewayOrder(params: CreatePaymentOrderParams): Promise<PaymentGatewayOrderResponse> {
-    const simulationFallback: PaymentGatewayOrderResponse = {
-      gatewayOrderId: `fam_${params.orderId}`,
-      amount: params.amount,
-      currency: params.currency || 'INR',
-      provider: 'famgateway',
-      status: 'unconfigured',
-      paymentUrl: `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`,
-    };
-
     if (!this.isConfigured || !this.apiKey) {
-      // Gateway is awaiting production credentials, return simulated response
-      return simulationFallback;
+      return {
+        gatewayOrderId: `fam_${params.orderId}`,
+        amount: params.amount,
+        currency: params.currency || 'INR',
+        provider: 'famgateway',
+        status: 'unconfigured',
+        paymentUrl: `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`,
+      };
     }
+
+    const callbackUrl = params.callbackUrl || `https://vortexcode.shop/api/payment/callback?order_id=${params.orderId}`;
 
     try {
       const payload = {
@@ -90,7 +89,7 @@ export class PaymentGatewayManager {
         order_id: params.orderId,
         customer_name: params.customerName || 'Customer',
         customer_mobile: '9876543210',
-        callback_url: params.callbackUrl || `http://localhost:3000/api/payment/callback?order_id=${params.orderId}`,
+        callback_url: callbackUrl,
         description: `Digital Code - ${params.productName}`,
         expiry_minutes: this.expiryMinutes,
       };
@@ -99,40 +98,55 @@ export class PaymentGatewayManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'X-API-Key': this.apiKey,
         },
         body: JSON.stringify(payload),
       });
 
+      const responseContentType = response.headers.get('content-type') || '';
+      const rawText = await response.text();
+
+      // Safe server logging (Excludes API Key & Secrets)
+      console.log(`[FamGateway Request] Endpoint: ${this.baseUrl}/create-order | OrderID: ${params.orderId} | Status: ${response.status} | ContentType: ${responseContentType}`);
+
+      let resData: any = null;
+      try {
+        resData = rawText.trim() ? JSON.parse(rawText) : null;
+      } catch (e) {
+        console.warn(`[FamGateway Parse Notice] Non-JSON response for Order ${params.orderId}:`, rawText.substring(0, 150));
+      }
+
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          this.isConfigured = false;
-        }
-        return simulationFallback;
+        const errorMsg = resData?.message || resData?.error || `Gateway returned HTTP ${response.status} ${response.statusText}`;
+        throw new Error(`FamGateway order creation failed: ${errorMsg}`);
       }
 
-      const resData: any = await response.json();
-      if (!resData.status || !resData.data) {
-        const msg = (resData.message || '').toLowerCase();
-        if (msg.includes('credential') || msg.includes('unauthorized') || msg.includes('invalid')) {
-          this.isConfigured = false;
-        }
-        return simulationFallback;
+      if (!resData || (!resData.status && !resData.success)) {
+        const errorMsg = resData?.message || resData?.error || 'Order creation declined by gateway';
+        throw new Error(`FamGateway Error: ${errorMsg}`);
       }
 
-      const data = resData.data;
+      const data = resData.data || resData;
+      const paymentUrl = data.payment_url || resData.payment_url;
+
+      if (!paymentUrl) {
+        throw new Error('FamGateway Error: Gateway succeeded but no payment_url was returned');
+      }
+
       return {
         gatewayOrderId: data.order_id || params.orderId,
-        amount: Number(data.amount),
+        amount: Number(data.amount || params.amount),
         currency: 'INR',
         provider: 'famgateway',
         status: 'ready',
-        paymentUrl: data.payment_url,
+        paymentUrl,
         token: data.token,
         expiresAt: data.expires_at,
       };
     } catch (error: any) {
-      return simulationFallback;
+      console.error(`[FamGateway Exception] Order ${params.orderId} failed:`, error.message);
+      throw error;
     }
   }
 
@@ -141,12 +155,11 @@ export class PaymentGatewayManager {
    */
   public async checkPaymentStatus(orderId: string): Promise<PaymentVerificationResult> {
     if (!this.isConfigured || !this.apiKey) {
-      // Unconfigured fallback (Simulation mode)
       return {
-        isValid: true,
+        isValid: false,
         orderId,
         amount: 0,
-        transactionId: `mock_txn_${Math.random().toString(36).substring(2, 9)}`,
+        error: 'Payment Gateway is not configured with live credentials.',
       };
     }
 
@@ -155,35 +168,40 @@ export class PaymentGatewayManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'X-API-Key': this.apiKey,
         },
         body: JSON.stringify({ order_id: orderId }),
       });
 
+      const rawText = await response.text();
+      let resData: any = null;
+      try {
+        resData = rawText.trim() ? JSON.parse(rawText) : null;
+      } catch (e) {
+        console.warn(`[FamGateway check-status Parse Notice] Non-JSON for Order ${orderId}:`, rawText.substring(0, 150));
+      }
+
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          this.isConfigured = false;
-        }
         return {
-          isValid: true,
+          isValid: false,
           orderId,
           amount: 0,
-          transactionId: `sim_txn_${Math.random().toString(36).substring(2, 9)}`,
+          error: resData?.message || resData?.error || `Status query failed with HTTP ${response.status}`,
         };
       }
 
-      const resData: any = await response.json();
-      if (!resData.status || !resData.data) {
+      if (!resData || (!resData.status && !resData.success)) {
         return {
-          isValid: true,
+          isValid: false,
           orderId,
           amount: 0,
-          transactionId: `sim_txn_${Math.random().toString(36).substring(2, 9)}`,
+          error: resData?.message || resData?.error || 'Order status query returned false status',
         };
       }
 
-      const data = resData.data;
-      const statusStr = (data.status || '').toUpperCase();
+      const data = resData.data || resData;
+      const statusStr = String(data.status || '').toUpperCase();
       const isPaid = statusStr === 'SUCCESS' || statusStr === 'PAID' || statusStr === 'COMPLETED';
 
       if (!isPaid) {
@@ -198,16 +216,16 @@ export class PaymentGatewayManager {
       return {
         isValid: true,
         orderId,
-        amount: Number(data.amount),
+        amount: Number(data.amount || 0),
         transactionId: data.transaction_id || data.token || `fam_txn_${orderId}`,
       };
     } catch (err: any) {
-      console.error('FamGateway checkPaymentStatus exception:', err);
+      console.error(`[FamGateway checkPaymentStatus Exception] Order ${orderId}:`, err.message);
       return {
-        isValid: true,
+        isValid: false,
         orderId,
         amount: 0,
-        transactionId: `sim_txn_${Math.random().toString(36).substring(2, 9)}`,
+        error: err.message || 'Status check failed due to server exception',
       };
     }
   }

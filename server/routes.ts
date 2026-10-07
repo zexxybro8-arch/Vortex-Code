@@ -333,19 +333,11 @@ router.get('/payment/config', async (req, res) => {
   }
 });
 
-/**
- * POST /api/checkout/create-order
- * 1. Identifies product in database
- * 2. Fetches verified price from database (server-side only)
- * 3. Verifies UNUSED stock exists
- * 4. Creates PENDING order in database
- * 5. Returns checkout payload
- */
-router.post('/checkout/create-order', async (req, res) => {
+const handleCreateCheckoutOrder = async (req: any, res: any) => {
   try {
-    const { productId, codeId, customerName, customerEmail, customerId } = req.body;
+    const { productId, codeId, customerName, customerEmail, customerId } = req.body || {};
     if (!productId) {
-      return res.status(400).json({ success: false, error: 'productId is required for checkout' });
+      return res.status(400).json({ success: false, error: 'productId is required for checkout', message: 'productId is required for checkout' });
     }
 
     const checkoutResult = await createPendingCheckoutOrder({
@@ -356,16 +348,23 @@ router.post('/checkout/create-order', async (req, res) => {
       customerId,
     });
 
-    res.status(201).json(checkoutResult);
+    return res.status(201).json(checkoutResult);
   } catch (err: any) {
     const isOutOfStock = err.message && err.message.includes('OUT OF STOCK');
-    res.status(isOutOfStock ? 409 : 400).json({
+    return res.status(isOutOfStock ? 409 : 400).json({
       success: false,
       error: err.message || 'Failed to initiate checkout',
+      message: err.message || 'Failed to initiate checkout',
       isOutOfStock: Boolean(isOutOfStock),
     });
   }
-});
+};
+
+/**
+ * POST /api/checkout/create-order and POST /api/payment
+ */
+router.post('/checkout/create-order', handleCreateCheckoutOrder);
+router.post('/payment', handleCreateCheckoutOrder);
 
 /**
  * POST /api/checkout/verify-payment
