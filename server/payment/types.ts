@@ -25,7 +25,7 @@ export interface PaymentGatewayOrderResponse {
   currency: string;
   keyId?: string;
   provider: string;
-  status: 'created' | 'unconfigured' | 'ready';
+  status: 'created' | 'unconfigured' | 'ready' | 'fallback';
   paymentUrl?: string;
   token?: string;
   expiresAt?: string;
