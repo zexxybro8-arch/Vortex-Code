@@ -28,11 +28,16 @@ export const LoginPage: React.FC = () => {
       
       await loginWithGoogle(idToken);
     } catch (err: any) {
-      console.error('Google login error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        console.error('Google login error:', err);
+      }
+      
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setErrorMessage('Google authentication cancelled.');
       } else if (err.code === 'auth/popup-blocked') {
         setErrorMessage('Popup was blocked by your browser. Please allow popups.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setErrorMessage('Network error. Please check your connection or ensure this domain is authorized in Firebase console.');
       } else {
         setErrorMessage(err.message || 'Google authentication failed.');
       }
