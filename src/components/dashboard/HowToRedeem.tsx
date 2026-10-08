@@ -1,9 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Key, ShieldCheck, CheckCircle2, Copy, Sparkles, HelpCircle, ArrowRight } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
+import { api } from '../../services/api';
+
+const StepImage: React.FC<{ enabled: boolean; url: string; alt: string }> = ({ enabled, url, alt }) => {
+  const [error, setError] = useState(false);
+
+  if (!enabled || !url || !url.trim() || error) return null;
+
+  return (
+    <div className="mt-4 w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 flex items-center justify-center p-2 max-h-[350px] shrink-0">
+      <img
+        src={url.trim()}
+        alt={alt}
+        className="max-w-full max-h-[330px] object-contain rounded-xl"
+        onError={() => setError(true)}
+      />
+    </div>
+  );
+};
 
 export const HowToRedeem: React.FC = () => {
   const { setCurrentView } = useAuth();
+  const [settings, setSettings] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getStoreSettings().then((res) => {
+      if (isMounted && res) {
+        setSettings(res);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
@@ -16,10 +47,10 @@ export const HowToRedeem: React.FC = () => {
           <span>Official Redemption Guide</span>
         </div>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          How To Redeem Your Digital Code
+          How To Redeem Your Code
         </h2>
         <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
-          Follow these 4 simple steps to purchase, reveal, and activate your authentic digital vouchers safely.
+          Purchase your Redeem Code from VortexCode and redeem it safely on Google Play.
         </p>
       </div>
 
@@ -33,11 +64,16 @@ export const HowToRedeem: React.FC = () => {
           </div>
           <div className="space-y-2 flex-1">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>Select Your Reward Denomination</span>
+              <span>1. Choose Your Redeem Code</span>
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Navigate to the <strong className="text-emerald-400">REDEEM CODE</strong> store tab. Filter by denomination (₹100, ₹120, ₹150, ₹200, etc.) or category to select your desired voucher pass.
+              Go to the REDEEM CODE store and select the Redeem Code amount you want to purchase.
             </p>
+            <StepImage
+              enabled={!!settings?.how_to_redeem_step_1_image_enabled}
+              url={settings?.how_to_redeem_step_1_image_url || ''}
+              alt="Choose Your Redeem Code"
+            />
           </div>
         </div>
 
@@ -47,10 +83,15 @@ export const HowToRedeem: React.FC = () => {
             2
           </div>
           <div className="space-y-2 flex-1">
-            <h3 className="text-lg font-bold text-white">Click "BUY NOW" to Claim</h3>
+            <h3 className="text-lg font-bold text-white">2. Complete Your Payment</h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Click the <strong className="text-emerald-400">REDEEM NOW</strong> button on the product card. The payment processes securely and your code is fulfilled within seconds.
+              Click REDEEM NOW, complete the payment securely, and wait for your payment to be verified.
             </p>
+            <StepImage
+              enabled={!!settings?.how_to_redeem_step_2_image_enabled}
+              url={settings?.how_to_redeem_step_2_image_url || ''}
+              alt="Complete Your Payment"
+            />
           </div>
         </div>
 
@@ -60,10 +101,15 @@ export const HowToRedeem: React.FC = () => {
             3
           </div>
           <div className="space-y-2 flex-1">
-            <h3 className="text-lg font-bold text-white">Reveal Code Key & PIN in Your Vault</h3>
+            <h3 className="text-lg font-bold text-white">3. Get Your Redeem Code</h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Open the <strong className="text-emerald-400">My Orders & Vault</strong> tab. Click the eye icon (<Key className="w-3.5 h-3.5 inline text-emerald-400" />) to reveal your 16-digit secret key and security PIN.
+              After a successful payment, your purchased Redeem Code will be available in your order details. Copy the code securely.
             </p>
+            <StepImage
+              enabled={!!settings?.how_to_redeem_step_3_image_enabled}
+              url={settings?.how_to_redeem_step_3_image_url || ''}
+              alt="Get Your Redeem Code"
+            />
           </div>
         </div>
 
@@ -73,23 +119,21 @@ export const HowToRedeem: React.FC = () => {
             4
           </div>
           <div className="space-y-2 flex-1">
-            <h3 className="text-lg font-bold text-white">Paste Key into Target App or Platform</h3>
+            <h3 className="text-lg font-bold text-white">4. Redeem on Google Play</h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Copy the code key using the <strong className="text-emerald-400">Copy</strong> button and paste it into your game console, streaming app, or partner voucher redemption page to enjoy your rewards!
+              Open Google Play Store, tap your profile picture → Payments & subscriptions → Redeem code, enter your purchased code, and tap Redeem.
             </p>
+            <StepImage
+              enabled={!!settings?.how_to_redeem_step_4_image_enabled}
+              url={settings?.how_to_redeem_step_4_image_url || ''}
+              alt="Redeem on Google Play"
+            />
           </div>
         </div>
 
       </div>
 
-      {/* Security Assurance */}
-      <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-xs text-emerald-300">
-        <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-        <p>
-          All Vortex Code vouchers are generated with 256-bit encryption. Need help with activation? Contact our support team in the <strong>SUPPORT</strong> tab.
-        </p>
-      </div>
-
     </div>
   );
 };
+

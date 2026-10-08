@@ -53,7 +53,7 @@ function mapApiCodeToAdmin(c: any): AdminRedeemCode {
     productName: c.productName || 'Google Play Recharge Code',
     codeMasked: formatMaskedCode(c.code),
     fullCodeSecret: formatFullCode(c.code),
-    pin: c.pin || '9842',
+    pin: c.pin || '',
     denominationRupees: c.denomination ? Number(c.denomination.replace(/\D/g, '')) || 100 : 100,
     denomination: c.denomination,
     orderId: c.orderId,
@@ -159,6 +159,7 @@ interface AdminContextType {
     famupigatewayWebhookSecret: string;
     famupigatewayExpiryMinutes: number;
     appUrl: string;
+    [key: string]: any;
   };
   updateStoreSettings: (newSettings: any) => void;
   updateBranding: (branding: { logoUrl: string; websiteName: string; tagline: string }) => Promise<any>;

@@ -996,7 +996,7 @@ export async function addRedeemCode(data: {
 
   const id = `cd_${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
-  const pin = data.pin?.trim() || Math.floor(1000 + Math.random() * 9000).toString();
+  const pin = data.pin?.trim() || null;
 
   let status = 'UNUSED';
   if (data.status) {
@@ -1046,22 +1046,14 @@ export async function addBulkRedeemCodes(data: {
   }
 
   // Pre-validate every code before inserting to enforce strict 16-character format
-  const parsedCodes: { code: string; pin: string }[] = [];
+  const parsedCodes: { code: string; pin: string | null }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    let codePart = raw;
-    let pinPart = Math.floor(1000 + Math.random() * 9000).toString();
-    if (raw.includes(':')) {
-      const parts = raw.split(':');
-      codePart = parts[0].trim();
-      pinPart = parts[1].trim() || pinPart;
-    }
-
-    const validation = validateCode(codePart);
+    const validation = validateCode(raw);
     if (!validation.valid) {
       throw new Error(`Line ${i + 1} ("${raw}"): ${validation.error}`);
     }
-    parsedCodes.push({ code: validation.normalized, pin: pinPart });
+    parsedCodes.push({ code: validation.normalized, pin: null });
   }
 
   const now = new Date().toISOString();
@@ -2107,13 +2099,26 @@ export async function getStoreSettings() {
     famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
     famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5,
     appUrl: process.env.APP_URL || 'https://vortexcode.shop',
+    how_to_redeem_step_1_image_enabled: false,
+    how_to_redeem_step_1_image_url: '',
+    how_to_redeem_step_2_image_enabled: false,
+    how_to_redeem_step_2_image_url: '',
+    how_to_redeem_step_3_image_enabled: false,
+    how_to_redeem_step_3_image_url: '',
+    how_to_redeem_step_4_image_enabled: false,
+    how_to_redeem_step_4_image_url: '',
   };
 
   if (res.length > 0 && res[0].values.length > 0) {
     res[0].values.forEach((row) => {
       const key = row[0] as string;
       const val = row[1] as string;
-      if (key === 'enableAutoFulfillment' || key === 'telegramEnabled' || key === 'contactEnabled') {
+      if (
+        key === 'enableAutoFulfillment' || 
+        key === 'telegramEnabled' || 
+        key === 'contactEnabled' ||
+        (key.startsWith('how_to_redeem_') && key.endsWith('_enabled'))
+      ) {
         settings[key] = val === 'true';
       } else if (
         key === 'famupigatewayExpiryMinutes' ||

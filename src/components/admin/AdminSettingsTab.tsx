@@ -11,6 +11,16 @@ export const AdminSettingsTab: React.FC = () => {
   const [currencySymbol, setCurrencySymbol] = useState(storeSettings.currencySymbol || '₹');
   const [enableAutoFulfillment, setEnableAutoFulfillment] = useState(storeSettings.enableAutoFulfillment ?? true);
 
+  // How To Redeem Step Images States
+  const [step1Enabled, setStep1Enabled] = useState(storeSettings.how_to_redeem_step_1_image_enabled ?? false);
+  const [step1Url, setStep1Url] = useState(storeSettings.how_to_redeem_step_1_image_url || '');
+  const [step2Enabled, setStep2Enabled] = useState(storeSettings.how_to_redeem_step_2_image_enabled ?? false);
+  const [step2Url, setStep2Url] = useState(storeSettings.how_to_redeem_step_2_image_url || '');
+  const [step3Enabled, setStep3Enabled] = useState(storeSettings.how_to_redeem_step_3_image_enabled ?? false);
+  const [step3Url, setStep3Url] = useState(storeSettings.how_to_redeem_step_3_image_url || '');
+  const [step4Enabled, setStep4Enabled] = useState(storeSettings.how_to_redeem_step_4_image_enabled ?? false);
+  const [step4Url, setStep4Url] = useState(storeSettings.how_to_redeem_step_4_image_url || '');
+
   // FamGateway Credentials & Domain URLs
   const [famupigatewayBaseUrl, setFamupigatewayBaseUrl] = useState(
     storeSettings.famupigatewayBaseUrl || 'https://famupigateway.site/api'
@@ -38,6 +48,14 @@ export const AdminSettingsTab: React.FC = () => {
       if (storeSettings.supportEmail) setSupportEmail(storeSettings.supportEmail);
       if (storeSettings.currencySymbol) setCurrencySymbol(storeSettings.currencySymbol);
       if (storeSettings.enableAutoFulfillment !== undefined) setEnableAutoFulfillment(storeSettings.enableAutoFulfillment);
+      if (storeSettings.how_to_redeem_step_1_image_enabled !== undefined) setStep1Enabled(storeSettings.how_to_redeem_step_1_image_enabled);
+      if (storeSettings.how_to_redeem_step_1_image_url !== undefined) setStep1Url(storeSettings.how_to_redeem_step_1_image_url);
+      if (storeSettings.how_to_redeem_step_2_image_enabled !== undefined) setStep2Enabled(storeSettings.how_to_redeem_step_2_image_enabled);
+      if (storeSettings.how_to_redeem_step_2_image_url !== undefined) setStep2Url(storeSettings.how_to_redeem_step_2_image_url);
+      if (storeSettings.how_to_redeem_step_3_image_enabled !== undefined) setStep3Enabled(storeSettings.how_to_redeem_step_3_image_enabled);
+      if (storeSettings.how_to_redeem_step_3_image_url !== undefined) setStep3Url(storeSettings.how_to_redeem_step_3_image_url);
+      if (storeSettings.how_to_redeem_step_4_image_enabled !== undefined) setStep4Enabled(storeSettings.how_to_redeem_step_4_image_enabled);
+      if (storeSettings.how_to_redeem_step_4_image_url !== undefined) setStep4Url(storeSettings.how_to_redeem_step_4_image_url);
       if (storeSettings.famupigatewayBaseUrl) setFamupigatewayBaseUrl(storeSettings.famupigatewayBaseUrl);
       if (storeSettings.famupigatewayApiKey !== undefined) setFamupigatewayApiKey(storeSettings.famupigatewayApiKey);
       if (storeSettings.famupigatewayWebhookSecret !== undefined) setFamupigatewayWebhookSecret(storeSettings.famupigatewayWebhookSecret);
@@ -78,6 +96,14 @@ export const AdminSettingsTab: React.FC = () => {
       famupigatewayWebhookSecret,
       famupigatewayExpiryMinutes,
       appUrl,
+      how_to_redeem_step_1_image_enabled: step1Enabled,
+      how_to_redeem_step_1_image_url: step1Url,
+      how_to_redeem_step_2_image_enabled: step2Enabled,
+      how_to_redeem_step_2_image_url: step2Url,
+      how_to_redeem_step_3_image_enabled: step3Enabled,
+      how_to_redeem_step_3_image_url: step3Url,
+      how_to_redeem_step_4_image_enabled: step4Enabled,
+      how_to_redeem_step_4_image_url: step4Url,
     });
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -326,6 +352,182 @@ export const AdminSettingsTab: React.FC = () => {
             >
               {enableAutoFulfillment ? 'ACTIVE' : 'PAUSED'}
             </button>
+          </div>
+        </div>
+
+        {/* How To Redeem Step Images Configuration */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6 shadow-xl">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
+            <Globe className="w-4 h-4 text-emerald-400" />
+            <span>How To Redeem Guide Images</span>
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Step 1 Image Control */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/85 space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono">Step 1 Image</h3>
+                  <button
+                    type="button"
+                    onClick={() => setStep1Enabled(!step1Enabled)}
+                    className={`py-1 px-2.5 rounded-lg text-[10px] font-bold font-mono transition-all ${
+                      step1Enabled ? 'bg-emerald-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {step1Enabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-400">Image URL</label>
+                  <input
+                    type="text"
+                    value={step1Url}
+                    onChange={(e) => setStep1Url(e.target.value)}
+                    placeholder="Enter Step 1 image URL..."
+                    className="w-full py-2 px-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              {step1Enabled && step1Url.trim() && (
+                <div className="mt-3 p-2 bg-slate-900 border border-slate-850 rounded-lg flex flex-col items-center">
+                  <p className="text-[10px] text-slate-500 mb-1 font-mono align-self-start w-full text-left">Preview:</p>
+                  <img
+                    src={step1Url.trim()}
+                    alt="Step 1 Preview"
+                    className="max-h-24 rounded object-contain border border-slate-800 bg-slate-950"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Step 2 Image Control */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/85 space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono">Step 2 Image</h3>
+                  <button
+                    type="button"
+                    onClick={() => setStep2Enabled(!step2Enabled)}
+                    className={`py-1 px-2.5 rounded-lg text-[10px] font-bold font-mono transition-all ${
+                      step2Enabled ? 'bg-emerald-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {step2Enabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-400">Image URL</label>
+                  <input
+                    type="text"
+                    value={step2Url}
+                    onChange={(e) => setStep2Url(e.target.value)}
+                    placeholder="Enter Step 2 image URL..."
+                    className="w-full py-2 px-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              {step2Enabled && step2Url.trim() && (
+                <div className="mt-3 p-2 bg-slate-900 border border-slate-850 rounded-lg flex flex-col items-center">
+                  <p className="text-[10px] text-slate-500 mb-1 font-mono align-self-start w-full text-left">Preview:</p>
+                  <img
+                    src={step2Url.trim()}
+                    alt="Step 2 Preview"
+                    className="max-h-24 rounded object-contain border border-slate-800 bg-slate-950"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Step 3 Image Control */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/85 space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono">Step 3 Image</h3>
+                  <button
+                    type="button"
+                    onClick={() => setStep3Enabled(!step3Enabled)}
+                    className={`py-1 px-2.5 rounded-lg text-[10px] font-bold font-mono transition-all ${
+                      step3Enabled ? 'bg-emerald-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {step3Enabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-400">Image URL</label>
+                  <input
+                    type="text"
+                    value={step3Url}
+                    onChange={(e) => setStep3Url(e.target.value)}
+                    placeholder="Enter Step 3 image URL..."
+                    className="w-full py-2 px-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              {step3Enabled && step3Url.trim() && (
+                <div className="mt-3 p-2 bg-slate-900 border border-slate-850 rounded-lg flex flex-col items-center">
+                  <p className="text-[10px] text-slate-500 mb-1 font-mono align-self-start w-full text-left">Preview:</p>
+                  <img
+                    src={step3Url.trim()}
+                    alt="Step 3 Preview"
+                    className="max-h-24 rounded object-contain border border-slate-800 bg-slate-950"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Step 4 Image Control */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/85 space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono">Step 4 Image</h3>
+                  <button
+                    type="button"
+                    onClick={() => setStep4Enabled(!step4Enabled)}
+                    className={`py-1 px-2.5 rounded-lg text-[10px] font-bold font-mono transition-all ${
+                      step4Enabled ? 'bg-emerald-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {step4Enabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-400">Image URL</label>
+                  <input
+                    type="text"
+                    value={step4Url}
+                    onChange={(e) => setStep4Url(e.target.value)}
+                    placeholder="Enter Step 4 image URL..."
+                    className="w-full py-2 px-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              {step4Enabled && step4Url.trim() && (
+                <div className="mt-3 p-2 bg-slate-900 border border-slate-850 rounded-lg flex flex-col items-center">
+                  <p className="text-[10px] text-slate-500 mb-1 font-mono align-self-start w-full text-left">Preview:</p>
+                  <img
+                    src={step4Url.trim()}
+                    alt="Step 4 Preview"
+                    className="max-h-24 rounded object-contain border border-slate-800 bg-slate-950"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
 

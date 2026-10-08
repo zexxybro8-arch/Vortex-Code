@@ -145,10 +145,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           value: Number(c.rewardValue || (c.price ? c.price * 15 : 1500)),
           code: c.codeMasked || 'CSGY AGTS **** ****',
           codeMasked: c.codeMasked || 'CSGY AGTS **** ****',
-          pin: c.pin || '9842',
+          pin: c.pin || '',
           status: 'available',
           image: 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
-          description: `Instant ${c.denomination || '₹100'} digital voucher code with encrypted key and security PIN.`,
+          description: `Instant ${c.denomination || '₹100'} digital voucher code with encrypted key.`,
         }));
         setAvailableCodes(mappedCodes);
       }

@@ -435,7 +435,6 @@ export const AdminRedeemCodesTab: React.FC = () => {
               <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
                 <th className="py-3 px-4">Product Name</th>
                 <th className="py-3 px-4">Code Key</th>
-                <th className="py-3 px-4">PIN</th>
                 <th className="py-3 px-4">Denomination</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Created Date</th>
@@ -445,7 +444,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
             <tbody className="divide-y divide-slate-800/80">
               {filteredCodes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500 font-mono">
+                  <td colSpan={6} className="py-8 text-center text-slate-500 font-mono">
                     No recharge codes match the selected filters.
                   </td>
                 </tr>
@@ -461,7 +460,6 @@ export const AdminRedeemCodesTab: React.FC = () => {
                       <td className="py-3.5 px-4 text-emerald-300 font-bold tracking-wider">
                         {isRevealed ? item.fullCodeSecret : item.codeMasked}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-300">{item.pin || '—'}</td>
                       <td className="py-3.5 px-4 text-white font-bold">
                         {item.denomination || `₹${item.denominationRupees}`}
                       </td>
@@ -589,18 +587,18 @@ export const AdminRedeemCodesTab: React.FC = () => {
               ) : (
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Paste Keys (One per line or KEY:PIN)
+                    Paste Redeem Codes (One per line)
                   </label>
                   <textarea
                     rows={5}
                     value={pastedCodes}
                     onChange={(e) => setPastedCodes(e.target.value)}
-                    placeholder="ABCD-EFGH-IJKL-MNOP:9842&#10;QWRE-TYUI-OPAS-DFGH:4192&#10;ZXCV-BNMK-JHGF-DSAQ:8821"
+                    placeholder="ABCD-EFGH-IJKL-MNOP&#10;QWRE-TYUI-OPAS-DFGH&#10;ZXCV-BNMK-JHGF-DSAQ"
                     className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
                     required
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Accepts 16-character keys with or without hyphens. Optional PIN after colon.
+                    Enter one valid redeem code per line. Redeem codes are stored securely and delivered after successful purchase.
                   </p>
                 </div>
               )}
@@ -689,19 +687,6 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   placeholder="e.g. ZRHS 35AC 7KLM 92PQ"
                   className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 font-bold focus:outline-none focus:border-emerald-400"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  PIN (Optional, 4 Digits)
-                </label>
-                <input
-                  type="text"
-                  value={singlePin}
-                  onChange={(e) => setSinglePin(e.target.value)}
-                  placeholder="e.g. 9842"
-                  className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
                 />
               </div>
 
@@ -811,19 +796,6 @@ export const AdminRedeemCodesTab: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  PIN
-                </label>
-                <input
-                  type="text"
-                  value={editPinValue}
-                  onChange={(e) => setEditPinValue(e.target.value)}
-                  placeholder="e.g. 9842"
-                  className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-blue-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Status in Database
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -910,10 +882,6 @@ export const AdminRedeemCodesTab: React.FC = () => {
               <div className="flex justify-between text-slate-400">
                 <span>Masked Key:</span>
                 <strong className="text-emerald-400 font-bold tracking-wider">{codeToDelete.codeMasked}</strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>PIN:</span>
-                <strong className="text-slate-200">{codeToDelete.pin || '—'}</strong>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Database Status:</span>
