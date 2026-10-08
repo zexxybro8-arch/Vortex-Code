@@ -196,16 +196,16 @@ export const AnnouncementPopup: React.FC = () => {
           )}
 
           {/* Title and Message */}
-          <div className="space-y-3 text-left sm:text-center">
+          <div className="flex flex-col items-center text-center w-full px-3 sm:px-4 space-y-3">
             <h2 
               id="announcement-title"
-              className="text-base sm:text-lg font-black tracking-tight text-white font-mono uppercase bg-emerald-500/10 border border-emerald-500/20 py-1.5 px-4 rounded-xl inline-block"
+              className="text-base sm:text-lg font-black tracking-tight text-white font-mono uppercase bg-emerald-500/10 border border-emerald-500/20 py-1.5 px-4 rounded-xl inline-block text-center"
             >
               {notice.title}
             </h2>
             
             <div 
-              className="text-xs sm:text-sm text-slate-300 font-sans leading-relaxed whitespace-pre-wrap text-left sm:text-center select-text"
+              className="text-xs sm:text-sm text-slate-300 font-sans leading-relaxed whitespace-pre-wrap text-center select-text w-full"
               style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
             >
               {notice.message}
