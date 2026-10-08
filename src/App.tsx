@@ -12,6 +12,7 @@ import { AuthRequiredModal } from './components/store/AuthRequiredModal';
 import { ToastContainer } from './components/common/Toast';
 import { TelegramFloatingButton } from './components/common/TelegramFloatingButton';
 import { AdminContainer } from './components/admin/AdminContainer';
+import { AnnouncementPopup } from './components/common/AnnouncementPopup';
 
 const checkIsAdminRoute = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -82,6 +83,7 @@ export default function App() {
         <AuthRequiredModal />
         <ToastContainer />
         <TelegramFloatingButton />
+        <AnnouncementPopup />
 
         {/* Minimal Branding Footer */}
         <footer className="py-8 px-4 text-center text-slate-500 text-[11px] font-mono">

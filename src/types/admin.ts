@@ -8,7 +8,8 @@ export type AdminTab =
   | 'orders'
   | 'customers'
   | 'contact'
-  | 'settings';
+  | 'settings'
+  | 'notice';
 
 export interface AdminCategory {
   id: string;
@@ -34,12 +35,10 @@ export interface AdminDashboardStats {
   totalSalesRupees: number;
   todaysSalesRupees: number;
   totalOrders: number;
-  todaysOrders: number;
   pendingOrders: number;
   availableRedeemCodes: number;
   usedRedeemCodes: number;
   registeredCustomers: number;
-  activeMembers: number;
 }
 
 export interface AdminOrder {
@@ -89,4 +88,21 @@ export interface AdminRedeemCode {
   createdAt: string;
   usedByCustomerEmail?: string;
   usedAt?: string;
+}
+
+export interface AdminNotice {
+  id?: string;
+  enabled: boolean;
+  title: string;
+  message: string;
+  imageUrl?: string;
+  buttonEnabled: boolean;
+  buttonText?: string;
+  buttonUrl?: string;
+  displayFrequency: 'EVERY_LOAD' | 'ONCE_SESSION' | 'ONCE_USER';
+  startAt?: string;
+  endAt?: string;
+  priority: number;
+  createdAt?: string;
+  updatedAt?: string;
 }

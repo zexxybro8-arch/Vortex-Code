@@ -534,4 +534,58 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  // Notices
+  async getNotices(): Promise<any[]> {
+    try {
+      const data = await safeFetchJson('/api/admin/notices', {
+        headers: { 'x-admin-token': 'SAGAR551' },
+      });
+      return data?.notices || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async createNotice(noticeData: any): Promise<any> {
+    const data = await safeFetchJson('/api/admin/notices', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+      body: JSON.stringify(noticeData),
+    });
+    return data.notice;
+  },
+
+  async updateNotice(id: string, updates: any): Promise<any> {
+    const data = await safeFetchJson(`/api/admin/notices/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+      body: JSON.stringify(updates),
+    });
+    return data.notice;
+  },
+
+  async deleteNotice(id: string): Promise<any> {
+    return safeFetchJson(`/api/admin/notices/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: {
+        'x-admin-token': 'SAGAR551',
+      },
+    });
+  },
+
+  async getActiveNotice(): Promise<any> {
+    try {
+      const data = await safeFetchJson('/api/notices/active');
+      return data?.notice || null;
+    } catch {
+      return null;
+    }
+  },
 };

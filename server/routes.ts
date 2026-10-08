@@ -37,6 +37,12 @@ import {
   getDb,
   getStoreSettings,
   updateStoreSettings,
+  getAllNotices,
+  getNoticeById,
+  getPublishedNotice,
+  createNotice,
+  updateNotice,
+  deleteNotice,
 } from './db';
 import { paymentGateway } from './payment/gateway';
 
@@ -1177,6 +1183,53 @@ router.post('/auth/login', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Login failed' });
+  }
+});
+
+// ===================== WEBSITE NOTICES =====================
+
+router.get('/notices/active', async (req, res) => {
+  try {
+    const notice = await getPublishedNotice();
+    res.json({ success: true, notice });
+  } catch (err: any) {
+    res.json({ success: true, notice: null, error: err.message }); // Fail silently on error as required
+  }
+});
+
+router.get('/admin/notices', isAdminMiddleware, async (req, res) => {
+  try {
+    const notices = await getAllNotices();
+    res.json({ success: true, notices });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch notices' });
+  }
+});
+
+router.post('/admin/notices', isAdminMiddleware, async (req, res) => {
+  try {
+    const notice = await createNotice(req.body);
+    res.status(201).json({ success: true, notice, message: 'Notice created successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to create notice' });
+  }
+});
+
+router.put('/admin/notices/:id', isAdminMiddleware, async (req, res) => {
+  try {
+    const notice = await updateNotice(req.params.id, req.body);
+    res.json({ success: true, notice, message: 'Notice updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update notice' });
+  }
+});
+
+router.delete('/admin/notices/:id', isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await deleteNotice(req.params.id);
+    res.json({ success: true, message: 'Notice deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to delete notice' });
   }
 });
 

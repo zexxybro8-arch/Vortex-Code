@@ -153,6 +153,23 @@ export async function getDb(): Promise<Database> {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS notices (
+      id TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      image_url TEXT,
+      button_enabled INTEGER NOT NULL DEFAULT 0,
+      button_text TEXT,
+      button_url TEXT,
+      display_frequency TEXT NOT NULL DEFAULT 'EVERY_LOAD',
+      start_at TEXT,
+      end_at TEXT,
+      priority INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   try {
@@ -2151,5 +2168,163 @@ export async function updateStoreSettings(updates: Record<string, any>) {
   }
   saveDb();
   return getStoreSettings();
+}
+
+export async function getAllNotices() {
+  const db = await getDb();
+  const res = db.exec(`
+    SELECT 
+      id, enabled, title, message, image_url as imageUrl, 
+      button_enabled as buttonEnabled, button_text as buttonText, button_url as buttonUrl, 
+      display_frequency as displayFrequency, start_at as startAt, end_at as endAt, 
+      priority, created_at as createdAt, updated_at as updatedAt
+    FROM notices
+    ORDER BY priority DESC, created_at DESC;
+  `);
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    obj.enabled = Boolean(obj.enabled);
+    obj.buttonEnabled = Boolean(obj.buttonEnabled);
+    obj.priority = Number(obj.priority || 0);
+    return obj;
+  });
+}
+
+export async function getNoticeById(id: string) {
+  const db = await getDb();
+  const res = db.exec(`
+    SELECT 
+      id, enabled, title, message, image_url as imageUrl, 
+      button_enabled as buttonEnabled, button_text as buttonText, button_url as buttonUrl, 
+      display_frequency as displayFrequency, start_at as startAt, end_at as endAt, 
+      priority, created_at as createdAt, updated_at as updatedAt
+    FROM notices
+    WHERE id = ?;
+  `, [id]);
+  if (res.length === 0 || res[0].values.length === 0) return null;
+  const columns = res[0].columns;
+  const row = res[0].values[0];
+  const obj: any = {};
+  columns.forEach((col, idx) => {
+    obj[col] = row[idx];
+  });
+  obj.enabled = Boolean(obj.enabled);
+  obj.buttonEnabled = Boolean(obj.buttonEnabled);
+  obj.priority = Number(obj.priority || 0);
+  return obj;
+}
+
+export async function getPublishedNotice() {
+  const notices = await getAllNotices();
+  const now = new Date().toISOString();
+  const active = notices.filter(n => {
+    if (!n.enabled) return false;
+    if (n.startAt && n.startAt > now) return false;
+    if (n.endAt && n.endAt < now) return false;
+    return true;
+  });
+  if (active.length === 0) return null;
+  active.sort((a, b) => b.priority - a.priority || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return active[0];
+}
+
+export async function createNotice(data: {
+  enabled: boolean;
+  title: string;
+  message: string;
+  imageUrl?: string;
+  buttonEnabled: boolean;
+  buttonText?: string;
+  buttonUrl?: string;
+  displayFrequency: string;
+  startAt?: string;
+  endAt?: string;
+  priority: number;
+}) {
+  const db = await getDb();
+  const id = `not_${Math.random().toString(36).substring(2, 9)}`;
+  const now = new Date().toISOString();
+  db.run(`
+    INSERT INTO notices (
+      id, enabled, title, message, image_url, button_enabled, button_text, button_url, 
+      display_frequency, start_at, end_at, priority, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  `, [
+    id,
+    data.enabled ? 1 : 0,
+    data.title || '',
+    data.message || '',
+    data.imageUrl || null,
+    data.buttonEnabled ? 1 : 0,
+    data.buttonText || null,
+    data.buttonUrl || null,
+    data.displayFrequency || 'EVERY_LOAD',
+    data.startAt || null,
+    data.endAt || null,
+    Number(data.priority || 0),
+    now,
+    now
+  ]);
+  saveDb();
+  return getNoticeById(id);
+}
+
+export async function updateNotice(id: string, updates: Partial<{
+  enabled: boolean;
+  title: string;
+  message: string;
+  imageUrl: string | null;
+  buttonEnabled: boolean;
+  buttonText: string | null;
+  buttonUrl: string | null;
+  displayFrequency: string;
+  startAt: string | null;
+  endAt: string | null;
+  priority: number;
+}>) {
+  const db = await getDb();
+  const existing = await getNoticeById(id);
+  if (!existing) {
+    throw new Error(`Notice ${id} not found`);
+  }
+  const now = new Date().toISOString();
+  
+  const enabled = updates.enabled !== undefined ? (updates.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
+  const title = updates.title !== undefined ? updates.title : existing.title;
+  const message = updates.message !== undefined ? updates.message : existing.message;
+  const imageUrl = updates.imageUrl !== undefined ? updates.imageUrl : existing.imageUrl;
+  const buttonEnabled = updates.buttonEnabled !== undefined ? (updates.buttonEnabled ? 1 : 0) : (existing.buttonEnabled ? 1 : 0);
+  const buttonText = updates.buttonText !== undefined ? updates.buttonText : existing.buttonText;
+  const buttonUrl = updates.buttonUrl !== undefined ? updates.buttonUrl : existing.buttonUrl;
+  const displayFrequency = updates.displayFrequency !== undefined ? updates.displayFrequency : existing.displayFrequency;
+  const startAt = updates.startAt !== undefined ? updates.startAt : existing.startAt;
+  const endAt = updates.endAt !== undefined ? updates.endAt : existing.endAt;
+  const priority = updates.priority !== undefined ? Number(updates.priority) : existing.priority;
+
+  db.run(`
+    UPDATE notices SET
+      enabled = ?, title = ?, message = ?, image_url = ?, button_enabled = ?, 
+      button_text = ?, button_url = ?, display_frequency = ?, start_at = ?, 
+      end_at = ?, priority = ?, updated_at = ?
+    WHERE id = ?;
+  `, [
+    enabled, title, message, imageUrl, buttonEnabled, 
+    buttonText, buttonUrl, displayFrequency, startAt, 
+    endAt, priority, now, id
+  ]);
+  saveDb();
+  return getNoticeById(id);
+}
+
+export async function deleteNotice(id: string) {
+  const db = await getDb();
+  db.run(`DELETE FROM notices WHERE id = ?;`, [id]);
+  saveDb();
+  return { success: true };
 }
 

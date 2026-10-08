@@ -12,6 +12,7 @@ import { AdminOrdersTab } from './AdminOrdersTab';
 import { AdminCustomersTab } from './AdminCustomersTab';
 import { AdminContactTab } from './AdminContactTab';
 import { AdminSettingsTab } from './AdminSettingsTab';
+import { AdminNoticeTab } from './AdminNoticeTab';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -29,6 +30,7 @@ import {
   Globe,
   Sparkles,
   Send,
+  Megaphone,
 } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
@@ -45,6 +47,7 @@ export const AdminLayout: React.FC = () => {
     { id: 'customers', label: 'Registered Users', icon: <Users className="w-4 h-4" /> },
     { id: 'contact', label: 'Telegram & Contact', icon: <Send className="w-4 h-4" /> },
     { id: 'settings', label: 'Payment & API Settings', icon: <Settings className="w-4 h-4" /> },
+    { id: 'notice', label: 'Website Notice', icon: <Megaphone className="w-4 h-4" /> },
   ];
 
   return (
@@ -210,6 +213,7 @@ export const AdminLayout: React.FC = () => {
           {adminTab === 'customers' && <AdminCustomersTab />}
           {adminTab === 'contact' && <AdminContactTab />}
           {adminTab === 'settings' && <AdminSettingsTab />}
+          {adminTab === 'notice' && <AdminNoticeTab />}
         </main>
 
       </div>
