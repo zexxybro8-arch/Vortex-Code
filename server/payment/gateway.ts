@@ -41,13 +41,21 @@ export class PaymentGatewayManager {
     if (settings.famupigatewayBaseUrl) {
       this.baseUrl = String(settings.famupigatewayBaseUrl).trim();
     }
-    if (settings.famupigatewayApiKey !== undefined) {
+    
+    // Ensure we keep environment variables if settings value is empty or not provided
+    if (settings.famupigatewayApiKey && String(settings.famupigatewayApiKey).trim()) {
       this.apiKey = String(settings.famupigatewayApiKey).trim();
-      this.isConfigured = Boolean(this.apiKey);
+    } else {
+      this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc';
     }
-    if (settings.famupigatewayWebhookSecret !== undefined) {
+    this.isConfigured = Boolean(this.apiKey);
+
+    if (settings.famupigatewayWebhookSecret && String(settings.famupigatewayWebhookSecret).trim()) {
       this.webhookSecret = String(settings.famupigatewayWebhookSecret).trim();
+    } else {
+      this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f';
     }
+
     if (settings.famupigatewayExpiryMinutes) {
       this.expiryMinutes = Number(settings.famupigatewayExpiryMinutes) || 5;
     }

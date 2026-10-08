@@ -1235,10 +1235,25 @@ router.delete('/admin/notices/:id', isAdminMiddleware, async (req, res) => {
 
 // ===================== STORE SETTINGS =====================
 
+function sanitizeStoreSettings(rawSettings: any) {
+  if (!rawSettings) return null;
+  const {
+    famupigatewayApiKey,
+    famupigatewayWebhookSecret,
+    ...safeSettings
+  } = rawSettings;
+
+  return {
+    ...safeSettings,
+    famupigatewayApiKeyConfigured: !!(famupigatewayApiKey && famupigatewayApiKey.trim()),
+    famupigatewayWebhookSecretConfigured: !!(famupigatewayWebhookSecret && famupigatewayWebhookSecret.trim()),
+  };
+}
+
 router.get('/settings', async (req, res) => {
   try {
     const settings = await getStoreSettings();
-    res.json({ success: true, settings });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings) });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to fetch settings' });
   }
@@ -1247,7 +1262,7 @@ router.get('/settings', async (req, res) => {
 router.put('/settings', isAdminMiddleware, async (req, res) => {
   try {
     const settings = await updateStoreSettings(req.body);
-    res.json({ success: true, settings, message: 'Settings updated successfully in database' });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings), message: 'Settings updated successfully in database' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to update settings' });
   }
@@ -1263,7 +1278,7 @@ router.post('/admin/branding', isAdminMiddleware, async (req, res) => {
       storeName: websiteName !== undefined ? websiteName.trim() : 'VORTEX CODE',
       subtitle: tagline !== undefined ? tagline.trim() : 'SECURE DIGITAL STORE',
     });
-    res.json({ success: true, settings, message: 'Branding updated successfully in database' });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings), message: 'Branding updated successfully in database' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to update branding' });
   }
@@ -1279,7 +1294,7 @@ router.put('/admin/branding', isAdminMiddleware, async (req, res) => {
       storeName: websiteName !== undefined ? websiteName.trim() : 'VORTEX CODE',
       subtitle: tagline !== undefined ? tagline.trim() : 'SECURE DIGITAL STORE',
     });
-    res.json({ success: true, settings, message: 'Branding updated successfully in database' });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings), message: 'Branding updated successfully in database' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to update branding' });
   }
@@ -1498,7 +1513,7 @@ async function handleSaveContact(req: any, res: any) {
 
     res.json({
       success: true,
-      settings,
+      settings: sanitizeStoreSettings(settings),
       message: 'Contact settings updated successfully in database',
     });
   } catch (err: any) {

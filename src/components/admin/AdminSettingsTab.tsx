@@ -25,10 +25,6 @@ export const AdminSettingsTab: React.FC = () => {
   const [famupigatewayBaseUrl, setFamupigatewayBaseUrl] = useState(
     storeSettings.famupigatewayBaseUrl || 'https://famupigateway.site/api'
   );
-  const [famupigatewayApiKey, setFamupigatewayApiKey] = useState(storeSettings.famupigatewayApiKey || '');
-  const [famupigatewayWebhookSecret, setFamupigatewayWebhookSecret] = useState(
-    storeSettings.famupigatewayWebhookSecret || ''
-  );
   const [famupigatewayExpiryMinutes, setFamupigatewayExpiryMinutes] = useState(
     storeSettings.famupigatewayExpiryMinutes || 5
   );
@@ -57,8 +53,6 @@ export const AdminSettingsTab: React.FC = () => {
       if (storeSettings.how_to_redeem_step_4_image_enabled !== undefined) setStep4Enabled(storeSettings.how_to_redeem_step_4_image_enabled);
       if (storeSettings.how_to_redeem_step_4_image_url !== undefined) setStep4Url(storeSettings.how_to_redeem_step_4_image_url);
       if (storeSettings.famupigatewayBaseUrl) setFamupigatewayBaseUrl(storeSettings.famupigatewayBaseUrl);
-      if (storeSettings.famupigatewayApiKey !== undefined) setFamupigatewayApiKey(storeSettings.famupigatewayApiKey);
-      if (storeSettings.famupigatewayWebhookSecret !== undefined) setFamupigatewayWebhookSecret(storeSettings.famupigatewayWebhookSecret);
       if (storeSettings.famupigatewayExpiryMinutes) setFamupigatewayExpiryMinutes(storeSettings.famupigatewayExpiryMinutes);
       if (storeSettings.appUrl) setAppUrl(storeSettings.appUrl);
 
@@ -92,8 +86,6 @@ export const AdminSettingsTab: React.FC = () => {
       currencySymbol,
       enableAutoFulfillment,
       famupigatewayBaseUrl,
-      famupigatewayApiKey,
-      famupigatewayWebhookSecret,
       famupigatewayExpiryMinutes,
       appUrl,
       how_to_redeem_step_1_image_enabled: step1Enabled,
@@ -122,21 +114,17 @@ export const AdminSettingsTab: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6">
 
-        {/* 1. FAMGATEWAY API INTEGRATION SETTINGS */}
-        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 space-y-5 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 px-3 py-1 bg-emerald-500/10 border-b border-l border-emerald-500/30 rounded-bl-xl text-[10px] font-mono text-emerald-400 font-bold">
-            LIVE INTEGRATION
-          </div>
-
+        {/* A. API / ENDPOINT SETTINGS */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5 shadow-xl">
           <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
-            <CreditCard className="w-4 h-4 text-emerald-400" />
-            <span>FamGateway Payment Credentials</span>
+            <Globe className="w-4 h-4 text-emerald-400" />
+            <span>API / Endpoint Settings</span>
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                FamGateway Base API URL <span className="text-emerald-400">*</span>
+                Payment API URL <span className="text-emerald-400">*</span>
               </label>
               <input
                 type="text"
@@ -151,38 +139,18 @@ export const AdminSettingsTab: React.FC = () => {
 
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Server-Side API Key (<code className="text-emerald-400">FAMUPIGATEWAY_API_KEY</code>) <span className="text-emerald-400">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={famupigatewayApiKey}
-                  onChange={(e) => setFamupigatewayApiKey(e.target.value)}
-                  placeholder="Paste your FamGateway API Key here..."
-                  className="w-full py-2.5 pl-9 pr-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
-                />
-                <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">
-                {famupigatewayApiKey.trim() ? (
-                  <span className="text-emerald-400 font-bold">✓ Active API Key configured! Transactions will route through live FamGateway.</span>
-                ) : (
-                  <span className="text-amber-400 font-bold">⚠️ Enter your server API key above to enable real-time payment gateway processing.</span>
-                )}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Webhook Secret (<code className="text-slate-400">Optional</code>)
+                Application Domain URL (<code className="text-emerald-400">APP_URL</code>)
               </label>
               <input
                 type="text"
-                value={famupigatewayWebhookSecret}
-                onChange={(e) => setFamupigatewayWebhookSecret(e.target.value)}
-                placeholder="FamGateway Webhook Secret..."
+                value={appUrl}
+                onChange={(e) => setAppUrl(e.target.value)}
+                placeholder="https://vortexcode.shop"
                 className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
               />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Primary production URL of your store (e.g. <code className="text-slate-300">https://vortexcode.shop</code>)
+              </p>
             </div>
 
             <div>
@@ -202,22 +170,6 @@ export const AdminSettingsTab: React.FC = () => {
 
           {/* Website Domain & Webhook Copy Section */}
           <div className="pt-3 border-t border-slate-800/80 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Application Domain URL (<code className="text-emerald-400">APP_URL</code>)
-              </label>
-              <input
-                type="text"
-                value={appUrl}
-                onChange={(e) => setAppUrl(e.target.value)}
-                placeholder="https://vortexcode.shop"
-                className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">
-                Primary production URL of your store (e.g. <code className="text-slate-300">https://vortexcode.shop</code>)
-              </p>
-            </div>
-
             {/* Calculated Webhook Endpoint Box */}
             <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <div className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
@@ -258,7 +210,40 @@ export const AdminSettingsTab: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
 
+        {/* B. PAYMENT GATEWAY SECURED STATUS CARD */}
+        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 space-y-4 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 px-3 py-1 bg-emerald-500/10 border-b border-l border-emerald-500/30 rounded-bl-xl text-[10px] font-mono text-emerald-400 font-bold">
+            SECURED ENDPOINT
+          </div>
+
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
+            <CreditCard className="w-4 h-4 text-emerald-400" />
+            <span>Payment Gateway Credentials Status</span>
+          </h2>
+
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>FamGateway Server Credentials</span>
+                {storeSettings.famupigatewayApiKeyConfigured ? (
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase tracking-wider font-mono">
+                    CONNECTED / CONFIGURED
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider font-mono">
+                    NOT CONFIGURED
+                  </span>
+                )}
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                {storeSettings.famupigatewayApiKeyConfigured
+                  ? "🔒 Server-Side Credentials Secured. Sensitive gateway access keys and signing secrets are stored privately in server environment variables and excluded from frontend exposure."
+                  : "⚠️ Server API Key not found. Please set FAMUPIGATEWAY_API_KEY inside your server environment variable configuration to process live payments."}
+              </p>
+            </div>
           </div>
         </div>
         
