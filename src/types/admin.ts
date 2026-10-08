@@ -34,12 +34,10 @@ export interface AdminDashboardStats {
   totalSalesRupees: number;
   todaysSalesRupees: number;
   totalOrders: number;
-  todaysOrders: number;
   pendingOrders: number;
   availableRedeemCodes: number;
   usedRedeemCodes: number;
   registeredCustomers: number;
-  activeMembers: number;
 }
 
 export interface AdminOrder {
