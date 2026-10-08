@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../common/Logo';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../../lib/firebase';
 
 export const LoginPage: React.FC = () => {
   const { login, loginWithGoogle, setCurrentView, isLoading } = useAuth();
@@ -15,33 +13,52 @@ export const LoginPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isGsiLoaded, setIsGsiLoaded] = useState(false);
 
-  // Firebase Google Auth
-  const handleGoogleClick = async () => {
+  // Load GSI client, but NOT the button
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const google = (window as any).google;
+      if (google) {
+        google.accounts.id.initialize({
+          client_id: '412099378603-nh2kva25qtq5jbajf7n49denqmj6evcf.apps.googleusercontent.com',
+          callback: async (response: any) => {
+            try {
+              setErrorMessage('');
+              await loginWithGoogle(response.credential);
+            } catch (err: any) {
+              setErrorMessage(err.message || 'Google authentication cancelled or failed.');
+            } finally {
+              setIsGoogleLoading(false);
+            }
+          },
+          use_fedcm_for_prompt: false,
+        });
+        setIsGsiLoaded(true);
+      }
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      try {
+        document.body.removeChild(script);
+      } catch (err) {}
+    };
+  }, [loginWithGoogle]);
+
+  const handleGoogleClick = () => {
+    if (!isGsiLoaded) return;
     setIsGoogleLoading(true);
-    setErrorMessage('');
-    
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const idToken = await user.getIdToken(true);
-      
-      await loginWithGoogle(idToken);
-    } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-        console.error('Google login error:', err);
-      }
-      
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        setErrorMessage('Google authentication cancelled.');
-      } else if (err.code === 'auth/popup-blocked') {
-        setErrorMessage('Popup was blocked by your browser. Please allow popups.');
-      } else if (err.code === 'auth/network-request-failed') {
-        setErrorMessage('Network error. Please check your connection or ensure this domain is authorized in Firebase console.');
-      } else {
-        setErrorMessage(err.message || 'Google authentication failed.');
-      }
-    } finally {
+    const google = (window as any).google;
+    if (google) {
+      // Use prompt to show the sign-in modal
+      google.accounts.id.prompt();
+    } else {
+      setErrorMessage('Google Sign-In is not initialized. Please refresh.');
       setIsGoogleLoading(false);
     }
   };
@@ -208,8 +225,8 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={handleGoogleClick}
-              disabled={isGoogleLoading}
-              className="w-full py-3 px-4 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white border border-slate-700 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center justify-center gap-3 cursor-pointer"
+              disabled={isGoogleLoading || !isGsiLoaded}
+              className="w-full py-3 px-4 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white border border-slate-700 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center justify-center gap-3 cursor-pointer"
             >
               {isGoogleLoading ? (
                 <div className="w-5 h-5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></div>
