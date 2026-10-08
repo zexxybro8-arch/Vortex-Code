@@ -29,9 +29,15 @@ import {
 } from 'lucide-react';
 
 export const CustomerDashboard: React.FC = () => {
-  const { user, orders, addToast, triggerAuthRequired, refreshCustomerOrders } = useAuth();
+  const { user, orders, addToast, triggerAuthRequired, refreshCustomerOrders, dashboardTab } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<DashboardTab>('redeem-code');
+  const [activeTab, setActiveTab] = useState<DashboardTab>((dashboardTab as DashboardTab) || 'redeem-code');
+
+  useEffect(() => {
+    if (dashboardTab) {
+      setActiveTab(dashboardTab as DashboardTab);
+    }
+  }, [dashboardTab]);
   
   // Store Filters State
   const [selectedDenomination, setSelectedDenomination] = useState<string>('ALL VALUES');
@@ -361,77 +367,18 @@ export const CustomerDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
       
-      {/* TAB NAVIGATION BAR (Horizontally Scrollable) */}
-      <div className="bg-slate-950 border-b border-slate-800/90 sticky top-20 z-30 px-3 sm:px-6 lg:px-8 py-3">
-        <div className="max-w-7xl mx-auto flex items-center gap-2.5 overflow-x-auto scrollbar-none">
-          
-          {/* TAB 1: REDEEM CODE */}
-          <button
-            onClick={() => setActiveTab('redeem-code')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'redeem-code'
-                ? 'bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 border border-emerald-300'
-                : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-            }`}
-          >
-            <Ticket className="w-4 h-4" />
-            <span>REDEEM CODE</span>
-          </button>
-
-          {/* TAB 2: HOW TO REDEEM */}
-          <button
-            onClick={() => setActiveTab('how-to-redeem')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'how-to-redeem'
-                ? 'bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 border border-emerald-300'
-                : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-            }`}
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>HOW TO REDEEM</span>
-          </button>
-
-          {/* TAB 3: SUPPORT */}
-          <button
-            onClick={() => setActiveTab('support')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'support'
-                ? 'bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 border border-emerald-300'
-                : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>SUPPORT</span>
-          </button>
-
-          {/* MY ORDERS TAB */}
-          <button
-            onClick={() => setActiveTab('my-orders')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              activeTab === 'my-orders'
-                ? 'bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 border border-emerald-300'
-                : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-            }`}
-          >
-            <Key className="w-4 h-4" />
-            <span>MY ORDERS & VAULT ({orders.length})</span>
-          </button>
-
-        </div>
-      </div>
-
       {/* MAIN VIEWPORT AREA */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-6 space-y-6">
         
         {activeTab === 'redeem-code' && (
           <div className="space-y-6">
             
             {/* SELECT RECHARGE AMOUNT / DENOMINATION FILTER BAR */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
+            <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Tag className="w-3.5 h-3.5" />
-                  <span>SELECT RECHARGE AMOUNT / DENOMINATION:</span>
+                  <span>SELECT REDEEM CODE / AMOUNT:</span>
                 </div>
               </div>
 
@@ -507,11 +454,14 @@ export const CustomerDashboard: React.FC = () => {
                         />
                       </div>
 
-                      {/* Product Title */}
-                      <div className="flex-1 min-w-0">
+                      {/* Product Title & Dynamic Green Subtitle */}
+                      <div className="flex-1 min-w-0 space-y-1">
                         <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight leading-snug truncate group-hover:text-emerald-300 transition-colors">
                           {prod.name}
                         </h3>
+                        <div className="text-xs sm:text-sm font-mono font-extrabold text-emerald-400">
+                          Pay ₹{prod.priceRupees.toLocaleString('en-IN')} and Get a ₹{prod.rewardValueRupees.toLocaleString('en-IN')} Redeem Code
+                        </div>
                       </div>
                     </div>
 
@@ -528,7 +478,7 @@ export const CustomerDashboard: React.FC = () => {
 
                       <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
                         <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
-                          BALANCE
+                          REDEEM CODE
                         </div>
                         <div className="text-lg sm:text-xl font-black text-emerald-400">
                           ₹{prod.rewardValueRupees.toLocaleString('en-IN')}

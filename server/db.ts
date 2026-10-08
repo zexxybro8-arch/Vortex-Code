@@ -179,6 +179,27 @@ export async function getDb(): Promise<Database> {
     // Ignore error if column already exists
   }
 
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN customer_id TEXT;`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN last_login_at TEXT;`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN provider TEXT DEFAULT 'Email';`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN photo_url TEXT;`);
+  } catch (e) {}
+
+
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
     const tableSqlRes = dbInstance.exec(`SELECT sql FROM sqlite_master WHERE name = 'redeem_codes';`);
@@ -1793,18 +1814,21 @@ export async function createUser(params: {
   googleSub?: string;
   role?: string;
   balance?: number;
+  customerId?: string;
 }) {
   const db = await getDb();
   const id = `usr_${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
   const role = params.role || 'CUSTOMER';
   const balance = params.balance !== undefined ? params.balance : 1500.0;
+  const customerId = params.customerId || null;
 
   db.run(
-    `INSERT INTO users (id, fullName, email, username, password, googleSub, role, createdAt, balance)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO users (id, customer_id, fullName, email, username, password, googleSub, role, createdAt, balance)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       id,
+      customerId,
       params.fullName.trim(),
       params.email.trim().toLowerCase(),
       params.username.trim().toLowerCase(),
@@ -1819,6 +1843,7 @@ export async function createUser(params: {
 
   return {
     id,
+    customerId,
     fullName: params.fullName,
     email: params.email,
     username: params.username,
@@ -1826,6 +1851,210 @@ export async function createUser(params: {
     role,
     createdAt: now,
     balance,
+  };
+}
+
+export async function isCustomerIdUnique(cid: string): Promise<boolean> {
+  const db = await getDb();
+  const res = db.exec(`SELECT id FROM users WHERE customer_id = ?;`, [cid]);
+  return res.length === 0 || res[0].values.length === 0;
+}
+
+export async function generateRandomCustomerId(): Promise<string> {
+  while (true) {
+    const num = Math.floor(Math.random() * 90000) + 10000;
+    const cid = `VC-${num}`;
+    if (await isCustomerIdUnique(cid)) {
+      return cid;
+    }
+  }
+}
+
+export async function migrateToRandomCustomerIds() {
+  const db = await getDb();
+  const res = db.exec(`SELECT id, customer_id FROM users;`);
+  if (res.length === 0 || res[0].values.length === 0) return;
+
+  const rows = res[0].values;
+  for (const row of rows) {
+    const uid = row[0] as string;
+    const cid = row[1] as string;
+
+    // Migrate if no CID OR old format (sequential starts with VC-0)
+    if (!cid || cid.startsWith('VC-0')) {
+      const newCid = await generateRandomCustomerId();
+      db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, uid]);
+    }
+  }
+  saveDb();
+}
+
+export async function getAllUsersForAdmin() {
+  const db = await getDb();
+  const res = db.exec(`
+    SELECT 
+      u.id, 
+      u.customer_id as customerId,
+      u.fullName, 
+      u.email, 
+      u.username, 
+      u.role, 
+      u.googleSub,
+      u.provider,
+      u.status,
+      u.createdAt, 
+      u.last_login_at as lastLoginAt,
+      u.balance
+    FROM users u
+    ORDER BY u.createdAt DESC;
+  `);
+
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  const users = res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
+
+  // Attach order stats for each user
+  const enhancedUsers = [];
+  for (const u of users) {
+    const ordersRes = db.exec(`
+      SELECT id, amount, created_at, payment_status, delivery_status 
+      FROM orders 
+      WHERE (customer_email IS NOT NULL AND LOWER(customer_email) = ?) 
+         OR (customer_id IS NOT NULL AND customer_id = ?)
+      ORDER BY created_at DESC;
+    `, [(u.email || '').toLowerCase(), u.customerId || '']);
+
+    let successfulOrdersCount = 0;
+    let totalSpent = 0;
+    let codesPurchased = 0;
+
+    if (ordersRes.length > 0 && ordersRes[0].values.length > 0) {
+      for (const ordRow of ordersRes[0].values) {
+        const paymentStatus = ordRow[3] as string;
+        const amount = Number(ordRow[1]) || 0;
+        if (paymentStatus === 'PAID') {
+          successfulOrdersCount++;
+          totalSpent += amount;
+          codesPurchased++;
+        }
+      }
+    }
+
+    enhancedUsers.push({
+      id: u.id,
+      customerId: u.customerId || 'VC-000000',
+      fullName: u.fullName || u.username || 'Customer',
+      email: u.email,
+      role: u.role || 'CUSTOMER',
+      provider: u.googleSub ? 'Google' : (u.provider || 'Email/Password'),
+      status: u.status || 'ACTIVE',
+      createdAt: u.createdAt,
+      joinedDate: u.createdAt ? u.createdAt.substring(0, 10) : '2026-10-08',
+      lastLogin: u.lastLoginAt ? u.lastLoginAt.substring(0, 16).replace('T', ' ') : (u.createdAt ? u.createdAt.substring(0, 16).replace('T', ' ') : 'Recently'),
+      successfulOrders: successfulOrdersCount,
+      orderCount: successfulOrdersCount,
+      codesPurchased: codesPurchased,
+      totalSpent: totalSpent,
+      totalSpentRupees: totalSpent,
+    });
+  }
+
+  return enhancedUsers;
+}
+
+export async function getUserDetailsWithOrders(identifier: string) {
+  const db = await getDb();
+  const clean = identifier.trim();
+
+  const userRes = db.exec(`
+    SELECT 
+      id, customer_id as customerId, fullName, email, username, role, googleSub, provider, status, createdAt, last_login_at as lastLoginAt, balance
+    FROM users 
+    WHERE id = ? OR customer_id = ? OR email = ?;
+  `, [clean, clean, clean]);
+
+  if (userRes.length === 0 || userRes[0].values.length === 0) return null;
+  const cols = userRes[0].columns;
+  const row = userRes[0].values[0];
+  const userObj: any = {};
+  cols.forEach((c, idx) => { userObj[c] = row[idx]; });
+
+  const orders = await getCustomerPaidOrders(userObj.email, userObj.customerId);
+  const totalSpent = orders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+
+  return {
+    profile: {
+      id: userObj.id,
+      customerId: userObj.customerId || 'VC-000000',
+      fullName: userObj.fullName,
+      email: userObj.email,
+      role: userObj.role,
+      provider: userObj.googleSub ? 'Google' : (userObj.provider || 'Email'),
+      status: userObj.status || 'ACTIVE',
+      createdAt: userObj.createdAt,
+      lastLogin: userObj.lastLoginAt || userObj.createdAt,
+    },
+    statistics: {
+      successfulOrders: orders.length,
+      codesPurchased: orders.length,
+      totalSpent,
+    },
+    orders,
+  };
+}
+
+export async function updateUserStatus(identifier: string, status: 'ACTIVE' | 'DISABLED') {
+  const db = await getDb();
+  const clean = identifier.trim();
+  db.run(`UPDATE users SET status = ? WHERE id = ? OR customer_id = ? OR email = ?;`, [status, clean, clean, clean]);
+  saveDb();
+  return getUserDetailsWithOrders(clean);
+}
+
+export async function getAdminAnalyticsSummary() {
+  const users = await getAllUsersForAdmin();
+  const allOrders = await getAllOrders();
+  const successfulOrders = allOrders.filter(o => o.paymentStatus === 'PAID');
+
+  const totalUsers = users.length;
+  const activeUsers = users.filter(u => u.status === 'ACTIVE').length;
+  const usersWithPurchases = users.filter(u => u.successfulOrders > 0).length;
+  const totalCodesSold = successfulOrders.length;
+  const totalSales = successfulOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+
+  // Today's sales
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const todaysSales = successfulOrders
+    .filter(o => o.createdAt && o.createdAt.startsWith(todayStr))
+    .reduce((sum, o) => sum + Number(o.amount || 0), 0);
+
+  const topBuyers = [...users]
+    .sort((a, b) => b.totalSpent - a.totalSpent)
+    .slice(0, 5)
+    .map(u => ({
+      customerId: u.customerId,
+      name: u.fullName,
+      email: u.email,
+      codesPurchased: u.codesPurchased,
+      totalSpent: u.totalSpent,
+    }));
+
+  return {
+    totalUsers,
+    activeUsers,
+    usersWithPurchases,
+    totalCodesSold,
+    totalOrders: allOrders.length,
+    successfulOrders: successfulOrders.length,
+    totalSales,
+    todaysSales,
+    topBuyers,
   };
 }
 

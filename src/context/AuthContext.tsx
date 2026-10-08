@@ -34,6 +34,8 @@ interface AuthContextType {
   setAuthRequiredModalOpen: (open: boolean) => void;
   restrictedActionAttempted: string;
   triggerAuthRequired: (actionName: string) => void;
+  dashboardTab: string;
+  setDashboardTab: (tab: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -98,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [availableCodes, setAvailableCodes] = useState<RedeemCode[]>([]);
+  const [dashboardTab, setDashboardTab] = useState<string>('redeem-code');
 
   const refreshCustomerOrders = useCallback(async () => {
     try {
@@ -107,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const apiOrders = await api.getMyOrders(user.email, user.id);
       if (apiOrders) {
-        const mappedOrders: OrderItem[] = apiOrders.map((o) => ({
+        const mappedOrders: OrderItem[] = apiOrders.map((o: any) => ({
           id: o.id,
           orderNumber: o.orderNumber,
           codeTitle: o.productName,
@@ -343,6 +346,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthRequiredModalOpen,
         restrictedActionAttempted,
         triggerAuthRequired,
+        dashboardTab,
+        setDashboardTab,
       }}
     >
       {children}

@@ -135,18 +135,22 @@ export const api = {
 
   // Redeem Codes
   async getRedeemCodes(productId?: string, status?: string, denomination?: string, isAdmin: boolean = false): Promise<ApiRedeemCode[]> {
-    const params = new URLSearchParams();
-    if (productId) params.set('productId', productId);
-    if (status) params.set('status', status);
-    if (denomination && denomination !== 'ALL VALUES') params.set('denomination', denomination);
+    try {
+      const params = new URLSearchParams();
+      if (productId) params.set('productId', productId);
+      if (status) params.set('status', status);
+      if (denomination && denomination !== 'ALL VALUES') params.set('denomination', denomination);
 
-    const headers: Record<string, string> = {};
-    if (isAdmin) {
-      headers['x-admin-token'] = 'SAGAR551';
+      const headers: Record<string, string> = {};
+      if (isAdmin) {
+        headers['x-admin-token'] = 'SAGAR551';
+      }
+
+      const data = await safeFetchJson(`/api/redeem-codes?${params.toString()}`, { headers });
+      return data.codes || [];
+    } catch {
+      return [];
     }
-
-    const data = await safeFetchJson(`/api/redeem-codes?${params.toString()}`, { headers });
-    return data.codes || [];
   },
 
   async addRedeemCode(codeData: {
@@ -229,6 +233,54 @@ export const api = {
     } catch (err) {
       console.warn('api.getOrders connection notice:', err);
       return [];
+    }
+  },
+
+  async getCurrentUser(email: string): Promise<any> {
+    try {
+      const data = await safeFetchJson(`/api/me?email=${encodeURIComponent(email)}`);
+      return data?.user || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async getAdminUsers(): Promise<any[]> {
+    try {
+      const data = await safeFetchJson('/api/admin/users', {
+        headers: { 'x-admin-token': 'SAGAR551' },
+      });
+      return data?.users || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getAdminUserDetails(identifier: string): Promise<any> {
+    return safeFetchJson(`/api/admin/users/${encodeURIComponent(identifier)}`, {
+      headers: { 'x-admin-token': 'SAGAR551' },
+    });
+  },
+
+  async updateUserStatus(identifier: string, status: 'ACTIVE' | 'DISABLED'): Promise<any> {
+    return safeFetchJson(`/api/admin/users/${encodeURIComponent(identifier)}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  async getAdminAnalytics(): Promise<any> {
+    try {
+      const data = await safeFetchJson('/api/admin/analytics', {
+        headers: { 'x-admin-token': 'SAGAR551' },
+      });
+      return data?.analytics || null;
+    } catch {
+      return null;
     }
   },
 

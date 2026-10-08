@@ -79,52 +79,20 @@ export default function App() {
         <Header />
         <CustomerMainContent />
         
-        {/* CUSTOMER FOOTER */}
-        <footer className="border-t border-slate-900 bg-slate-950/95 py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-            
-            {/* Left: Brand */}
-            <div className="space-y-1 text-center md:text-left">
-              <div className="font-extrabold text-sm text-white font-mono tracking-wider">
-                VORTEX<span className="text-emerald-400">CODE</span>
-              </div>
-              <p className="text-[11px] text-slate-500">Secure Digital Store</p>
-            </div>
-
-            {/* Middle Links */}
-            <div className="flex flex-wrap items-center justify-center gap-6 text-slate-300 font-medium">
-              <FooterLink target="landing">Home</FooterLink>
-              <FooterLink target="dashboard">Redeem Store</FooterLink>
-              <FooterLink target="order-lookup">Order Lookup</FooterLink>
-              <FooterLink target="dashboard">Support</FooterLink>
-              <FooterLink target="register">Terms</FooterLink>
-              <FooterLink target="register">Privacy</FooterLink>
-            </div>
-
-            {/* Right: Copyright */}
-            <div className="text-slate-500 text-[11px] text-center md:text-right">
-              © 2026 VORTEX CODE. All rights reserved.
-            </div>
-
-          </div>
-        </footer>
-
         <AuthRequiredModal />
         <ToastContainer />
         <TelegramFloatingButton />
+
+        {/* Minimal Branding Footer */}
+        <footer className="py-8 px-4 text-center text-slate-500 text-[11px] font-mono">
+          <div className="flex items-center justify-center gap-1.5">
+            <span className="font-extrabold text-white tracking-wider">VORTEX CODE</span>
+            <span className="text-slate-700">•</span>
+            <span className="text-emerald-400 font-bold tracking-wide">TRUSTED BY THOUSANDS</span>
+            <span className="text-emerald-400 font-bold">✓</span>
+          </div>
+        </footer>
       </div>
     </AuthProvider>
   );
 }
-
-const FooterLink: React.FC<{ target: any; children: React.ReactNode }> = ({ target, children }) => {
-  const { setCurrentView } = useAuth();
-  return (
-    <button
-      onClick={() => setCurrentView(target)}
-      className="hover:text-emerald-400 transition-colors cursor-pointer"
-    >
-      {children}
-    </button>
-  );
-};

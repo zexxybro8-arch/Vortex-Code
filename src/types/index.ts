@@ -4,6 +4,7 @@ export type DashboardTab = 'redeem-code' | 'how-to-redeem' | 'support' | 'my-ord
 
 export interface User {
   id: string;
+  customerId?: string;
   fullName: string;
   email: string;
   username: string;

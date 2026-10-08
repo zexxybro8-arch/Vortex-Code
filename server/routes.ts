@@ -27,6 +27,12 @@ import {
   getUserByEmail,
   getUserByGoogleSub,
   createUser,
+  generateRandomCustomerId,
+  migrateToRandomCustomerIds,
+  getAllUsersForAdmin,
+  getUserDetailsWithOrders,
+  updateUserStatus,
+  getAdminAnalyticsSummary,
   saveDb,
   getDb,
   getStoreSettings,
@@ -319,6 +325,100 @@ router.delete('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
 });
 
 // ===================== ORDERS & REDEMPTION HISTORY =====================
+
+// GET /api/me - Get current customer profile with assigned customer ID
+router.get('/me', async (req, res) => {
+  try {
+    const email = (req.query.email as string || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+    const user = await getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Ensure customer has a random 5-digit ID
+    if (!user.customer_id || user.customer_id.startsWith('VC-0')) {
+      const newCid = await generateRandomCustomerId();
+      const db = await getDb();
+      db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, user.id]);
+      saveDb();
+      user.customer_id = newCid;
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        customerId: user.customer_id,
+        fullName: user.fullName,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        status: user.status || 'ACTIVE',
+        createdAt: user.createdAt,
+        balance: user.balance !== undefined ? user.balance : 1500.0,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch user profile' });
+  }
+});
+
+// ===================== ADMIN USERS MANAGEMENT =====================
+
+router.get('/admin/users', isAdminMiddleware, async (req, res) => {
+  try {
+    const users = await getAllUsersForAdmin();
+    res.json({ success: true, users });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch users' });
+  }
+});
+
+router.get('/admin/users/:identifier', isAdminMiddleware, async (req, res) => {
+  try {
+    const details = await getUserDetailsWithOrders(req.params.identifier);
+    if (!details) {
+      return res.status(404).json({ success: false, error: 'User profile not found' });
+    }
+    res.json({ success: true, ...details });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch user details' });
+  }
+});
+
+router.put('/admin/users/:identifier/status', isAdminMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (status !== 'ACTIVE' && status !== 'DISABLED') {
+      return res.status(400).json({ success: false, error: 'Invalid status. Must be ACTIVE or DISABLED.' });
+    }
+    const updated = await updateUserStatus(req.params.identifier, status);
+    res.json({ success: true, ...updated, message: `User status updated to ${status}` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update user status' });
+  }
+});
+
+router.get('/admin/analytics', isAdminMiddleware, async (req, res) => {
+  try {
+    const analytics = await getAdminAnalyticsSummary();
+    res.json({ success: true, analytics });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch analytics' });
+  }
+});
+
+router.get('/admin/migrate-ids', isAdminMiddleware, async (req, res) => {
+  try {
+    await migrateToRandomCustomerIds();
+    res.json({ success: true, message: 'Migration complete' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // GET /api/my-orders - Securely fetch ONLY the authenticated customer's successfully completed orders
 router.get('/my-orders', async (req, res) => {
@@ -956,11 +1056,13 @@ router.post('/auth/google-login', async (req, res) => {
       } else {
         // Register new customer account in database with standard CUSTOMER role (no administrative privilege automatically granted)
         const username = email.split('@')[0];
+        const customerId = await generateRandomCustomerId();
         userRecord = await createUser({
           fullName,
           email,
           username,
           googleSub,
+          customerId,
           role: 'CUSTOMER',
         });
       }
@@ -970,6 +1072,7 @@ router.post('/auth/google-login', async (req, res) => {
       success: true,
       user: {
         id: userRecord.id,
+        customerId: userRecord.customerId,
         fullName: userRecord.fullName,
         email: userRecord.email,
         username: userRecord.username,
@@ -1006,11 +1109,13 @@ router.post('/auth/register', async (req, res) => {
     }
 
     const username = email.split('@')[0];
+    const customerId = await generateRandomCustomerId();
     const userRecord = await createUser({
       fullName,
       email,
       username,
       password, // Persisted securely in DB
+      customerId,
       role: 'CUSTOMER',
     });
 
@@ -1018,6 +1123,7 @@ router.post('/auth/register', async (req, res) => {
       success: true,
       user: {
         id: userRecord.id,
+        customerId: userRecord.customerId,
         fullName: userRecord.fullName,
         email: userRecord.email,
         username: userRecord.username,
@@ -1044,11 +1150,21 @@ router.post('/auth/login', async (req, res) => {
     if (!userRecord || userRecord.password !== password) {
       return res.status(401).json({ success: false, error: 'Invalid email/username or password.' });
     }
+    
+    // Ensure customer has a random 5-digit ID
+    if (!userRecord.customer_id || userRecord.customer_id.startsWith('VC-0')) {
+      const newCid = await generateRandomCustomerId();
+      const db = await getDb();
+      db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, userRecord.id]);
+      saveDb();
+      userRecord.customer_id = newCid;
+    }
 
     res.json({
       success: true,
       user: {
         id: userRecord.id,
+        customerId: userRecord.customer_id,
         fullName: userRecord.fullName,
         email: userRecord.email,
         username: userRecord.username,
