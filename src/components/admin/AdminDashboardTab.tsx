@@ -1,7 +1,6 @@
 import React from 'react';
 import { useAdmin } from '../../context/AdminContext';
 import {
-  TrendingUp,
   ShoppingBag,
   Clock,
   Key,
@@ -30,10 +29,6 @@ export const AdminDashboardTab: React.FC = () => {
           <div className="text-2xl font-extrabold text-white font-mono">
             ₹{stats.totalSalesRupees.toLocaleString('en-IN')}
           </div>
-          <p className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" />
-            <span>+14.2% from last month</span>
-          </p>
         </div>
 
         {/* Today's Sales */}
@@ -45,7 +40,7 @@ export const AdminDashboardTab: React.FC = () => {
           <div className="text-2xl font-extrabold text-emerald-400 font-mono">
             ₹{stats.todaysSalesRupees.toLocaleString('en-IN')}
           </div>
-          <p className="text-[10px] text-slate-400 font-mono">28 orders processed today</p>
+          <p className="text-[10px] text-slate-400 font-mono">{stats.todaysOrders} orders processed today</p>
         </div>
 
         {/* Total Orders */}
@@ -82,7 +77,11 @@ export const AdminDashboardTab: React.FC = () => {
       <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs text-slate-300">
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-emerald-400" />
-          <span>Registered Customer Accounts: <strong className="text-white font-mono">{stats.registeredCustomers} active members</strong></span>
+          <span>
+            Registered Customer Accounts: <strong className="text-white font-mono">{stats.registeredCustomers}</strong>
+            <span className="mx-2 text-slate-600">|</span>
+            Active Members: <strong className="text-emerald-400 font-mono">{stats.activeMembers}</strong>
+          </span>
         </div>
         <button
           onClick={() => setAdminTab('customers')}

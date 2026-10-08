@@ -231,24 +231,20 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [customerOverrides, setCustomerOverrides] = useState<Record<string, 'ACTIVE' | 'SUSPENDED'>>({});
+  const [users, setUsers] = useState<any[]>([]);
 
-  // Compute real customers dynamically from real database orders
-  const uniqueCustomerEmails = Array.from(new Set(orders.map((o) => o.customerEmail.toLowerCase())));
-  const customers: AdminCustomer[] = uniqueCustomerEmails.map((email, idx) => {
-    const custOrders = orders.filter((o) => o.customerEmail.toLowerCase() === email);
+  // Compute real customers dynamically from real database users
+  const customers: AdminCustomer[] = users.map((u) => {
+    const custOrders = orders.filter((o) => o.customerEmail.toLowerCase() === u.email.toLowerCase());
     const totalSpent = custOrders.reduce((sum, o) => sum + (o.paymentStatus === 'PAID' ? o.amountRupees : 0), 0);
-    const firstName = custOrders[0]?.customerName || email.split('@')[0];
-    const firstDate = custOrders[custOrders.length - 1]?.createdAt.substring(0, 10) || new Date().toISOString().substring(0, 10);
-    const id = `cust_${idx + 1}`;
     return {
-      id,
-      fullName: firstName,
-      email,
-      registrationDate: firstDate,
+      id: u.customerId,
+      fullName: u.fullName,
+      email: u.email,
+      registrationDate: u.createdAt ? u.createdAt.substring(0, 10) : new Date().toISOString().substring(0, 10),
       orderCount: custOrders.length,
       totalSpentRupees: totalSpent,
-      status: customerOverrides[id] || 'ACTIVE',
+      status: u.status || 'ACTIVE',
     };
   });
 
@@ -321,7 +317,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshData = useCallback(async () => {
     if (!adminUser) return; // Securely skip if not authenticated
     try {
-      const [apiProducts, apiCodes, apiOrders, apiSettings, apiCats] = await Promise.all([
+      const [apiProducts, apiCodes, apiOrders, apiSettings, apiCats, apiUsers] = await Promise.all([
         api.getProducts().catch((err) => {
           console.error('Failed to load products from API:', err);
           return [];
@@ -342,6 +338,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           console.error('Failed to load categories from API:', err);
           return [];
         }),
+        api.getAdminUsers().catch((err) => {
+          console.error('Failed to load users from API:', err);
+          return [];
+        }),
       ]);
 
       if (apiProducts && apiProducts.length > 0) {
@@ -358,6 +358,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       if (apiCats) {
         setCategories(apiCats);
+      }
+      if (apiUsers) {
+        setUsers(apiUsers);
       }
     } catch (err) {
       console.error('Error refreshing admin data from DB:', err);
@@ -570,11 +573,16 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const toggleCustomerStatus = (id: string) => {
-    setCustomerOverrides((prev) => ({
-      ...prev,
-      [id]: prev[id] === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
-    }));
+  const toggleCustomerStatus = async (id: string) => {
+    try {
+      const userToToggle = users.find(u => u.customerId === id);
+      if (!userToToggle) return;
+      const newStatus = userToToggle.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+      await api.updateUserStatus(id, newStatus);
+      await refreshData();
+    } catch (err) {
+      console.error('Failed to toggle customer status:', err);
+    }
   };
 
   const addCategory = async (catData: {
@@ -719,14 +727,20 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const availableRedeemCodesCount = redeemCodes.filter((c) => c.status === 'AVAILABLE').length;
   const usedRedeemCodesCount = redeemCodes.filter((c) => c.status === 'USED').length;
 
+  const todaysSalesOrdersCount = orders
+    .filter((o) => o.paymentStatus === 'PAID' && o.createdAt.startsWith(todayStr))
+    .length;
+
   const stats: AdminDashboardStats = {
     totalSalesRupees,
     todaysSalesRupees,
+    todaysOrders: todaysSalesOrdersCount,
     totalOrders: orders.length,
     pendingOrders: orders.filter((o) => o.paymentStatus === 'PENDING').length,
     availableRedeemCodes: availableRedeemCodesCount,
     usedRedeemCodes: usedRedeemCodesCount,
-    registeredCustomers: customers.length,
+    registeredCustomers: users.length,
+    activeMembers: users.filter((u) => u.status === 'ACTIVE').length,
   };
 
   return (
