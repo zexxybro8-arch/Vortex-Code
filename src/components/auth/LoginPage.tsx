@@ -215,9 +215,20 @@ export const LoginPage: React.FC = () => {
             <div className="flex-grow border-t border-slate-800"></div>
           </div>
 
-          {/* Secure Google Login Button Container */}
-          <div className="flex justify-center w-full pt-1">
-            <div id="google-signin-btn-container" className="w-full flex justify-center min-h-[44px]"></div>
+          {/* Secure Google Login Button */}
+          <div className="relative w-full pt-1">
+            {/* Custom Button UI */}
+            <div className="w-full h-[52px] sm:h-[56px] rounded-xl bg-slate-950 border border-slate-700 flex items-center justify-center gap-3 text-sm font-medium text-slate-100 transition-all active:scale-[0.98] hover:border-emerald-500/50 hover:bg-slate-900 shadow-sm relative z-0">
+              <img
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                alt="Google"
+                className="w-5 h-5"
+              />
+              <span>Continue with Google</span>
+            </div>
+
+            {/* Standard GSI Button Overlay (Invisible but functional) */}
+            <div id="google-signin-btn-container" className="absolute top-0 left-0 w-full h-full opacity-0 z-10 cursor-pointer"></div>
           </div>
 
           {/* Below link: Register Page */}
