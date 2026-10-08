@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../common/Logo';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../../lib/firebase';
 
 export const LoginPage: React.FC = () => {
   const { login, loginWithGoogle, setCurrentView, isLoading } = useAuth();
@@ -14,46 +16,27 @@ export const LoginPage: React.FC = () => {
 
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  // Load GSI client, but NOT the button
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      const google = (window as any).google;
-      if (google) {
-        google.accounts.id.initialize({
-          client_id: '412099378603-nh2kva25qtq5jbajf7n49denqmj6evcf.apps.googleusercontent.com',
-          callback: async (response: any) => {
-            try {
-              setErrorMessage('');
-              await loginWithGoogle(response.credential);
-            } catch (err: any) {
-              setErrorMessage(err.message || 'Google authentication cancelled or failed.');
-            } finally {
-              setIsGoogleLoading(false);
-            }
-          },
-        });
-      }
-    };
-    document.body.appendChild(script);
-
-    return () => {
-      try {
-        document.body.removeChild(script);
-      } catch (err) {}
-    };
-  }, [loginWithGoogle]);
-
-  const handleGoogleClick = () => {
+  // Firebase Google Auth
+  const handleGoogleClick = async () => {
     setIsGoogleLoading(true);
-    const google = (window as any).google;
-    if (google) {
-      google.accounts.id.prompt();
-    } else {
-      setErrorMessage('Google Sign-In is not initialized. Please refresh.');
+    setErrorMessage('');
+    
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const idToken = await user.getIdToken(true);
+      
+      await loginWithGoogle(idToken);
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      if (err.code === 'auth/popup-closed-by-user') {
+        setErrorMessage('Google authentication cancelled.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setErrorMessage('Popup was blocked by your browser. Please allow popups.');
+      } else {
+        setErrorMessage(err.message || 'Google authentication failed.');
+      }
+    } finally {
       setIsGoogleLoading(false);
     }
   };
