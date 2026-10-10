@@ -1228,34 +1228,12 @@ export async function getAllOrders() {
  * Fetch ONLY successfully PAID and completed purchases belonging strictly to the customer.
  * Pending, failed, or cancelled transactions are excluded.
  */
-export async function getCustomerPaidOrders(customerEmail?: string, customerId?: string) {
+export async function getCustomerPaidOrders(customerEmail: string, customerId?: string) {
   const db = await getDb();
   const cleanEmail = (customerEmail || '').trim().toLowerCase();
   const cleanId = (customerId || '').trim();
 
   if (!cleanEmail && !cleanId) return [];
-
-  // Check if we can find associated user record to link customer_id, user id, and email
-  let matchedUser: any = null;
-  if (cleanId) {
-    matchedUser = await getUserByIdOrCustomerId(cleanId);
-  }
-  if (!matchedUser && cleanEmail) {
-    matchedUser = await getUserByEmail(cleanEmail);
-  }
-
-  const idsToMatch = new Set<string>();
-  const emailsToMatch = new Set<string>();
-
-  if (cleanId) idsToMatch.add(cleanId);
-  if (cleanEmail) emailsToMatch.add(cleanEmail);
-
-  if (matchedUser) {
-    if (matchedUser.id) idsToMatch.add(String(matchedUser.id));
-    if (matchedUser.customer_id) idsToMatch.add(String(matchedUser.customer_id));
-    if (matchedUser.customerId) idsToMatch.add(String(matchedUser.customerId));
-    if (matchedUser.email) emailsToMatch.add(String(matchedUser.email).toLowerCase());
-  }
 
   const res = db.exec(`
     SELECT 
@@ -1281,28 +1259,22 @@ export async function getCustomerPaidOrders(customerEmail?: string, customerId?:
       p.reward_value as rewardValue
     FROM orders o
     LEFT JOIN products p ON o.product_id = p.id
-    WHERE o.payment_status = 'PAID'
+    WHERE (
+      (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = ?)
+      OR (o.customer_id IS NOT NULL AND o.customer_id = ? AND ? != '')
+    )
+    AND o.payment_status = 'PAID'
     ORDER BY o.created_at DESC;
-  `);
+  `, [cleanEmail, cleanId, cleanId]);
 
-  if (res.length === 0 || res[0].values.length === 0) return [];
+  if (res.length === 0) return [];
   const columns = res[0].columns;
-  const allPaidOrders = res[0].values.map((row) => {
+  return res[0].values.map((row) => {
     const obj: any = {};
     columns.forEach((col, idx) => {
       obj[col] = row[idx];
     });
     return obj;
-  });
-
-  // Strict account isolation: Only orders belonging directly to this account
-  return allPaidOrders.filter((ord: any) => {
-    const ordCustId = (ord.customerId || '').trim();
-    const ordEmail = (ord.customerEmail || '').trim().toLowerCase();
-
-    if (ordCustId && idsToMatch.has(ordCustId)) return true;
-    if (ordEmail && emailsToMatch.has(ordEmail)) return true;
-    return false;
   });
 }
 
@@ -1810,35 +1782,12 @@ export async function verifyAndFulfillPaymentOrder(params: {
   };
 }
 
-export async function getUserByEmail(emailOrIdentifier: string) {
+export async function getUserByEmail(email: string) {
   const db = await getDb();
-  const clean = emailOrIdentifier.trim();
-  const lower = clean.toLowerCase();
+  const clean = email.trim().toLowerCase();
   const res = db.exec(
-    `SELECT id, customer_id, fullName, email, username, password, googleSub, role, createdAt, balance 
-     FROM users 
-     WHERE LOWER(email) = ? OR LOWER(username) = ? OR customer_id = ? OR id = ?;`,
-    [lower, lower, clean, clean]
-  );
-  if (res.length === 0 || res[0].values.length === 0) return null;
-  const columns = res[0].columns;
-  const row = res[0].values[0];
-  const obj: any = {};
-  columns.forEach((col, idx) => {
-    obj[col] = row[idx];
-  });
-  return obj;
-}
-
-export async function getUserByIdOrCustomerId(identifier: string) {
-  const db = await getDb();
-  const clean = identifier.trim();
-  const lower = clean.toLowerCase();
-  const res = db.exec(
-    `SELECT id, customer_id, fullName, email, username, password, googleSub, role, createdAt, balance 
-     FROM users 
-     WHERE id = ? OR customer_id = ? OR LOWER(email) = ? OR LOWER(username) = ?;`,
-    [clean, clean, lower, lower]
+    `SELECT id, fullName, email, username, password, googleSub, role, createdAt, balance FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?;`,
+    [clean, clean]
   );
   if (res.length === 0 || res[0].values.length === 0) return null;
   const columns = res[0].columns;
