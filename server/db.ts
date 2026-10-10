@@ -119,7 +119,6 @@ export async function getDb(): Promise<Database> {
       amount REAL NOT NULL,
       payment_status TEXT NOT NULL,
       delivery_status TEXT NOT NULL,
-      reserved_code_id TEXT,
       delivered_code_id TEXT,
       delivered_code TEXT,
       delivered_pin TEXT,
@@ -193,12 +192,6 @@ export async function getDb(): Promise<Database> {
 
   try {
     dbInstance.run(`ALTER TABLE orders ADD COLUMN customer_id TEXT;`);
-  } catch (e) {
-    // Ignore error if column already exists
-  }
-
-  try {
-    dbInstance.run(`ALTER TABLE orders ADD COLUMN reserved_code_id TEXT;`);
   } catch (e) {
     // Ignore error if column already exists
   }
@@ -541,7 +534,6 @@ function seedInitialData(db: Database) {
 
 export async function getAllProducts(includeDisabled = true) {
   const db = await getDb();
-  await releaseExpiredReservations();
 
   // Retrieve disabled categories to enforce filtering
   const disabledCatsRes = db.exec(`SELECT denomination FROM categories WHERE enabled = 0;`);
@@ -923,7 +915,6 @@ export function maskCode(code: string): string {
 
 export async function getRedeemCodes(productId?: string, status?: string, denomination?: string) {
   const db = await getDb();
-  await releaseExpiredReservations();
   let sql = `
     SELECT 
       r.id, 
@@ -1183,8 +1174,8 @@ export async function deleteRedeemCode(id: string, force?: boolean) {
   const productId = row[2] as string;
   const code = row[3] as string;
 
-  if ((status === 'SOLD' || status === 'RESERVED') && !force) {
-    throw new Error('This code is currently RESERVED for an active customer checkout or SOLD. Explicit confirmation is required to delete.');
+  if (status === 'SOLD' && !force) {
+    throw new Error('This code is already SOLD and linked to a completed customer order. Explicit confirmation is required to delete.');
   }
 
   db.run(`DELETE FROM redeem_codes WHERE id = ?;`, [cleanId]);
@@ -1209,17 +1200,13 @@ export async function getAllOrders() {
       product_name as productName, 
       customer_name as customerName, 
       customer_email as customerEmail, 
-      customer_id as customerId,
       amount, 
       payment_status as paymentStatus, 
       delivery_status as deliveryStatus, 
-      reserved_code_id as reservedCodeId,
       delivered_code_id as deliveredCodeId, 
       delivered_code as deliveredCode, 
       delivered_pin as deliveredPin, 
       payment_method as paymentMethod, 
-      gateway_order_id as gatewayOrderId,
-      gateway_payment_id as gatewayPaymentId,
       created_at as createdAt, 
       updated_at as updatedAt 
     FROM orders 
@@ -1241,12 +1228,34 @@ export async function getAllOrders() {
  * Fetch ONLY successfully PAID and completed purchases belonging strictly to the customer.
  * Pending, failed, or cancelled transactions are excluded.
  */
-export async function getCustomerPaidOrders(customerEmail: string, customerId?: string) {
+export async function getCustomerPaidOrders(customerEmail?: string, customerId?: string) {
   const db = await getDb();
   const cleanEmail = (customerEmail || '').trim().toLowerCase();
   const cleanId = (customerId || '').trim();
 
   if (!cleanEmail && !cleanId) return [];
+
+  // Check if we can find associated user record to link customer_id, user id, and email
+  let matchedUser: any = null;
+  if (cleanId) {
+    matchedUser = await getUserByIdOrCustomerId(cleanId);
+  }
+  if (!matchedUser && cleanEmail) {
+    matchedUser = await getUserByEmail(cleanEmail);
+  }
+
+  const idsToMatch = new Set<string>();
+  const emailsToMatch = new Set<string>();
+
+  if (cleanId) idsToMatch.add(cleanId);
+  if (cleanEmail) emailsToMatch.add(cleanEmail);
+
+  if (matchedUser) {
+    if (matchedUser.id) idsToMatch.add(String(matchedUser.id));
+    if (matchedUser.customer_id) idsToMatch.add(String(matchedUser.customer_id));
+    if (matchedUser.customerId) idsToMatch.add(String(matchedUser.customerId));
+    if (matchedUser.email) emailsToMatch.add(String(matchedUser.email).toLowerCase());
+  }
 
   const res = db.exec(`
     SELECT 
@@ -1260,7 +1269,6 @@ export async function getCustomerPaidOrders(customerEmail: string, customerId?: 
       o.amount, 
       o.payment_status as paymentStatus, 
       o.delivery_status as deliveryStatus, 
-      o.reserved_code_id as reservedCodeId,
       o.delivered_code_id as deliveredCodeId, 
       o.delivered_code as deliveredCode, 
       o.delivered_pin as deliveredPin, 
@@ -1273,22 +1281,28 @@ export async function getCustomerPaidOrders(customerEmail: string, customerId?: 
       p.reward_value as rewardValue
     FROM orders o
     LEFT JOIN products p ON o.product_id = p.id
-    WHERE (
-      (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = ?)
-      OR (o.customer_id IS NOT NULL AND o.customer_id = ? AND ? != '')
-    )
-    AND o.payment_status = 'PAID'
+    WHERE o.payment_status = 'PAID'
     ORDER BY o.created_at DESC;
-  `, [cleanEmail, cleanId, cleanId]);
+  `);
 
-  if (res.length === 0) return [];
+  if (res.length === 0 || res[0].values.length === 0) return [];
   const columns = res[0].columns;
-  return res[0].values.map((row) => {
+  const allPaidOrders = res[0].values.map((row) => {
     const obj: any = {};
     columns.forEach((col, idx) => {
       obj[col] = row[idx];
     });
     return obj;
+  });
+
+  // Strict account isolation: Only orders belonging directly to this account
+  return allPaidOrders.filter((ord: any) => {
+    const ordCustId = (ord.customerId || '').trim();
+    const ordEmail = (ord.customerEmail || '').trim().toLowerCase();
+
+    if (ordCustId && idsToMatch.has(ordCustId)) return true;
+    if (ordEmail && emailsToMatch.has(ordEmail)) return true;
+    return false;
   });
 }
 
@@ -1303,11 +1317,9 @@ export async function getOrderByIdOrNumber(identifier: string) {
       product_name as productName, 
       customer_name as customerName, 
       customer_email as customerEmail, 
-      customer_id as customerId,
       amount, 
       payment_status as paymentStatus, 
       delivery_status as deliveryStatus, 
-      reserved_code_id as reservedCodeId,
       delivered_code_id as deliveredCodeId, 
       delivered_code as deliveredCode, 
       delivered_pin as deliveredPin, 
@@ -1338,32 +1350,6 @@ export async function updateOrderStatus(
 ) {
   const db = await getDb();
   const now = new Date().toISOString();
-
-  // If order is failed, cancelled, or expired, release any code that was reserved for it
-  if (
-    paymentStatus === 'FAILED' ||
-    paymentStatus === 'CANCELLED' ||
-    paymentStatus === 'EXPIRED' ||
-    deliveryStatus === 'CANCELLED'
-  ) {
-    const existing = await getOrderByIdOrNumber(id);
-    if (existing && existing.reservedCodeId) {
-      db.run(
-        `UPDATE redeem_codes 
-         SET status = 'UNUSED', order_id = NULL 
-         WHERE id = ? AND status = 'RESERVED';`,
-        [existing.reservedCodeId]
-      );
-    }
-    // Also release any codes associated with this order_id that are currently RESERVED
-    db.run(
-      `UPDATE redeem_codes 
-       SET status = 'UNUSED', order_id = NULL 
-       WHERE order_id = ? AND status = 'RESERVED';`,
-      [id]
-    );
-  }
-
   db.run(
     `UPDATE orders 
      SET payment_status = ?, delivery_status = ?, updated_at = ? 
@@ -1502,61 +1488,9 @@ export async function purchaseProductDirect(params: {
 }
 
 /**
- * Auto-releases expired or cancelled reservations so inventory is never permanently locked.
- */
-export async function releaseExpiredReservations(expiryMinutes: number = 10) {
-  const db = await getDb();
-  const cutoffTime = new Date(Date.now() - expiryMinutes * 60 * 1000).toISOString();
-
-  // 1. Release codes where associated order is marked FAILED, CANCELLED, or EXPIRED
-  db.run(`
-    UPDATE redeem_codes
-    SET status = 'UNUSED', order_id = NULL
-    WHERE status = 'RESERVED'
-      AND order_id IN (SELECT id FROM orders WHERE payment_status IN ('FAILED', 'CANCELLED', 'EXPIRED'));
-  `);
-
-  // 2. Release codes where associated order has stayed PENDING longer than expiry cutoff
-  const expiredPendingOrders = db.exec(`
-    SELECT id FROM orders 
-    WHERE payment_status = 'PENDING' AND created_at < ?;
-  `, [cutoffTime]);
-
-  if (expiredPendingOrders.length > 0 && expiredPendingOrders[0].values.length > 0) {
-    const ids = expiredPendingOrders[0].values.map((v) => v[0] as string);
-    const placeholders = ids.map(() => '?').join(',');
-    
-    db.run(
-      `UPDATE redeem_codes
-       SET status = 'UNUSED', order_id = NULL
-       WHERE status = 'RESERVED' AND order_id IN (${placeholders});`,
-      ids
-    );
-
-    const now = new Date().toISOString();
-    db.run(
-      `UPDATE orders
-       SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ?
-       WHERE id IN (${placeholders}) AND payment_status = 'PENDING';`,
-      [now, ...ids]
-    );
-  }
-
-  // 3. Clean up any orphan RESERVED codes that have no valid order
-  db.run(`
-    UPDATE redeem_codes
-    SET status = 'UNUSED', order_id = NULL
-    WHERE status = 'RESERVED'
-      AND (order_id IS NULL OR order_id = '' OR order_id NOT IN (SELECT id FROM orders));
-  `);
-
-  saveDb();
-}
-
-/**
  * 1. Identify product in DB & lookup verified price from DB (NEVER trust frontend price)
- * 2. Verify stock exists & ATOMICALLY RESERVE the specific inventory code
- * 3. Create a PENDING order in DB with reserved_code_id strictly linking the previewed code
+ * 2. Verify stock exists (count UNUSED codes)
+ * 3. Create a PENDING order in DB with currency = INR, paymentStatus = PENDING
  * 4. Generate payment gateway order intent
  */
 export async function createPendingCheckoutOrder(params: {
@@ -1567,9 +1501,6 @@ export async function createPendingCheckoutOrder(params: {
   customerId?: string;
 }) {
   const db = await getDb();
-  // Automatically release stale / expired reservations before attempting a new reservation
-  await releaseExpiredReservations();
-
   const product = await getProductById(params.productId);
   if (!product) {
     throw new Error('Product not found in database.');
@@ -1582,57 +1513,37 @@ export async function createPendingCheckoutOrder(params: {
     throw err;
   }
 
-  // Stock verification & atomic reservation:
-  let targetCodeId: string | null = null;
+  // Stock verification: count available UNUSED codes
+  let availableCodeId: string | null = null;
   if (params.codeId) {
     const specificCodeRes = db.exec(
-      `SELECT id FROM redeem_codes 
-       WHERE id = ? AND product_id = ? AND status = 'UNUSED' 
-       LIMIT 1;`,
+      `SELECT id FROM redeem_codes WHERE id = ? AND product_id = ? AND status = 'UNUSED' LIMIT 1;`,
       [params.codeId, product.id]
     );
     if (specificCodeRes.length === 0 || specificCodeRes[0].values.length === 0) {
       throw new Error('OUT OF STOCK: The requested redeem code is no longer available.');
     }
-    targetCodeId = specificCodeRes[0].values[0][0] as string;
+    availableCodeId = specificCodeRes[0].values[0][0] as string;
   } else {
     const stockRes = db.exec(
-      `SELECT id FROM redeem_codes 
-       WHERE product_id = ? AND status = 'UNUSED' 
-       LIMIT 1;`,
+      `SELECT id FROM redeem_codes WHERE product_id = ? AND status = 'UNUSED' LIMIT 1;`,
       [product.id]
     );
     if (stockRes.length === 0 || stockRes[0].values.length === 0) {
       throw new Error('OUT OF STOCK: No available redeem codes for this product.');
     }
-    targetCodeId = stockRes[0].values[0][0] as string;
+    availableCodeId = stockRes[0].values[0][0] as string;
   }
 
   const now = new Date().toISOString();
   const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   const orderNumber = `VRX-2026-${randomSuffix}`;
+
+  // Amount MUST come strictly from product.price in DB
   const verifiedAmount = product.price;
 
-  // ATOMIC RESERVATION:
-  // 1. Mark this exact code as RESERVED for this order in redeem_codes
-  db.run(
-    `UPDATE redeem_codes 
-     SET status = 'RESERVED', order_id = ? 
-     WHERE id = ? AND status = 'UNUSED';`,
-    [orderId, targetCodeId]
-  );
-
-  // Verify reservation succeeded (concurrency guard against double-booking)
-  const verifyReservation = db.exec(
-    `SELECT id FROM redeem_codes WHERE id = ? AND order_id = ? AND status = 'RESERVED';`,
-    [targetCodeId, orderId]
-  );
-  if (verifyReservation.length === 0 || verifyReservation[0].values.length === 0) {
-    throw new Error('OUT OF STOCK: This code was just reserved by another checkout. Please select another code.');
-  }
-
-  // 2. Insert PENDING order record with reserved_code_id strictly linking the reserved inventory item
+  // Insert PENDING order record (No code delivered yet!)
   db.run(
     `INSERT INTO orders (
       id, 
@@ -1645,14 +1556,13 @@ export async function createPendingCheckoutOrder(params: {
       amount, 
       payment_status, 
       delivery_status, 
-      reserved_code_id,
       delivered_code_id, 
       delivered_code, 
       delivered_pin, 
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', ?, NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1662,7 +1572,6 @@ export async function createPendingCheckoutOrder(params: {
       params.customerEmail || 'customer@vortexcode.com',
       params.customerId || null,
       verifiedAmount,
-      targetCodeId,
       now,
       now,
     ]
@@ -1709,7 +1618,6 @@ export async function createPendingCheckoutOrder(params: {
       currency: 'INR',
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING',
-      reservedCodeId: targetCodeId,
       customerName: params.customerName,
       customerEmail: params.customerEmail,
       createdAt: now,
@@ -1725,8 +1633,8 @@ export async function createPendingCheckoutOrder(params: {
  * Strict verification flow:
  * 1. Idempotency Check: Prevents duplicate fulfillment
  * 2. Authenticity & Status check
- * 3. Atomic exact reserved code assignment & status update to SOLD
- * 4. Update order to PAID + DELIVERED with the exact code purchased
+ * 3. Atomic UNUSED code selection & status update to SOLD
+ * 4. Update order to PAID + DELIVERED
  */
 export async function verifyAndFulfillPaymentOrder(params: {
   orderId: string;
@@ -1741,7 +1649,7 @@ export async function verifyAndFulfillPaymentOrder(params: {
     throw new Error('Order not found in database.');
   }
 
-  // 1. Idempotency check: If already paid, return existing delivered code
+  // Idempotency check: If already paid, return existing delivered code
   if (order.paymentStatus === 'PAID' && order.deliveredCode) {
     return {
       success: true,
@@ -1763,7 +1671,7 @@ export async function verifyAndFulfillPaymentOrder(params: {
     const identifierToCheck = order.gatewayOrderId || params.gatewayOrderId || order.id;
     const verifyResult = await paymentGateway.checkPaymentStatus(identifierToCheck, order.amount);
 
-    // Handle PENDING without converting into failed
+    // STEP 4: Handle PENDING without converting into failed
     if (verifyResult.status === 'PENDING') {
       return {
         success: false,
@@ -1776,12 +1684,6 @@ export async function verifyAndFulfillPaymentOrder(params: {
 
     if (verifyResult.status === 'FAILED') {
       const now = new Date().toISOString();
-      if (order.reservedCodeId) {
-        db.run(
-          `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE id = ? AND status = 'RESERVED';`,
-          [order.reservedCodeId]
-        );
-      }
       db.run(
         `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ?;`,
         [now, order.id]
@@ -1798,12 +1700,6 @@ export async function verifyAndFulfillPaymentOrder(params: {
 
     if (verifyResult.status === 'EXPIRED') {
       const now = new Date().toISOString();
-      if (order.reservedCodeId) {
-        db.run(
-          `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE id = ? AND status = 'RESERVED';`,
-          [order.reservedCodeId]
-        );
-      }
       db.run(
         `UPDATE orders SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ? WHERE id = ?;`,
         [now, order.id]
@@ -1840,68 +1736,18 @@ export async function verifyAndFulfillPaymentOrder(params: {
     };
   }
 
-  // ATOMIC INVENTORY CODE FULFILLMENT:
-  // PRIORITY 1: The exact code reserved for this order!
-  let assignedCodeId: string | null = null;
-  let assignedCode: string | null = null;
-  let assignedPin: string | null = null;
+  // Atomically select ONE UNUSED code for this product from DB
+  const codeRes = db.exec(
+    `SELECT id, code, pin FROM redeem_codes 
+     WHERE product_id = ? AND status = 'UNUSED' 
+     LIMIT 1;`,
+    [order.productId]
+  );
 
-  if (order.reservedCodeId) {
-    const reservedRes = db.exec(
-      `SELECT id, code, pin, status, order_id FROM redeem_codes WHERE id = ?;`,
-      [order.reservedCodeId]
-    );
-    if (reservedRes.length > 0 && reservedRes[0].values.length > 0) {
-      const row = reservedRes[0].values[0];
-      const rId = row[0] as string;
-      const rCode = row[1] as string;
-      const rPin = row[2] as string;
-      const rStatus = row[3] as string;
-      const rOrderId = row[4] as string;
+  const now = new Date().toISOString();
 
-      if (
-        (rStatus === 'RESERVED' && (!rOrderId || rOrderId === order.id)) ||
-        (rStatus === 'SOLD' && rOrderId === order.id) ||
-        rStatus === 'UNUSED'
-      ) {
-        assignedCodeId = rId;
-        assignedCode = rCode;
-        assignedPin = rPin;
-      }
-    }
-  }
-
-  // PRIORITY 2: Any code currently marked RESERVED specifically for this order_id
-  if (!assignedCodeId) {
-    const orderReservedRes = db.exec(
-      `SELECT id, code, pin FROM redeem_codes WHERE order_id = ? AND status = 'RESERVED' LIMIT 1;`,
-      [order.id]
-    );
-    if (orderReservedRes.length > 0 && orderReservedRes[0].values.length > 0) {
-      assignedCodeId = orderReservedRes[0].values[0][0] as string;
-      assignedCode = orderReservedRes[0].values[0][1] as string;
-      assignedPin = orderReservedRes[0].values[0][2] as string;
-    }
-  }
-
-  // PRIORITY 3 (Fallback for older orders without reservedCodeId): Atomically pick first UNUSED code
-  if (!assignedCodeId) {
-    const codeRes = db.exec(
-      `SELECT id, code, pin FROM redeem_codes 
-       WHERE product_id = ? AND status = 'UNUSED' 
-       LIMIT 1;`,
-      [order.productId]
-    );
-    if (codeRes.length > 0 && codeRes[0].values.length > 0) {
-      assignedCodeId = codeRes[0].values[0][0] as string;
-      assignedCode = codeRes[0].values[0][1] as string;
-      assignedPin = codeRes[0].values[0][2] as string;
-    }
-  }
-
-  if (!assignedCodeId || !assignedCode) {
+  if (codeRes.length === 0 || codeRes[0].values.length === 0) {
     // Edge case: Out of stock between checkout initiation and payment verification
-    const now = new Date().toISOString();
     db.run(
       `UPDATE orders 
        SET payment_status = 'PAID', delivery_status = 'OUT_OF_STOCK_PENDING_REFUND', updated_at = ? 
@@ -1912,9 +1758,11 @@ export async function verifyAndFulfillPaymentOrder(params: {
     throw new Error('OUT OF STOCK: Payment recorded but no unused redeem code was available. Marked for automated refund.');
   }
 
-  const now = new Date().toISOString();
+  const assignedCodeId = codeRes[0].values[0][0] as string;
+  const assignedCode = codeRes[0].values[0][1] as string;
+  const assignedPin = codeRes[0].values[0][2] as string;
 
-  // 1. Mark code SOLD with this exact order_id
+  // 1. Mark code SOLD
   db.run(
     `UPDATE redeem_codes 
      SET status = 'SOLD', order_id = ?, used_at = ? 
@@ -1922,7 +1770,7 @@ export async function verifyAndFulfillPaymentOrder(params: {
     [order.id, now, assignedCodeId]
   );
 
-  // 2. Mark order PAID & DELIVERED with the exact code purchased
+  // 2. Mark order PAID & DELIVERED with the exact 16-character code
   const fullCodeFormatted = formatFullCode(assignedCode);
   const paymentMethodStr = verifiedGatewayPaymentId
     ? `FamGateway (${verifiedGatewayPaymentId})`
@@ -1942,7 +1790,7 @@ export async function verifyAndFulfillPaymentOrder(params: {
     [
       assignedCodeId,
       fullCodeFormatted,
-      assignedPin || null,
+      assignedPin,
       paymentMethodStr,
       verifiedGatewayPaymentId || null,
       now,
@@ -1962,12 +1810,35 @@ export async function verifyAndFulfillPaymentOrder(params: {
   };
 }
 
-export async function getUserByEmail(email: string) {
+export async function getUserByEmail(emailOrIdentifier: string) {
   const db = await getDb();
-  const clean = email.trim().toLowerCase();
+  const clean = emailOrIdentifier.trim();
+  const lower = clean.toLowerCase();
   const res = db.exec(
-    `SELECT id, fullName, email, username, password, googleSub, role, createdAt, balance FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?;`,
-    [clean, clean]
+    `SELECT id, customer_id, fullName, email, username, password, googleSub, role, createdAt, balance 
+     FROM users 
+     WHERE LOWER(email) = ? OR LOWER(username) = ? OR customer_id = ? OR id = ?;`,
+    [lower, lower, clean, clean]
+  );
+  if (res.length === 0 || res[0].values.length === 0) return null;
+  const columns = res[0].columns;
+  const row = res[0].values[0];
+  const obj: any = {};
+  columns.forEach((col, idx) => {
+    obj[col] = row[idx];
+  });
+  return obj;
+}
+
+export async function getUserByIdOrCustomerId(identifier: string) {
+  const db = await getDb();
+  const clean = identifier.trim();
+  const lower = clean.toLowerCase();
+  const res = db.exec(
+    `SELECT id, customer_id, fullName, email, username, password, googleSub, role, createdAt, balance 
+     FROM users 
+     WHERE id = ? OR customer_id = ? OR LOWER(email) = ? OR LOWER(username) = ?;`,
+    [clean, clean, lower, lower]
   );
   if (res.length === 0 || res[0].values.length === 0) return null;
   const columns = res[0].columns;
