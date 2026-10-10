@@ -119,8 +119,10 @@ export const CustomerVault: React.FC = () => {
           </div>
 
           {orders.length === 0 ? (
-            <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-2xl">
-              <p className="text-slate-400 text-sm">No orders or claimed codes yet.</p>
+            <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-2xl space-y-2">
+              <ShieldCheck className="w-8 h-8 text-emerald-400/60 mx-auto" />
+              <p className="text-white font-bold text-base">No verified purchase record found.</p>
+              <p className="text-slate-400 text-xs">Only confirmed and verified purchase records exist in this vault.</p>
             </div>
           ) : (
             <div className="space-y-4">

@@ -26,6 +26,11 @@ import {
   Copy,
   Gift,
   ArrowRight,
+  History,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from 'lucide-react';
 
 export const CustomerDashboard: React.FC = () => {
@@ -57,6 +62,45 @@ export const CustomerDashboard: React.FC = () => {
 
   // Request counter ref to prevent race conditions from out-of-order async responses
   const fetchRequestIdRef = React.useRef(0);
+
+  // Verified Purchase History State from Database
+  const [verifiedPurchases, setVerifiedPurchases] = useState<any[]>([]);
+  const [isLoadingPurchases, setIsLoadingPurchases] = useState<boolean>(false);
+  const [purchasesError, setPurchasesError] = useState<string | null>(null);
+  const [unmaskedCodeIds, setUnmaskedCodeIds] = useState<Record<string, boolean>>({});
+  const [accountQueryInput, setAccountQueryInput] = useState<string>('');
+  const [queriedAccountId, setQueriedAccountId] = useState<string>('');
+
+  const loadPurchaseHistory = useCallback(async (accountIdOverride?: string) => {
+    setIsLoadingPurchases(true);
+    setPurchasesError(null);
+    try {
+      const targetId = accountIdOverride !== undefined
+        ? accountIdOverride.trim()
+        : (user?.customerId || user?.id || '');
+      const email = accountIdOverride ? undefined : user?.email;
+      setQueriedAccountId(targetId);
+
+      const res = await api.getPurchaseHistory(targetId, email);
+      if (res && res.success && Array.isArray(res.purchases)) {
+        setVerifiedPurchases(res.purchases);
+      } else {
+        setVerifiedPurchases([]);
+      }
+    } catch (err: any) {
+      console.warn('Failed to load purchase history:', err);
+      setPurchasesError('Unable to load purchase records from server.');
+      setVerifiedPurchases([]);
+    } finally {
+      setIsLoadingPurchases(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab === 'purchase-history' || activeTab === 'my-orders') {
+      loadPurchaseHistory();
+    }
+  }, [activeTab, loadPurchaseHistory]);
 
   // Helper to match unused redeem codes to a product deterministically
   const getUnusedCodesForProduct = useCallback(
@@ -155,9 +199,10 @@ export const CustomerDashboard: React.FC = () => {
     // Check for payment callback params from the redirect url
     const params = new URLSearchParams(window.location.search);
     if (params.get('payment_success') === 'true') {
-      addToast('success', 'Payment verified successfully! Your recharge code has been delivered to your Vault.');
-      setActiveTab('my-orders'); // Switch to My Orders / Vault tab to view code immediately
+      addToast('success', 'Payment verified successfully! Your recharge code has been delivered to your Purchase History.');
+      setActiveTab('purchase-history'); // Switch to Purchase History tab to view code immediately
       refreshCustomerOrders();
+      loadPurchaseHistory();
       // Clean query params so they don't persist on refresh
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (params.get('payment_pending') === 'true') {
@@ -336,7 +381,7 @@ export const CustomerDashboard: React.FC = () => {
         codeId,
         customerName: user.fullName || user.username || 'Verified Customer',
         customerEmail: user.email,
-        customerId: user.id,
+        customerId: user.customerId || user.id,
       });
 
       if (checkoutRes && checkoutRes.success && checkoutRes.order) {
@@ -370,6 +415,87 @@ export const CustomerDashboard: React.FC = () => {
       {/* MAIN VIEWPORT AREA */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-6 space-y-6">
         
+        {/* Account Dashboard Top Navigation Bar */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('redeem-code')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === 'redeem-code'
+                  ? 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>REDEEM STORE</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!user) {
+                  triggerAuthRequired('View Account Purchase History');
+                  return;
+                }
+                setActiveTab('purchase-history');
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === 'purchase-history' || activeTab === 'my-orders'
+                  ? 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>PURCHASE HISTORY</span>
+              {verifiedPurchases.length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-extrabold ${
+                  activeTab === 'purchase-history' || activeTab === 'my-orders'
+                    ? 'bg-slate-950 text-emerald-400'
+                    : 'bg-emerald-500/20 text-emerald-300'
+                }`}>
+                  {verifiedPurchases.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('how-to-redeem')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === 'how-to-redeem'
+                  ? 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>HOW TO REDEEM</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('support')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === 'support'
+                  ? 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>SUPPORT</span>
+            </button>
+          </div>
+
+          {user && (
+            <div className="hidden sm:flex items-center gap-2 text-xs font-mono shrink-0 ml-auto">
+              <span className="text-slate-500">Account ID:</span>
+              <span className="text-emerald-400 font-bold px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                {user.customerId || user.id}
+              </span>
+            </div>
+          )}
+        </div>
+
         {activeTab === 'redeem-code' && (
           <div className="space-y-6">
             
@@ -578,62 +704,219 @@ export const CustomerDashboard: React.FC = () => {
 
         {activeTab === 'support' && <SupportTab />}
 
-        {activeTab === 'my-orders' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <div>
-                <h2 className="text-xl font-bold text-white">My Orders & Vault</h2>
-                <p className="text-xs text-slate-400">Copy secret code keys and review purchase receipts.</p>
-              </div>
-              <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/30">
-                {orders.length} Keys Claimed
-              </span>
-            </div>
-
-            {orders.length === 0 && (
-              <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-2xl">
-                <p className="text-slate-400 text-sm">No orders yet. Purchase a voucher to receive your digital code key.</p>
-              </div>
-            )}
-
-            {orders.map((ord) => (
-              <div
-                key={ord.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3"
-              >
-                <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
-                  <span className="font-mono text-emerald-400 font-bold">{ord.orderNumber}</span>
-                  <span className="text-slate-400 font-mono">{ord.purchaseDate}</span>
+        {(activeTab === 'purchase-history' || activeTab === 'my-orders') && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Header Box */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white tracking-tight">PURCHASE HISTORY</h2>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                    VERIFIED VAULT
+                  </span>
                 </div>
+                <p className="text-xs text-slate-400">
+                  Account-specific verified recharge orders and delivered digital redeem codes.
+                </p>
+              </div>
 
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-white text-sm">{ord.codeTitle}</h3>
-                  <span className="font-mono font-bold text-emerald-400 text-sm">
-                    Code Key Delivered
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono">
+                  <span className="text-slate-500 mr-1.5">Account ID:</span>
+                  <span className="text-emerald-400 font-bold">
+                    {queriedAccountId || user?.customerId || user?.id || 'Unassigned'}
                   </span>
                 </div>
 
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between font-mono text-xs">
-                  <div className="space-y-0.5">
-                    <span className="text-emerald-300 font-bold tracking-wider text-sm">{ord.redeemCode}</span>
-                    {ord.pin && (
-                      <div className="text-[11px] text-slate-400 font-mono">
-                        PIN: <strong className="text-emerald-400">{ord.pin}</strong>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(ord.redeemCode);
-                      addToast('success', 'Full secret code copied to clipboard!');
-                    }}
-                    className="py-1.5 px-3 bg-emerald-400 text-slate-950 font-bold rounded-lg hover:bg-emerald-300 text-[11px] cursor-pointer"
-                  >
-                    Copy Key
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => loadPurchaseHistory(queriedAccountId || undefined)}
+                  disabled={isLoadingPurchases}
+                  className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/30 text-slate-300 hover:text-white text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="Refresh Purchase Records from Database"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoadingPurchases ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
               </div>
-            ))}
+            </div>
+
+            {/* Quick Account ID Verification & Lookup Bar */}
+            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="text-xs text-slate-400 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Verify specific Account ID records directly against backend database:</span>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (accountQueryInput.trim()) {
+                    loadPurchaseHistory(accountQueryInput.trim());
+                  }
+                }}
+                className="flex items-center gap-2 w-full sm:w-auto"
+              >
+                <input
+                  type="text"
+                  value={accountQueryInput}
+                  onChange={(e) => setAccountQueryInput(e.target.value)}
+                  placeholder="e.g. 7CPDK9A1S18P6MFP"
+                  className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 flex-1 sm:w-56"
+                />
+                <button
+                  type="submit"
+                  disabled={isLoadingPurchases || !accountQueryInput.trim()}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs font-mono cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  Verify ID
+                </button>
+                {queriedAccountId && queriedAccountId !== (user?.customerId || user?.id) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountQueryInput('');
+                      loadPurchaseHistory();
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 text-xs font-mono cursor-pointer"
+                    title="Reset to current user account"
+                  >
+                    Reset
+                  </button>
+                )}
+              </form>
+            </div>
+
+            {/* Loading State */}
+            {isLoadingPurchases && (
+              <div className="py-12 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col items-center justify-center space-y-3 text-center">
+                <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-xs font-mono text-slate-400">Verifying database transaction records...</p>
+              </div>
+            )}
+
+            {/* Empty State: EXACT Required Text: "No verified purchase record found." */}
+            {!isLoadingPurchases && verifiedPurchases.length === 0 && (
+              <div className="text-center py-12 px-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+                <div className="w-12 h-12 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center text-slate-500 mx-auto">
+                  <ShieldCheck className="w-6 h-6 text-emerald-400/60" />
+                </div>
+                <div className="text-base sm:text-lg font-bold text-slate-200">
+                  No verified purchase record found.
+                </div>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  {queriedAccountId ? (
+                    <>No verified purchase records found in the database for Account ID <span className="font-mono text-emerald-400 font-bold">{queriedAccountId}</span>.</>
+                  ) : (
+                    <>No verified purchases found for this account. Only real, successfully paid transactions confirmed by the payment gateway will appear here.</>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Populated Verified Purchase Records */}
+            {!isLoadingPurchases && verifiedPurchases.length > 0 && (
+              <div className="space-y-4">
+                {verifiedPurchases.map((rec: any) => {
+                  const isUnmasked = Boolean(unmaskedCodeIds[rec.orderId]);
+                  const displayCode = isUnmasked ? formatFullCode(rec.redeemCode) : formatMaskedCode(rec.redeemCode);
+
+                  return (
+                    <div
+                      key={rec.orderId}
+                      className="bg-slate-900 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-5 sm:p-6 transition-all space-y-4 shadow-xl"
+                    >
+                      {/* Top Header: Order ID & Date */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-emerald-400 font-bold">
+                            Order ID: {rec.orderId}
+                          </span>
+                          {rec.orderNumber && rec.orderNumber !== rec.orderId && (
+                            <span className="text-[11px] font-mono text-slate-500">
+                              ({rec.orderNumber})
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-mono text-slate-400">
+                          Purchase Date: <span className="text-slate-200">{rec.purchaseDate}</span>
+                        </div>
+                      </div>
+
+                      {/* Middle Details: Product, Amount, Status Badges */}
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Product</div>
+                          <h3 className="text-base font-bold text-white mt-0.5">
+                            {rec.product || 'Google Play Recharge Code'}
+                          </h3>
+                          <div className="text-xs font-mono text-emerald-400 mt-1">
+                            {rec.denomination || `₹${rec.amount}`}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Purchase Status: {rec.purchaseStatus || 'Purchased'}</span>
+                          </span>
+
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>Payment Status: {rec.paymentStatus || 'Paid'}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Redeem Code Display with Unmask and Copy */}
+                      <div className="bg-slate-950 p-4 rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono shadow-inner">
+                        <div className="space-y-1">
+                          <div className="text-[11px] text-slate-400">Redeem Code:</div>
+                          <div className="text-base sm:text-lg font-bold text-emerald-300 tracking-wider">
+                            {displayCode}
+                          </div>
+                          {rec.pin && (
+                            <div className="text-xs text-slate-400">
+                              PIN: <strong className="text-emerald-400">{rec.pin}</strong>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUnmaskedCodeIds((prev) => ({
+                                ...prev,
+                                [rec.orderId]: !prev[rec.orderId],
+                              }));
+                            }}
+                            className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                            title={isUnmasked ? 'Mask Code' : 'Reveal Full Redeem Code'}
+                          >
+                            {isUnmasked ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(rec.redeemCode);
+                              addToast('success', 'Full redeem code copied to clipboard!');
+                            }}
+                            className="py-2 px-3.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Code</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -649,6 +932,7 @@ export const CustomerDashboard: React.FC = () => {
         onPaymentSuccess={async () => {
           await fetchLiveDatabaseData();
           await refreshCustomerOrders();
+          await loadPurchaseHistory();
         }}
       />
 

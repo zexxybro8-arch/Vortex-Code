@@ -298,6 +298,38 @@ export const api = {
     }
   },
 
+  async getPurchaseHistory(customerId?: string, email?: string): Promise<{
+    success: boolean;
+    accountId?: string;
+    purchases: any[];
+    count: number;
+    message?: string;
+  }> {
+    try {
+      const params = new URLSearchParams();
+      if (customerId) params.set('customerId', customerId);
+      if (email) params.set('email', email);
+
+      const data = await safeFetchJson(`/api/purchase-history?${params.toString()}`);
+      return {
+        success: Boolean(data?.success),
+        accountId: data?.accountId || customerId || email || '',
+        purchases: Array.isArray(data?.purchases) ? data.purchases : [],
+        count: Array.isArray(data?.purchases) ? data.purchases.length : 0,
+        message: data?.message || (data?.purchases?.length === 0 ? 'No verified purchase record found.' : undefined),
+      };
+    } catch (err) {
+      console.warn('api.getPurchaseHistory error:', err);
+      return {
+        success: false,
+        accountId: customerId || email || '',
+        purchases: [],
+        count: 0,
+        message: 'No verified purchase record found.',
+      };
+    }
+  },
+
   async revealOrderCode(orderId: string, email?: string, customerId?: string): Promise<any> {
     return safeFetchJson('/api/my-orders/reveal', {
       method: 'POST',

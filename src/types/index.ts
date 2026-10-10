@@ -1,6 +1,19 @@
 export type AuthView = 'landing' | 'login' | 'register' | 'forgot-password' | 'dashboard' | 'store' | 'vault' | 'order-lookup';
 
-export type DashboardTab = 'redeem-code' | 'how-to-redeem' | 'support' | 'my-orders';
+export type DashboardTab = 'redeem-code' | 'how-to-redeem' | 'support' | 'my-orders' | 'purchase-history';
+
+export interface PurchaseRecord {
+  orderId: string;
+  orderNumber: string;
+  product: string;
+  redeemCode: string;
+  pin?: string;
+  purchaseStatus: 'Purchased' | 'Completed' | 'Processing';
+  paymentStatus: 'Paid' | 'Pending' | 'Failed';
+  purchaseDate: string;
+  amount: number;
+  denomination?: string;
+}
 
 export interface User {
   id: string;

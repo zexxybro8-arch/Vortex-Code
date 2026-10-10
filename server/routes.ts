@@ -484,6 +484,61 @@ router.get('/my-orders', async (req, res) => {
   }
 });
 
+// GET /api/purchase-history - Account-Specific Verified Purchase History from Database
+router.get('/purchase-history', async (req, res) => {
+  try {
+    const customerId = (req.query.customerId as string || '').trim();
+    const email = (req.query.email as string || '').trim().toLowerCase();
+    const accountId = customerId || email;
+
+    if (!accountId) {
+      return res.json({
+        success: true,
+        accountId: '',
+        purchases: [],
+        count: 0,
+        message: 'No verified purchase record found.',
+      });
+    }
+
+    // Query real verified purchases from database
+    const paidOrders = await getCustomerPaidOrders(email, customerId);
+
+    const formattedPurchases = paidOrders.map((ord: any) => ({
+      orderId: ord.id,
+      orderNumber: ord.orderNumber,
+      product: ord.productName || 'Google Play Recharge Code',
+      redeemCode: ord.deliveredCode || '',
+      pin: ord.deliveredPin || '',
+      purchaseStatus: 'Purchased' as const,
+      paymentStatus: 'Paid' as const,
+      purchaseDate: ord.createdAt,
+      amount: Number(ord.amount),
+      denomination: ord.denomination || `₹${ord.amount}`,
+      customerName: ord.customerName,
+      customerEmail: ord.customerEmail,
+      customerId: ord.customerId,
+    }));
+
+    return res.json({
+      success: true,
+      accountId,
+      purchases: formattedPurchases,
+      count: formattedPurchases.length,
+      message: formattedPurchases.length === 0 ? 'No verified purchase record found.' : undefined,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/purchase-history:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Unable to load purchase history from database.',
+      purchases: [],
+      count: 0,
+      message: 'No verified purchase record found.',
+    });
+  }
+});
+
 // POST /api/my-orders/reveal - Authenticated code reveal verification
 router.post('/my-orders/reveal', async (req, res) => {
   try {
