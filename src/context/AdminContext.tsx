@@ -293,7 +293,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactIconSize: 42,
     contactMobileIconSize: 42,
     famupigatewayBaseUrl: 'https://famupigateway.site/api',
-    famupigatewayApiKey: 'Famcfc08cd92c090e3718e9ad92155eb0fc',
+    famupigatewayApiKey: 'fam_live_58cf91eefc079374307c6da10de2f3262866',
     famupigatewayWebhookSecret: '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
     famupigatewayExpiryMinutes: 5,
     appUrl: 'https://vortexcode.shop',
@@ -721,14 +721,18 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const availableRedeemCodesCount = redeemCodes.filter((c) => c.status === 'AVAILABLE').length;
   const usedRedeemCodesCount = redeemCodes.filter((c) => c.status === 'USED').length;
 
+  const todaysOrdersCount = orders.filter((o) => o.createdAt.startsWith(todayStr)).length;
+
   const stats: AdminDashboardStats = {
     totalSalesRupees,
     todaysSalesRupees,
+    todaysOrders: todaysOrdersCount,
     totalOrders: orders.length,
     pendingOrders: orders.filter((o) => o.paymentStatus === 'PENDING').length,
     availableRedeemCodes: availableRedeemCodesCount,
     usedRedeemCodes: usedRedeemCodesCount,
     registeredCustomers: customers.length,
+    activeMembers: customers.filter((c) => c.status === 'ACTIVE').length || customers.length,
   };
 
   return (

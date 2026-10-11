@@ -1,153 +1,7 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-
-// server/firestore.ts
-var firestore_exports = {};
-__export(firestore_exports, {
-  deleteRecordFromFirestore: () => deleteRecordFromFirestore,
-  getFirestore: () => getFirestore,
-  restoreDbFromFirestore: () => restoreDbFromFirestore,
-  syncRecordToFirestore: () => syncRecordToFirestore
-});
-import { Firestore } from "@google-cloud/firestore";
-import fs from "fs";
-import path from "path";
-function getFirestore() {
-  if (firestoreInstance) return firestoreInstance;
-  let projectId = "gen-lang-client-0062305766";
-  try {
-    const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-      if (config.projectId) {
-        projectId = config.projectId;
-      }
-    }
-  } catch (err) {
-    console.error("Error reading firebase config, using fallback projectId:", err);
-  }
-  const options = { projectId };
-  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (serviceAccountEnv) {
-    try {
-      options.credentials = JSON.parse(serviceAccountEnv);
-      console.log("Using service account credentials from FIREBASE_SERVICE_ACCOUNT env var.");
-    } catch (err) {
-      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:", err);
-    }
-  }
-  firestoreInstance = new Firestore(options);
-  console.log(`Firestore client initialized successfully for project: ${projectId}`);
-  return firestoreInstance;
-}
-async function restoreDbFromFirestore(db) {
-  const timeoutMs = 3500;
-  const timeoutPromise = new Promise(
-    (resolve) => setTimeout(() => {
-      console.warn(`Firestore restore timed out after ${timeoutMs}ms. Continuing with local database.`);
-      resolve(false);
-    }, timeoutMs)
-  );
-  const fetchPromise = (async () => {
-    try {
-      const fsClient = getFirestore();
-      console.log("Restoring products from Firestore...");
-      const prodSnap = await fsClient.collection("vortex_products").get();
-      if (prodSnap.empty) {
-        console.log("Firestore is empty. Relational database needs initial seed data.");
-        return false;
-      }
-      prodSnap.forEach((doc) => {
-        const p = doc.data();
-        db.run(
-          `INSERT OR REPLACE INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-          [p.id, p.name, p.category, p.description, p.price, p.reward_value, p.denomination, p.enabled, p.image, p.created_at, p.updated_at]
-        );
-      });
-      console.log("Restoring redeem codes from Firestore...");
-      const codesSnap = await fsClient.collection("vortex_redeem_codes").get();
-      codesSnap.forEach((doc) => {
-        const c = doc.data();
-        db.run(
-          `INSERT OR REPLACE INTO redeem_codes (id, product_id, code, pin, status, order_id, created_at, used_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-          [c.id, c.product_id, c.code, c.pin, c.status, c.order_id, c.created_at, c.used_at]
-        );
-      });
-      console.log("Restoring orders from Firestore...");
-      const ordersSnap = await fsClient.collection("vortex_orders").get();
-      ordersSnap.forEach((doc) => {
-        const o = doc.data();
-        db.run(
-          `INSERT OR REPLACE INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, amount, payment_status, delivery_status, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-          [o.id, o.order_number, o.product_id, o.product_name, o.customer_name, o.customer_email, o.amount, o.payment_status, o.delivery_status, o.delivered_code_id, o.delivered_code, o.delivered_pin, o.payment_method, o.created_at, o.updated_at]
-        );
-      });
-      console.log("Restoring users from Firestore...");
-      const usersSnap = await fsClient.collection("vortex_users").get();
-      usersSnap.forEach((doc) => {
-        const u = doc.data();
-        db.run(
-          `INSERT OR REPLACE INTO users (id, fullName, email, username, password, googleSub, role, createdAt, balance)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-          [u.id, u.fullName, u.email, u.username, u.password, u.googleSub, u.role, u.createdAt, u.balance !== void 0 ? u.balance : 1500]
-        );
-      });
-      console.log("Restoring store settings from Firestore...");
-      const settingsSnap = await fsClient.collection("vortex_settings").get();
-      settingsSnap.forEach((doc) => {
-        const s = doc.data();
-        db.run(
-          `INSERT OR REPLACE INTO store_settings (key, value) VALUES (?, ?);`,
-          [s.key, s.value]
-        );
-      });
-      console.log("\u2705 SQLite relational database restored successfully from production Cloud Firestore!");
-      return true;
-    } catch (err) {
-      console.error("Failed to restore SQLite from Firestore:", err);
-      return false;
-    }
-  })();
-  return Promise.race([fetchPromise, timeoutPromise]);
-}
-async function syncRecordToFirestore(collectionName, docId, data) {
-  try {
-    const fsClient = getFirestore();
-    const cleanData = JSON.parse(JSON.stringify(data));
-    await fsClient.collection(collectionName).doc(docId).set(cleanData, { merge: true });
-  } catch (err) {
-    console.error(`Failed to sync to Firestore for collection ${collectionName}, ID ${docId}:`, err);
-  }
-}
-async function deleteRecordFromFirestore(collectionName, docId) {
-  try {
-    const fsClient = getFirestore();
-    await fsClient.collection(collectionName).doc(docId).delete();
-  } catch (err) {
-    console.error(`Failed to delete from Firestore for collection ${collectionName}, ID ${docId}:`, err);
-  }
-}
-var firestoreInstance;
-var init_firestore = __esm({
-  "server/firestore.ts"() {
-    firestoreInstance = null;
-  }
-});
-
 // server.ts
 import express from "express";
-import { createServer as createViteServer } from "vite";
-import path3 from "path";
+import fs2 from "fs";
+import path2 from "path";
 import { fileURLToPath } from "url";
 
 // server/routes.ts
@@ -155,31 +9,48 @@ import { Router } from "express";
 
 // server/db.ts
 import initSqlJs from "sql.js";
-import fs2 from "fs";
-import path2 from "path";
+import fs from "fs";
+import path from "path";
 
 // server/payment/gateway.ts
 import crypto from "crypto";
-function logPaymentDiagnostic(event, meta = {}) {
-  const safeMeta = {};
-  for (const [key, val] of Object.entries(meta)) {
-    if (["apiKey", "secret", "password", "code", "codeFull", "pin", "token"].includes(key)) {
-      safeMeta[key] = "[REDACTED]";
-    } else {
-      safeMeta[key] = val;
-    }
-  }
-  console.log(`[PAYMENT_LOG] ${event}`, JSON.stringify(safeMeta));
-}
 var PaymentGatewayManager = class {
   constructor() {
-    const rawBase = process.env.FAMUPIGATEWAY_BASE_URL || "https://famupigateway.site/api";
-    this.baseUrl = rawBase.replace(/\/$/, "");
-    this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || "";
-    this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || "";
-    this.expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 10;
+    this.baseUrl = process.env.FAMUPIGATEWAY_BASE_URL || "https://famupigateway.site/api";
+    this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || "Famcfc08cd92c090e3718e9ad92155eb0fc";
+    this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || "87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f";
+    this.expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
+    this.appUrl = process.env.APP_URL || "https://vortexcode.shop";
     this.isConfigured = Boolean(this.apiKey);
   }
+  /**
+   * Dynamically reload credentials from database store settings
+   */
+  updateCredentials(settings) {
+    if (settings.famupigatewayBaseUrl) {
+      this.baseUrl = String(settings.famupigatewayBaseUrl).trim();
+    }
+    if (settings.famupigatewayApiKey && String(settings.famupigatewayApiKey).trim()) {
+      this.apiKey = String(settings.famupigatewayApiKey).trim();
+    } else {
+      this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || "Famcfc08cd92c090e3718e9ad92155eb0fc";
+    }
+    this.isConfigured = Boolean(this.apiKey);
+    if (settings.famupigatewayWebhookSecret && String(settings.famupigatewayWebhookSecret).trim()) {
+      this.webhookSecret = String(settings.famupigatewayWebhookSecret).trim();
+    } else {
+      this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || "87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f";
+    }
+    if (settings.famupigatewayExpiryMinutes) {
+      this.expiryMinutes = Number(settings.famupigatewayExpiryMinutes) || 5;
+    }
+    if (settings.appUrl) {
+      this.appUrl = String(settings.appUrl).trim();
+    }
+  }
+  /**
+   * Returns current gateway configuration (public-safe data only)
+   */
   getConfig() {
     return {
       provider: "famupigateway",
@@ -190,174 +61,226 @@ var PaymentGatewayManager = class {
       webhookConfigured: Boolean(this.webhookSecret)
     };
   }
+  /**
+   * Initializes a payment order with the gateway provider
+   * (Amount is strictly calculated and enforced from server database)
+   */
   async createGatewayOrder(params) {
-    const appUrl = process.env.APP_URL || "http://localhost:3000";
-    const callbackUrl = params.callbackUrl || `${appUrl}/api/payment/callback?order_id=${params.orderId}`;
-    const webhookUrl = `${appUrl}/api/payment/webhook`;
-    logPaymentDiagnostic("PAYMENT_GATEWAY_REQUEST", {
-      orderId: params.orderId,
-      amount: params.amount,
-      isConfigured: this.isConfigured
-    });
-    if (!this.isConfigured) {
-      logPaymentDiagnostic("PAYMENT_GATEWAY_RESPONSE_STATUS", {
-        orderId: params.orderId,
-        status: "unconfigured_fallback"
-      });
+    if (!this.isConfigured || !this.apiKey || process.env.TEST_MODE === "true") {
       return {
         gatewayOrderId: `fam_${params.orderId}`,
         amount: params.amount,
         currency: params.currency || "INR",
-        provider: "famupigateway",
+        provider: "famgateway",
         status: "unconfigured",
         paymentUrl: `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`
       };
     }
-    const payload = {
-      api_key: this.apiKey,
-      amount: Number(params.amount.toFixed(2)),
-      order_id: params.orderId,
-      customer_name: params.customerName || "Customer",
-      customer_email: params.customerEmail || "customer@vortexcode.com",
-      customer_mobile: "9876543210",
-      callback_url: webhookUrl,
-      redirect_url: callbackUrl,
-      description: `Digital Code - ${params.productName}`,
-      expiry_minutes: this.expiryMinutes
-    };
+    const cleanAppUrl = (this.appUrl || "https://vortexcode.shop").replace(/\/+$/, "");
+    const callbackUrl = params.callbackUrl || `${cleanAppUrl}/api/payment/callback?order_id=${params.orderId}`;
+    const webhookUrl = `${cleanAppUrl}/api/payment/webhook`;
     try {
-      let endpoint = `${this.baseUrl}/create-order`;
-      let response = await fetch(endpoint, {
+      const payload = {
+        amount: Number(params.amount.toFixed(2)),
+        order_id: params.orderId,
+        customer_name: params.customerName || "Customer",
+        customer_mobile: "9876543210",
+        callback_url: callbackUrl,
+        redirect_url: callbackUrl,
+        webhook_url: webhookUrl,
+        description: `Digital Code - ${params.productName}`,
+        expiry_minutes: this.expiryMinutes
+      };
+      const response = await fetch(`${this.baseUrl}/create-order`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": this.apiKey
+          "Accept": "application/json",
+          "X-API-Key": this.apiKey,
+          "Authorization": `Bearer ${this.apiKey}`
         },
         body: JSON.stringify(payload)
       });
-      if (!response.ok) {
-        endpoint = `${this.baseUrl}/create-order.php`;
-        response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": this.apiKey
-          },
-          body: JSON.stringify(payload)
-        });
+      const responseContentType = response.headers.get("content-type") || "";
+      const rawText = await response.text();
+      console.log(`[FamGateway Request] Endpoint: ${this.baseUrl}/create-order | OrderID: ${params.orderId} | Status: ${response.status} | ContentType: ${responseContentType}`);
+      let resData = null;
+      try {
+        resData = rawText.trim() ? JSON.parse(rawText) : null;
+      } catch (e) {
+        console.warn(`[FamGateway Parse Notice] Non-JSON response for Order ${params.orderId}:`, rawText.substring(0, 150));
       }
-      logPaymentDiagnostic("PAYMENT_GATEWAY_RESPONSE_STATUS", {
-        orderId: params.orderId,
-        httpStatus: response.status,
-        endpoint
-      });
       if (!response.ok) {
-        return {
-          gatewayOrderId: `fam_${params.orderId}`,
-          amount: params.amount,
-          currency: params.currency || "INR",
-          provider: "famupigateway",
-          status: "fallback",
-          paymentUrl: `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`
-        };
+        const errorMsg = resData?.message || resData?.error || `Gateway returned HTTP ${response.status} ${response.statusText}`;
+        throw new Error(`FamGateway order creation failed: ${errorMsg}`);
       }
-      const resData = await response.json();
+      if (!resData || !resData.status && !resData.success) {
+        const errorMsg = resData?.message || resData?.error || "Order creation declined by gateway";
+        throw new Error(`FamGateway Error: ${errorMsg}`);
+      }
       const data = resData.data || resData;
-      const paymentUrl = data.payment_url || data.payment_link || data.checkout_url || data.url || resData.payment_url || resData.payment_link || resData.url || `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`;
+      const paymentUrl = data.payment_url || resData.payment_url;
+      const gatewayOrderId = data.order_id || data.id || data.token || params.orderId;
+      if (!paymentUrl) {
+        throw new Error("FamGateway Error: Gateway succeeded but no payment_url was returned");
+      }
+      console.log(`[PAYMENT CREATED]
+localTransactionId: ${params.orderId}
+merchantOrderId: ${params.orderNumber || params.orderId}
+gatewayOrderId: ${gatewayOrderId}
+amount: ${params.amount}`);
       return {
-        gatewayOrderId: data.order_id || params.orderId,
+        gatewayOrderId,
         amount: Number(data.amount || params.amount),
         currency: "INR",
-        provider: "famupigateway",
+        provider: "famgateway",
         status: "ready",
         paymentUrl,
         token: data.token,
         expiresAt: data.expires_at
       };
     } catch (error) {
-      logPaymentDiagnostic("PAYMENT_FAILED", {
-        orderId: params.orderId,
-        error: error.message || "Gateway fetch error"
-      });
-      return {
-        gatewayOrderId: `fam_${params.orderId}`,
-        amount: params.amount,
-        currency: params.currency || "INR",
-        provider: "famupigateway",
-        status: "fallback",
-        paymentUrl: `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`
-      };
+      console.error(`[FamGateway Exception] Order ${params.orderId} failed:`, error.message);
+      throw error;
     }
   }
-  async checkPaymentStatus(orderId) {
-    if (!this.isConfigured) {
+  /**
+   * Check status of FamGateway order with comprehensive identifier support
+   */
+  async checkPaymentStatus(orderId, expectedAmount) {
+    if (!this.isConfigured || !this.apiKey) {
       return {
-        isValid: true,
+        isValid: false,
+        status: "PENDING",
         orderId,
         amount: 0,
-        transactionId: `mock_txn_${Math.random().toString(36).substring(2, 9)}`
+        error: "Payment Gateway is not configured with live credentials."
       };
     }
     try {
-      const payload = {
-        api_key: this.apiKey,
-        order_id: orderId
-      };
-      let endpoint = `${this.baseUrl}/check-status`;
-      let response = await fetch(endpoint, {
+      const checkEndpoint = `${this.baseUrl}/check-status`;
+      console.log(`[PAYMENT VERIFY REQUEST]
+identifier being sent: ${orderId}
+verification endpoint: ${checkEndpoint}
+amount: ${expectedAmount ?? "N/A"}`);
+      let response = await fetch(checkEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": this.apiKey
+          "Accept": "application/json",
+          "X-API-Key": this.apiKey,
+          "Authorization": `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ order_id: orderId })
       });
-      if (!response.ok) {
-        endpoint = `${this.baseUrl}/check-status.php`;
-        response = await fetch(endpoint, {
-          method: "POST",
+      if (response.status === 404) {
+        const altEndpoint = `${this.baseUrl}/checkout-status.php?order_id=${encodeURIComponent(orderId)}&api_key=${encodeURIComponent(this.apiKey)}`;
+        const altRes = await fetch(altEndpoint, {
+          method: "GET",
           headers: {
-            "Content-Type": "application/json",
+            "Accept": "application/json",
             "X-API-Key": this.apiKey
-          },
-          body: JSON.stringify(payload)
+          }
         });
+        if (altRes.ok) {
+          response = altRes;
+        }
       }
+      const responseContentType = response.headers.get("content-type") || "";
+      const rawText = await response.text();
+      let resData = null;
+      try {
+        resData = rawText.trim() ? JSON.parse(rawText) : null;
+      } catch (e) {
+        console.warn(`[FamGateway check-status Parse Notice] Non-JSON for Order ${orderId}:`, rawText.substring(0, 150));
+      }
+      console.log(`[PAYMENT VERIFY RESPONSE]
+HTTP Status: ${response.status}
+Content-Type: ${responseContentType}
+Response Body: ${JSON.stringify(resData || rawText.substring(0, 300))}`);
       if (!response.ok) {
-        return {
-          isValid: true,
-          orderId,
-          amount: 0,
-          transactionId: `fam_txn_${orderId}`
-        };
-      }
-      const resData = await response.json();
-      const data = resData.data || resData;
-      const statusStr = String(data.status || resData.status || "").toUpperCase();
-      const isPaid = statusStr === "SUCCESS" || statusStr === "PAID" || statusStr === "COMPLETED" || statusStr === "TXN_SUCCESS" || statusStr === "TRUE" || statusStr === "1";
-      if (!isPaid) {
         return {
           isValid: false,
+          status: "PENDING",
           orderId,
-          amount: Number(data.amount || 0),
-          error: `Gateway payment status is ${data.status || "PENDING"}`
+          amount: expectedAmount || 0,
+          error: resData?.message || resData?.error || `Status query returned HTTP ${response.status}`,
+          rawGatewayResponse: resData
+        };
+      }
+      if (!resData) {
+        return {
+          isValid: false,
+          status: "PENDING",
+          orderId,
+          amount: expectedAmount || 0,
+          error: "Empty response returned from gateway status check"
+        };
+      }
+      const data = resData.data || resData;
+      const rawStatus = data.status !== void 0 ? data.status : resData.status;
+      const statusStr = String(rawStatus || "").toUpperCase().trim();
+      const utr = data.utr || data.bank_utr || data.transaction_id || data.txn_id || data.famgateway_id || "";
+      const settledAmount = Number(data.settled_amount || data.amount || resData.amount || expectedAmount || 0);
+      const isPaid = statusStr === "SUCCESS" || statusStr === "PAID" || statusStr === "COMPLETED" || statusStr === "TXN_SUCCESS" || statusStr === "CAPTURED" || rawStatus === true && !statusStr.includes("FAIL") || typeof utr === "string" && utr.trim().length >= 6 && statusStr !== "FAILED" && statusStr !== "CANCELLED";
+      const isFailed = statusStr === "FAILED" || statusStr === "CANCELLED" || statusStr === "DECLINED" || statusStr === "REJECTED" || statusStr === "FAILURE";
+      const isExpired = statusStr === "EXPIRED" || statusStr === "TIMEOUT";
+      if (isPaid) {
+        return {
+          isValid: true,
+          status: "PAID",
+          orderId,
+          gatewayOrderId: data.order_id || orderId,
+          amount: settledAmount,
+          transactionId: utr || data.transaction_id || data.token || `fam_${orderId}`,
+          rawGatewayResponse: data
+        };
+      }
+      if (isFailed) {
+        return {
+          isValid: false,
+          status: "FAILED",
+          orderId,
+          gatewayOrderId: data.order_id || orderId,
+          amount: settledAmount,
+          error: data.message || resData.message || "Payment was declined or failed on gateway",
+          rawGatewayResponse: data
+        };
+      }
+      if (isExpired) {
+        return {
+          isValid: false,
+          status: "EXPIRED",
+          orderId,
+          gatewayOrderId: data.order_id || orderId,
+          amount: settledAmount,
+          error: "Gateway payment session expired",
+          rawGatewayResponse: data
         };
       }
       return {
-        isValid: true,
+        isValid: false,
+        status: "PENDING",
         orderId,
-        amount: Number(data.amount || 0),
-        transactionId: data.transaction_id || data.txn_id || data.token || `fam_txn_${orderId}`
+        gatewayOrderId: data.order_id || orderId,
+        amount: settledAmount,
+        error: `Gateway payment status is ${rawStatus || "PENDING"}`,
+        rawGatewayResponse: data
       };
     } catch (err) {
+      console.error(`[FamGateway checkPaymentStatus Exception] Order ${orderId}:`, err.message);
       return {
-        isValid: true,
+        isValid: false,
+        status: "PENDING",
         orderId,
-        amount: 0,
-        transactionId: `fam_txn_${orderId}`
+        amount: expectedAmount || 0,
+        error: err.message || "Status check failed due to network exception"
       };
     }
   }
+  /**
+   * Signature Verification fallback
+   */
   verifySignature(params) {
     return {
       isValid: true,
@@ -365,6 +288,9 @@ var PaymentGatewayManager = class {
       amount: 0
     };
   }
+  /**
+   * Webhook Signature Verification
+   */
   verifyWebhookSignature(rawBody, signature) {
     if (!this.webhookSecret) {
       return true;
@@ -376,6 +302,7 @@ var PaymentGatewayManager = class {
         Buffer.from(signature, "utf-8")
       );
     } catch (err) {
+      console.error("Webhook signature verification error:", err);
       return false;
     }
   }
@@ -383,34 +310,26 @@ var PaymentGatewayManager = class {
 var paymentGateway = new PaymentGatewayManager();
 
 // server/db.ts
-var DATA_DIR = path2.resolve(process.cwd(), "data");
-var DB_FILE = path2.join(DATA_DIR, "vortex.db");
+var DATA_DIR = path.resolve(process.cwd(), "data");
+var DB_FILE = path.join(DATA_DIR, "vortex.db");
 var dbInstance = null;
 function saveDb() {
   if (!dbInstance) return;
-  if (!fs2.existsSync(DATA_DIR)) {
-    fs2.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   const binaryArray = dbInstance.export();
-  fs2.writeFileSync(DB_FILE, Buffer.from(binaryArray));
-}
-async function syncToFirestore(collectionName, id, record) {
-  try {
-    const { syncRecordToFirestore: syncRecordToFirestore2 } = await Promise.resolve().then(() => (init_firestore(), firestore_exports));
-    await syncRecordToFirestore2(collectionName, id, record);
-  } catch (err) {
-    console.error(`Failed to sync to Firestore for ${collectionName}:`, err);
-  }
+  fs.writeFileSync(DB_FILE, Buffer.from(binaryArray));
 }
 async function getDb() {
   if (dbInstance) return dbInstance;
   const SQL = await initSqlJs();
-  if (!fs2.existsSync(DATA_DIR)) {
-    fs2.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
   }
-  if (fs2.existsSync(DB_FILE)) {
+  if (fs.existsSync(DB_FILE)) {
     try {
-      const fileBuffer = fs2.readFileSync(DB_FILE);
+      const fileBuffer = fs.readFileSync(DB_FILE);
       dbInstance = new SQL.Database(fileBuffer);
     } catch (err) {
       console.error("Error reading existing database file, creating fresh DB:", err);
@@ -439,7 +358,7 @@ async function getDb() {
       product_id TEXT NOT NULL,
       code TEXT NOT NULL,
       pin TEXT,
-      status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD')),
+      status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD', 'DISABLED')),
       order_id TEXT,
       created_at TEXT NOT NULL,
       used_at TEXT,
@@ -456,6 +375,7 @@ async function getDb() {
       amount REAL NOT NULL,
       payment_status TEXT NOT NULL,
       delivery_status TEXT NOT NULL,
+      reserved_code_id TEXT,
       delivered_code_id TEXT,
       delivered_code TEXT,
       delivered_pin TEXT,
@@ -480,26 +400,151 @@ async function getDb() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      denomination TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notices (
+      id TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      image_url TEXT,
+      button_enabled INTEGER NOT NULL DEFAULT 0,
+      button_text TEXT,
+      button_url TEXT,
+      display_frequency TEXT NOT NULL DEFAULT 'EVERY_LOAD',
+      start_at TEXT,
+      end_at TEXT,
+      priority INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   try {
     dbInstance.run(`ALTER TABLE users ADD COLUMN balance REAL NOT NULL DEFAULT 1500.0;`);
   } catch (e) {
   }
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN reserved_code_id TEXT;`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_order_id TEXT;`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_payment_id TEXT;`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN customer_id TEXT;`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN customer_id TEXT;`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN last_login_at TEXT;`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN provider TEXT DEFAULT 'Email';`);
+  } catch (e) {
+  }
+  try {
+    dbInstance.run(`ALTER TABLE users ADD COLUMN photo_url TEXT;`);
+  } catch (e) {
+  }
+  try {
+    const tableSqlRes = dbInstance.exec(`SELECT sql FROM sqlite_master WHERE name = 'redeem_codes';`);
+    const tableSql = tableSqlRes[0]?.values[0]?.[0] || "";
+    if (tableSql && !tableSql.includes("DISABLED")) {
+      dbInstance.run(`
+        CREATE TABLE redeem_codes_migrated (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL,
+          code TEXT NOT NULL,
+          pin TEXT,
+          status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD', 'DISABLED')),
+          order_id TEXT,
+          created_at TEXT NOT NULL,
+          used_at TEXT,
+          FOREIGN KEY(product_id) REFERENCES products(id)
+        );
+        INSERT INTO redeem_codes_migrated SELECT id, product_id, code, pin, status, order_id, created_at, used_at FROM redeem_codes;
+        DROP TABLE redeem_codes;
+        ALTER TABLE redeem_codes_migrated RENAME TO redeem_codes;
+      `);
+      saveDb();
+    }
+  } catch (migErr) {
+    console.warn("redeem_codes schema migration notice:", migErr);
+  }
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('storeName', 'VORTEX CODE');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('websiteName', 'VORTEX CODE');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('subtitle', 'SECURE DIGITAL STORE');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('tagline', 'SECURE DIGITAL STORE');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('logoUrl', '');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('supportEmail', 'support@vortexcode.com');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('currencySymbol', '\u20B9');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('enableAutoFulfillment', 'true');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('telegramEnabled', 'true');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('telegramUrl', 'https://t.me/VortexCodeSupport');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactEnabled', 'true');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactPlatform', 'telegram');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactUrl', 'https://t.me/VortexCodeSupport');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconUrl', '');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactLabel', 'Contact Admin');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetSize', '60');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetRight', '30');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetBottom', '30');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileSize', '55');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileRight', '35');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactWidgetMobileBottom', '110');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconSize', '42');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactMobileIconSize', '42');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayApiKey', 'Famcfc08cd92c090e3718e9ad92155eb0fc');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayWebhookSecret', '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayExpiryMinutes', '5');`);
+  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
   try {
-    const { restoreDbFromFirestore: restoreDbFromFirestore2 } = await Promise.resolve().then(() => (init_firestore(), firestore_exports));
-    const restored = await restoreDbFromFirestore2(dbInstance);
-    if (restored) {
-      console.log("\u2705 SQLite successfully restored/synced from Cloud Firestore.");
-    } else {
-      console.log("Firestore backup was empty or could not be loaded. Relying on local/fallback data.");
+    const catCheck = dbInstance.exec(`SELECT count(*) as count FROM categories;`);
+    const catCount = catCheck.length > 0 && catCheck[0].values.length > 0 ? catCheck[0].values[0][0] : 0;
+    if (catCount === 0) {
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const defaultCategories = [
+        { id: "cat_100", name: "\u20B9100 Recharge", denomination: "\u20B9100", sort_order: 1 },
+        { id: "cat_120", name: "\u20B9120 Recharge", denomination: "\u20B9120", sort_order: 2 },
+        { id: "cat_150", name: "\u20B9150 Recharge", denomination: "\u20B9150", sort_order: 3 },
+        { id: "cat_200", name: "\u20B9200 Recharge", denomination: "\u20B9200", sort_order: 4 },
+        { id: "cat_300", name: "\u20B9300 Recharge", denomination: "\u20B9300", sort_order: 5 },
+        { id: "cat_500", name: "\u20B9500 Recharge", denomination: "\u20B9500", sort_order: 6 },
+        { id: "cat_700", name: "\u20B9700 Recharge", denomination: "\u20B9700", sort_order: 7 },
+        { id: "cat_900", name: "\u20B9900 Recharge", denomination: "\u20B9900", sort_order: 8 }
+      ];
+      for (const cat of defaultCategories) {
+        dbInstance.run(
+          `INSERT OR IGNORE INTO categories (id, name, denomination, enabled, sort_order, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?);`,
+          [cat.id, cat.name, cat.denomination, cat.sort_order, nowIso, nowIso]
+        );
+      }
     }
-  } catch (err) {
-    console.error("Failed to restore from Firestore at startup:", err);
+  } catch (e) {
+    console.error("Category seeding error:", e);
   }
   const prodCheck = dbInstance.exec(`SELECT count(*) as count FROM products;`);
   const prodCount = prodCheck.length > 0 && prodCheck[0].values.length > 0 ? prodCheck[0].values[0][0] : 0;
@@ -707,8 +752,23 @@ function seedInitialData(db) {
     );
   }
 }
-async function getAllProducts() {
+async function getAllProducts(includeDisabled = true) {
   const db = await getDb();
+  const disabledCatsRes = db.exec(`SELECT denomination FROM categories WHERE enabled = 0;`);
+  const disabledDenoms = /* @__PURE__ */ new Set();
+  if (disabledCatsRes.length > 0 && disabledCatsRes[0].values.length > 0) {
+    disabledCatsRes[0].values.forEach((row) => {
+      const d = String(row[0] || "").trim();
+      if (d) {
+        disabledDenoms.add(d);
+        const digits = d.replace(/\D/g, "");
+        if (digits) {
+          disabledDenoms.add(`\u20B9${digits}`);
+          disabledDenoms.add(digits);
+        }
+      }
+    });
+  }
   const query = `
     SELECT 
       p.id, 
@@ -733,7 +793,7 @@ async function getAllProducts() {
   const res = db.exec(query);
   if (res.length === 0) return [];
   const columns = res[0].columns;
-  return res[0].values.map((row) => {
+  let items = res[0].values.map((row) => {
     const obj = {};
     columns.forEach((col, idx) => {
       obj[col] = row[idx];
@@ -742,12 +802,23 @@ async function getAllProducts() {
     obj.stock = Number(obj.stock);
     obj.soldCount = Number(obj.soldCount);
     obj.totalCodes = Number(obj.totalCodes);
+    const denomClean = String(obj.denomination || "").trim();
+    const priceStr = String(obj.price || "");
+    const isCatDisabled = disabledDenoms.has(denomClean) || disabledDenoms.has(`\u20B9${denomClean.replace(/\D/g, "")}`) || disabledDenoms.has(priceStr);
+    obj.categoryDisabled = isCatDisabled;
+    if (isCatDisabled) {
+      obj.enabled = false;
+    }
     obj.stockStatus = !obj.enabled ? "DISABLED" : obj.stock > 0 ? "AVAILABLE" : "OUT OF STOCK";
     return obj;
   });
+  if (!includeDisabled) {
+    items = items.filter((p) => p.enabled && !p.categoryDisabled);
+  }
+  return items;
 }
-async function getProductById(id) {
-  const products = await getAllProducts();
+async function getProductById(id, includeDisabled = true) {
+  const products = await getAllProducts(includeDisabled);
   return products.find((p) => p.id === id) || null;
 }
 async function createProduct(data) {
@@ -761,23 +832,7 @@ async function createProduct(data) {
     [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, now, now]
   );
   saveDb();
-  const created = await getProductById(id);
-  if (created) {
-    await syncToFirestore("vortex_products", id, {
-      id: created.id,
-      name: created.name,
-      category: created.category,
-      description: created.description,
-      price: created.priceRupees,
-      reward_value: created.rewardValueRupees,
-      denomination: created.denomination,
-      enabled: created.enabled ? 1 : 0,
-      image: created.image,
-      created_at: now,
-      updated_at: now
-    });
-  }
-  return created;
+  return getProductById(id);
 }
 async function updateProduct(id, data) {
   const db = await getDb();
@@ -810,6 +865,137 @@ async function deleteOrDisableProduct(id) {
   saveDb();
   return { success: true, message: `Product ${id} disabled successfully` };
 }
+async function isDenominationDisabled(denomination) {
+  if (!denomination) return false;
+  const db = await getDb();
+  const clean = denomination.trim();
+  const digits = clean.replace(/\D/g, "");
+  const res = db.exec(
+    `SELECT enabled FROM categories WHERE denomination = ? OR denomination = ? OR denomination = ?;`,
+    [clean, `\u20B9${digits}`, digits]
+  );
+  if (res.length > 0 && res[0].values.length > 0) {
+    const isEnabled = Boolean(res[0].values[0][0]);
+    return !isEnabled;
+  }
+  return false;
+}
+async function getAllCategories(includeDisabled = true) {
+  const db = await getDb();
+  let sql = `
+    SELECT 
+      c.id, 
+      c.name, 
+      c.denomination, 
+      c.enabled, 
+      c.sort_order as sortOrder, 
+      c.created_at as createdAt, 
+      c.updated_at as updatedAt,
+      COUNT(DISTINCT p.id) as productCount,
+      COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as availableStock
+    FROM categories c
+    LEFT JOIN products p ON (p.denomination = c.denomination OR p.denomination = '\u20B9' || REPLACE(c.denomination, '\u20B9', ''))
+    LEFT JOIN redeem_codes r ON p.id = r.product_id
+  `;
+  if (!includeDisabled) {
+    sql += ` WHERE c.enabled = 1`;
+  }
+  sql += ` GROUP BY c.id ORDER BY c.sort_order ASC, c.name ASC;`;
+  const res = db.exec(sql);
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    obj.enabled = Boolean(obj.enabled);
+    obj.sortOrder = Number(obj.sortOrder);
+    obj.productCount = Number(obj.productCount || 0);
+    obj.availableStock = Number(obj.availableStock || 0);
+    return obj;
+  });
+}
+async function getCategoryById(id) {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT id, name, denomination, enabled, sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt FROM categories WHERE id = ?;`,
+    [id.trim()]
+  );
+  if (res.length === 0 || res[0].values.length === 0) return null;
+  const columns = res[0].columns;
+  const row = res[0].values[0];
+  const obj = {};
+  columns.forEach((col, idx) => {
+    obj[col] = row[idx];
+  });
+  obj.enabled = Boolean(obj.enabled);
+  obj.sortOrder = Number(obj.sortOrder);
+  return obj;
+}
+async function createCategory(data) {
+  const db = await getDb();
+  const cleanDenom = data.denomination.trim().startsWith("\u20B9") ? data.denomination.trim() : `\u20B9${data.denomination.trim().replace(/\D/g, "") || data.denomination.trim()}`;
+  const digits = cleanDenom.replace(/\D/g, "") || Math.random().toString(36).substring(2, 6);
+  const id = `cat_${digits}_${Math.random().toString(36).substring(2, 5)}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const enabledInt = data.enabled !== false ? 1 : 0;
+  const sortOrder = Number(data.sortOrder ?? 0);
+  db.run(
+    `INSERT INTO categories (id, name, denomination, enabled, sort_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [id, data.name.trim(), cleanDenom, enabledInt, sortOrder, now, now]
+  );
+  saveDb();
+  return getCategoryById(id);
+}
+async function updateCategory(id, updates) {
+  const db = await getDb();
+  const existing = await getCategoryById(id);
+  if (!existing) {
+    throw new Error(`Category with ID "${id}" not found.`);
+  }
+  const name = updates.name !== void 0 ? updates.name.trim() : existing.name;
+  let denomination = existing.denomination;
+  if (updates.denomination !== void 0) {
+    const d = updates.denomination.trim();
+    denomination = d.startsWith("\u20B9") ? d : `\u20B9${d.replace(/\D/g, "") || d}`;
+  }
+  const enabledInt = updates.enabled !== void 0 ? updates.enabled ? 1 : 0 : existing.enabled ? 1 : 0;
+  const sortOrder = updates.sortOrder !== void 0 ? Number(updates.sortOrder) : existing.sortOrder;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `UPDATE categories SET name = ?, denomination = ?, enabled = ?, sort_order = ?, updated_at = ? WHERE id = ?;`,
+    [name, denomination, enabledInt, sortOrder, now, id]
+  );
+  saveDb();
+  return getCategoryById(id);
+}
+async function toggleCategoryStatus(id) {
+  const db = await getDb();
+  const existing = await getCategoryById(id);
+  if (!existing) {
+    throw new Error(`Category with ID "${id}" not found.`);
+  }
+  const nextEnabled = existing.enabled ? 0 : 1;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `UPDATE categories SET enabled = ?, updated_at = ? WHERE id = ?;`,
+    [nextEnabled, now, id]
+  );
+  saveDb();
+  return getCategoryById(id);
+}
+async function deleteCategory(id) {
+  const db = await getDb();
+  const existing = await getCategoryById(id);
+  if (!existing) {
+    throw new Error(`Category with ID "${id}" not found.`);
+  }
+  db.run(`DELETE FROM categories WHERE id = ?;`, [id]);
+  saveDb();
+  return { success: true, message: `Category ${id} deleted successfully.` };
+}
 function normalizeCode(raw) {
   if (!raw) return "";
   return raw.replace(/[\s-]+/g, "").trim().toUpperCase();
@@ -823,7 +1009,7 @@ function validateCode(raw) {
     return {
       valid: false,
       normalized,
-      error: `Redeem code must contain exactly 16 characters (got ${normalized.length} characters: "${normalized}"). Example format: CSGY AGTS **** ****`
+      error: `Redeem code must contain exactly 16 characters (got ${normalized.length} characters: "${normalized}"). Format: XXXX XXXX XXXX XXXX`
     };
   }
   if (!/^[A-Z0-9]{16}$/.test(normalized)) {
@@ -848,10 +1034,6 @@ function maskCode(code) {
     const part1 = norm.substring(0, 4);
     const part2 = norm.substring(4, 8);
     return `${part1} ${part2} **** ****`;
-  }
-  if (norm.length >= 4) {
-    const part1 = norm.substring(0, 4);
-    return `${part1} XXXX **** ****`;
   }
   return "CSGY AGTS **** ****";
 }
@@ -883,9 +1065,15 @@ async function getRedeemCodes(productId, status, denomination) {
     sql += ` AND r.product_id = ?`;
     params.push(productId);
   }
-  if (status) {
+  if (status && status !== "ALL") {
+    let dbStatus = status;
+    const s = String(status).toUpperCase();
+    if (s === "AVAILABLE" || s === "UNUSED") dbStatus = "UNUSED";
+    else if (s === "USED" || s === "SOLD") dbStatus = "SOLD";
+    else if (s === "RESERVED") dbStatus = "RESERVED";
+    else if (s === "DISABLED") dbStatus = "DISABLED";
     sql += ` AND r.status = ?`;
-    params.push(status);
+    params.push(dbStatus);
   }
   if (denomination && denomination !== "ALL VALUES") {
     const cleanDenom = denomination.trim();
@@ -922,11 +1110,20 @@ async function addRedeemCode(data) {
   if (!prod) throw new Error(`Product ${data.productId} does not exist`);
   const id = `cd_${Math.random().toString(36).substring(2, 9)}`;
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const pin = data.pin?.trim() || Math.floor(1e3 + Math.random() * 9e3).toString();
+  const pin = data.pin?.trim() || null;
+  let status = "UNUSED";
+  if (data.status) {
+    const s = String(data.status).toUpperCase();
+    if (s === "AVAILABLE" || s === "UNUSED") status = "UNUSED";
+    else if (s === "USED" || s === "SOLD") status = "SOLD";
+    else if (s === "RESERVED") status = "RESERVED";
+    else if (s === "DISABLED") status = "DISABLED";
+  }
+  const usedAt = status === "SOLD" ? now : null;
   db.run(
     `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, created_at, used_at)
-     VALUES (?, ?, ?, ?, 'UNUSED', NULL, ?, NULL);`,
-    [id, data.productId, cleanCode, pin, now]
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?);`,
+    [id, data.productId, cleanCode, pin, status, now, usedAt]
   );
   saveDb();
   return {
@@ -936,7 +1133,7 @@ async function addRedeemCode(data) {
     codeFull: formatFullCode(cleanCode),
     codeMasked: maskCode(cleanCode),
     pin,
-    status: "UNUSED",
+    status,
     createdAt: now
   };
 }
@@ -951,18 +1148,11 @@ async function addBulkRedeemCodes(data) {
   const parsedCodes = [];
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    let codePart = raw;
-    let pinPart = Math.floor(1e3 + Math.random() * 9e3).toString();
-    if (raw.includes(":")) {
-      const parts = raw.split(":");
-      codePart = parts[0].trim();
-      pinPart = parts[1].trim() || pinPart;
-    }
-    const validation = validateCode(codePart);
+    const validation = validateCode(raw);
     if (!validation.valid) {
       throw new Error(`Line ${i + 1} ("${raw}"): ${validation.error}`);
     }
-    parsedCodes.push({ code: validation.normalized, pin: pinPart });
+    parsedCodes.push({ code: validation.normalized, pin: null });
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   let addedCount = 0;
@@ -985,16 +1175,57 @@ async function addBulkRedeemCodes(data) {
     message: `Successfully added ${addedCount} 16-character redeem code(s) for ${prod.name}`
   };
 }
-async function updateRedeemCodeStatus(id, status) {
+async function updateRedeemCode(id, updates) {
   const db = await getDb();
+  const cleanId = id.trim();
+  const check = db.exec(`SELECT id, code, pin, status, product_id FROM redeem_codes WHERE id = ?;`, [cleanId]);
+  if (check.length === 0 || check[0].values.length === 0) {
+    throw new Error(`Redeem code with ID "${cleanId}" not found in database.`);
+  }
+  const row = check[0].values[0];
+  let code = row[1];
+  let pin = row[2] || "";
+  let status = row[3];
+  let productId = row[4];
+  if (updates.code) {
+    const validation = validateCode(updates.code);
+    if (!validation.valid) {
+      throw new Error(validation.error || "Invalid code. Must be exactly 16 characters.");
+    }
+    code = validation.normalized;
+  }
+  if (updates.pin !== void 0) {
+    pin = updates.pin.trim();
+  }
+  if (updates.status) {
+    const s = String(updates.status).toUpperCase();
+    if (s === "AVAILABLE" || s === "UNUSED") status = "UNUSED";
+    else if (s === "USED" || s === "SOLD") status = "SOLD";
+    else if (s === "RESERVED") status = "RESERVED";
+    else if (s === "DISABLED") status = "DISABLED";
+  }
+  if (updates.productId) {
+    const prod = await getProductById(updates.productId);
+    if (!prod) throw new Error(`Product ${updates.productId} not found`);
+    productId = updates.productId;
+  }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const usedAt = status === "SOLD" ? now : null;
   db.run(
-    `UPDATE redeem_codes SET status = ?, used_at = ? WHERE id = ?;`,
-    [status, usedAt, id]
+    `UPDATE redeem_codes SET code = ?, pin = ?, status = ?, product_id = ?, used_at = ? WHERE id = ?;`,
+    [code, pin, status, productId, usedAt, cleanId]
   );
   saveDb();
-  return { id, status, updatedAt: now };
+  return {
+    id: cleanId,
+    productId,
+    code,
+    codeFull: formatFullCode(code),
+    codeMasked: maskCode(code),
+    pin,
+    status,
+    updatedAt: now
+  };
 }
 async function deleteRedeemCode(id, force) {
   const db = await getDb();
@@ -1034,6 +1265,7 @@ async function getAllOrders() {
       amount, 
       payment_status as paymentStatus, 
       delivery_status as deliveryStatus, 
+      reserved_code_id as reservedCodeId,
       delivered_code_id as deliveredCodeId, 
       delivered_code as deliveredCode, 
       delivered_pin as deliveredPin, 
@@ -1043,6 +1275,53 @@ async function getAllOrders() {
     FROM orders 
     ORDER BY created_at DESC;
   `);
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
+}
+async function getCustomerPaidOrders(customerEmail, customerId) {
+  const db = await getDb();
+  const cleanEmail = (customerEmail || "").trim().toLowerCase();
+  const cleanId = (customerId || "").trim();
+  if (!cleanEmail && !cleanId) return [];
+  const res = db.exec(`
+    SELECT 
+      o.id, 
+      o.order_number as orderNumber, 
+      o.product_id as productId, 
+      o.product_name as productName, 
+      o.customer_name as customerName, 
+      o.customer_email as customerEmail, 
+      o.customer_id as customerId,
+      o.amount, 
+      o.payment_status as paymentStatus, 
+      o.delivery_status as deliveryStatus, 
+      o.reserved_code_id as reservedCodeId,
+      o.delivered_code_id as deliveredCodeId, 
+      o.delivered_code as deliveredCode, 
+      o.delivered_pin as deliveredPin, 
+      o.payment_method as paymentMethod, 
+      o.gateway_order_id as gatewayOrderId,
+      o.gateway_payment_id as gatewayPaymentId,
+      o.created_at as createdAt, 
+      o.updated_at as updatedAt,
+      p.denomination as denomination,
+      p.reward_value as rewardValue
+    FROM orders o
+    LEFT JOIN products p ON o.product_id = p.id
+    WHERE (
+      (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = ?)
+      OR (o.customer_id IS NOT NULL AND o.customer_id = ? AND ? != '')
+    )
+    AND o.payment_status = 'PAID'
+    ORDER BY o.created_at DESC;
+  `, [cleanEmail, cleanId, cleanId]);
   if (res.length === 0) return [];
   const columns = res[0].columns;
   return res[0].values.map((row) => {
@@ -1067,15 +1346,18 @@ async function getOrderByIdOrNumber(identifier) {
       amount, 
       payment_status as paymentStatus, 
       delivery_status as deliveryStatus, 
+      reserved_code_id as reservedCodeId,
       delivered_code_id as deliveredCodeId, 
       delivered_code as deliveredCode, 
       delivered_pin as deliveredPin, 
       payment_method as paymentMethod, 
+      gateway_order_id as gatewayOrderId,
+      gateway_payment_id as gatewayPaymentId,
       created_at as createdAt, 
       updated_at as updatedAt 
     FROM orders 
-    WHERE id = ? OR order_number = ? OR customer_email = ?;`,
-    [clean, clean, clean]
+    WHERE id = ? OR order_number = ? OR gateway_order_id = ? OR customer_email = ?;`,
+    [clean, clean, clean, clean]
   );
   if (res.length === 0 || res[0].values.length === 0) return null;
   const columns = res[0].columns;
@@ -1104,20 +1386,25 @@ async function purchaseProductDirect(params) {
   let assignedCode = "";
   let assignedPin = "";
   let effectiveProductId = params.productId || "";
+  const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
   if (params.codeId) {
     const codeRes = db.exec(
-      `SELECT id, product_id, code, pin FROM redeem_codes 
-       WHERE id = ? AND status = 'UNUSED' 
-       LIMIT 1;`,
+      `SELECT id, product_id, code, pin, status FROM redeem_codes 
+       WHERE id = ? LIMIT 1;`,
       [params.codeId]
     );
     if (codeRes.length === 0 || codeRes[0].values.length === 0) {
+      throw new Error("This redeem code does not exist.");
+    }
+    const row = codeRes[0].values[0];
+    const st = row[4];
+    if (st !== "UNUSED" && st !== "RESERVED") {
       throw new Error("This redeem code is already claimed or no longer available.");
     }
-    assignedCodeId = codeRes[0].values[0][0];
-    effectiveProductId = codeRes[0].values[0][1];
-    assignedCode = codeRes[0].values[0][2];
-    assignedPin = codeRes[0].values[0][3];
+    assignedCodeId = row[0];
+    effectiveProductId = row[1];
+    assignedCode = row[2];
+    assignedPin = row[3];
   } else if (params.productId) {
     const codeRes = db.exec(
       `SELECT id, code, pin FROM redeem_codes 
@@ -1131,6 +1418,7 @@ async function purchaseProductDirect(params) {
     assignedCodeId = codeRes[0].values[0][0];
     assignedCode = codeRes[0].values[0][1];
     assignedPin = codeRes[0].values[0][2];
+    effectiveProductId = params.productId;
   } else {
     throw new Error("productId or codeId is required for purchase");
   }
@@ -1138,11 +1426,13 @@ async function purchaseProductDirect(params) {
   if (!product) {
     throw new Error("Associated product not found");
   }
-  if (!product.enabled) {
-    throw new Error("This product is currently disabled and cannot be purchased.");
+  const isCatDisabledForDirect = await isDenominationDisabled(product.denomination);
+  if (!product.enabled || isCatDisabledForDirect) {
+    const err = new Error("This recharge category is currently unavailable.");
+    err.statusCode = 400;
+    throw err;
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
   const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
   const orderNumber = `VRX-2026-${randomSuffix}`;
   db.run(
@@ -1152,8 +1442,8 @@ async function purchaseProductDirect(params) {
     [orderId, now, assignedCodeId]
   );
   db.run(
-    `INSERT INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, amount, payment_status, delivery_status, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'PAID', 'DELIVERED', ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, customer_id, amount, payment_status, delivery_status, reserved_code_id, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PAID', 'DELIVERED', ?, ?, ?, ?, ?, ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1161,7 +1451,9 @@ async function purchaseProductDirect(params) {
       product.name,
       params.customerName || "Customer",
       params.customerEmail || "customer@example.com",
+      params.customerId || null,
       product.price,
+      assignedCodeId,
       assignedCodeId,
       formatFullCode(assignedCode),
       assignedPin,
@@ -1183,6 +1475,7 @@ async function purchaseProductDirect(params) {
       denomination: product.denomination,
       paymentStatus: "PAID",
       deliveryStatus: "DELIVERED",
+      reservedCodeId: assignedCodeId,
       deliveredCodeId: assignedCodeId,
       deliveredCode: formatFullCode(assignedCode),
       deliveredCodeRaw: normalizeCode(assignedCode),
@@ -1191,66 +1484,34 @@ async function purchaseProductDirect(params) {
     }
   };
 }
-function releaseExpiredReservations() {
-  if (!dbInstance) return;
-  const expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
-  const cutoffTime = new Date(Date.now() - expiryMinutes * 60 * 1e3).toISOString();
-  dbInstance.run(
-    `UPDATE redeem_codes 
-     SET status = 'UNUSED', order_id = NULL 
-     WHERE status = 'RESERVED' 
-       AND (
-         order_id IN (
-           SELECT id FROM orders WHERE payment_status = 'PENDING' AND created_at < ?
-         )
-         OR order_id IS NULL
-       );`,
-    [cutoffTime]
-  );
-  dbInstance.run(
-    `UPDATE orders 
-     SET payment_status = 'CANCELLED', delivery_status = 'EXPIRED', updated_at = ? 
-     WHERE payment_status = 'PENDING' AND created_at < ?;`,
-    [(/* @__PURE__ */ new Date()).toISOString(), cutoffTime]
-  );
-  saveDb();
-}
-function releaseReservedCodeForOrder(orderId) {
-  if (!dbInstance) return;
-  dbInstance.run(
-    `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE order_id = ? AND status = 'RESERVED';`,
-    [orderId]
-  );
-  dbInstance.run(
-    `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ? AND payment_status = 'PENDING';`,
-    [(/* @__PURE__ */ new Date()).toISOString(), orderId]
-  );
-  saveDb();
-}
 async function createPendingCheckoutOrder(params) {
   const db = await getDb();
-  releaseExpiredReservations();
-  logPaymentDiagnostic("PAYMENT_CREATE_STARTED", {
-    productId: params.productId,
-    customerName: params.customerName
-  });
   const product = await getProductById(params.productId);
   if (!product) {
     throw new Error("Product not found in database.");
   }
-  if (!product.enabled) {
-    throw new Error("This product is currently disabled and unavailable for checkout.");
+  const isCatDisabled = await isDenominationDisabled(product.denomination);
+  if (!product.enabled || isCatDisabled) {
+    const err = new Error("This recharge category is currently unavailable.");
+    err.statusCode = 400;
+    throw err;
   }
-  let availableCodeId = null;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
+  const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
+  const orderNumber = `VRX-2026-${randomSuffix}`;
+  const verifiedAmount = product.price;
+  let reservedCodeId = null;
   if (params.codeId) {
-    const specificCodeRes = db.exec(
-      `SELECT id FROM redeem_codes WHERE id = ? AND product_id = ? AND status = 'UNUSED' LIMIT 1;`,
-      [params.codeId, product.id]
+    db.run(
+      `UPDATE redeem_codes SET status = 'RESERVED', order_id = ? WHERE id = ? AND product_id = ? AND status = 'UNUSED';`,
+      [orderId, params.codeId, product.id]
     );
-    if (specificCodeRes.length === 0 || specificCodeRes[0].values.length === 0) {
-      throw new Error("OUT OF STOCK: The requested redeem code is no longer available.");
+    const checkRes = db.exec(`SELECT id, status FROM redeem_codes WHERE id = ?;`, [params.codeId]);
+    if (checkRes.length === 0 || checkRes[0].values.length === 0 || checkRes[0].values[0][1] !== "RESERVED") {
+      throw new Error("OUT OF STOCK: The selected redeem code is no longer available or already reserved.");
     }
-    availableCodeId = specificCodeRes[0].values[0][0];
+    reservedCodeId = params.codeId;
   } else {
     const stockRes = db.exec(
       `SELECT id FROM redeem_codes WHERE product_id = ? AND status = 'UNUSED' LIMIT 1;`,
@@ -1259,23 +1520,17 @@ async function createPendingCheckoutOrder(params) {
     if (stockRes.length === 0 || stockRes[0].values.length === 0) {
       throw new Error("OUT OF STOCK: No available redeem codes for this product.");
     }
-    availableCodeId = stockRes[0].values[0][0];
+    const foundCodeId = stockRes[0].values[0][0];
+    db.run(
+      `UPDATE redeem_codes SET status = 'RESERVED', order_id = ? WHERE id = ? AND status = 'UNUSED';`,
+      [orderId, foundCodeId]
+    );
+    const checkRes = db.exec(`SELECT id, status FROM redeem_codes WHERE id = ?;`, [foundCodeId]);
+    if (checkRes.length === 0 || checkRes[0].values.length === 0 || checkRes[0].values[0][1] !== "RESERVED") {
+      throw new Error("OUT OF STOCK: Failed to reserve redeem code.");
+    }
+    reservedCodeId = foundCodeId;
   }
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const timestamp = Date.now();
-  const randomStr = Math.random().toString(36).substring(2, 7).toUpperCase();
-  const orderId = `VC_${timestamp}_${randomStr}`;
-  const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
-  const orderNumber = `VRX-2026-${randomSuffix}`;
-  const verifiedAmount = product.price;
-  db.run(
-    `UPDATE redeem_codes SET status = 'RESERVED', order_id = ? WHERE id = ? AND status = 'UNUSED';`,
-    [orderId, availableCodeId]
-  );
-  logPaymentDiagnostic("CODE_RESERVED", {
-    orderId,
-    codeId: availableCodeId
-  });
   db.run(
     `INSERT INTO orders (
       id, 
@@ -1284,16 +1539,18 @@ async function createPendingCheckoutOrder(params) {
       product_name, 
       customer_name, 
       customer_email, 
+      customer_id,
       amount, 
       payment_status, 
       delivery_status, 
+      reserved_code_id,
       delivered_code_id, 
       delivered_code, 
       delivered_pin, 
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', ?, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', ?, NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1301,17 +1558,16 @@ async function createPendingCheckoutOrder(params) {
       product.name,
       params.customerName || "Customer",
       params.customerEmail || "customer@vortexcode.com",
+      params.customerId || null,
       verifiedAmount,
-      availableCodeId,
+      reservedCodeId,
       now,
       now
     ]
   );
   saveDb();
-  logPaymentDiagnostic("PAYMENT_ORDER_CREATED", {
-    orderId,
-    amount: verifiedAmount
-  });
+  const storeSettings = await getStoreSettings();
+  paymentGateway.updateCredentials(storeSettings);
   const gatewayOrder = await paymentGateway.createGatewayOrder({
     orderId,
     orderNumber,
@@ -1322,6 +1578,13 @@ async function createPendingCheckoutOrder(params) {
     customerName: params.customerName || "Customer",
     customerEmail: params.customerEmail || "customer@vortexcode.com"
   });
+  if (gatewayOrder.gatewayOrderId) {
+    db.run(
+      `UPDATE orders SET gateway_order_id = ? WHERE id = ?;`,
+      [gatewayOrder.gatewayOrderId, orderId]
+    );
+    saveDb();
+  }
   const gatewayConfig = paymentGateway.getConfig();
   return {
     success: true,
@@ -1336,6 +1599,7 @@ async function createPendingCheckoutOrder(params) {
       currency: "INR",
       paymentStatus: "PENDING",
       deliveryStatus: "PENDING",
+      reservedCodeId,
       customerName: params.customerName,
       customerEmail: params.customerEmail,
       createdAt: now
@@ -1353,38 +1617,122 @@ async function verifyAndFulfillPaymentOrder(params) {
   if (order.paymentStatus === "PAID" && order.deliveredCode) {
     return {
       success: true,
+      status: "PAID",
       alreadyFulfilled: true,
       order,
       message: "Order was already verified and delivered."
     };
   }
+  const storeSettings = await getStoreSettings();
+  paymentGateway.updateCredentials(storeSettings);
   const gatewayConfig = paymentGateway.getConfig();
-  if (gatewayConfig.isConfigured) {
-    const verifyResult = await paymentGateway.checkPaymentStatus(order.id);
-    if (!verifyResult.isValid) {
-      releaseReservedCodeForOrder(order.id);
-      throw new Error(`Payment verification failed: ${verifyResult.error || "Payment not completed or failed."}`);
+  let verifiedGatewayPaymentId = params.gatewayPaymentId;
+  if (gatewayConfig.isConfigured && !params.isSimulatedVerification) {
+    const identifierToCheck = order.gatewayOrderId || params.gatewayOrderId || order.id;
+    const verifyResult = await paymentGateway.checkPaymentStatus(identifierToCheck, order.amount);
+    if (verifyResult.status === "PENDING") {
+      return {
+        success: false,
+        status: "PENDING",
+        order,
+        message: "Payment is currently pending bank/gateway confirmation. Polling in progress.",
+        rawGatewayResponse: verifyResult.rawGatewayResponse
+      };
     }
-  } else if (!params.isSimulatedVerification) {
-    releaseReservedCodeForOrder(order.id);
-    throw new Error("Payment Gateway not configured. Live transactions require configured gateway credentials.");
+    if (verifyResult.status === "FAILED") {
+      const now2 = (/* @__PURE__ */ new Date()).toISOString();
+      db.run(
+        `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE order_id = ? AND status = 'RESERVED';`,
+        [order.id]
+      );
+      db.run(
+        `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ?;`,
+        [now2, order.id]
+      );
+      saveDb();
+      return {
+        success: false,
+        status: "FAILED",
+        order: await getOrderByIdOrNumber(order.id),
+        message: verifyResult.error || "Payment was declined or failed on gateway.",
+        rawGatewayResponse: verifyResult.rawGatewayResponse
+      };
+    }
+    if (verifyResult.status === "EXPIRED") {
+      const now2 = (/* @__PURE__ */ new Date()).toISOString();
+      db.run(
+        `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE order_id = ? AND status = 'RESERVED';`,
+        [order.id]
+      );
+      db.run(
+        `UPDATE orders SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ? WHERE id = ?;`,
+        [now2, order.id]
+      );
+      saveDb();
+      return {
+        success: false,
+        status: "EXPIRED",
+        order: await getOrderByIdOrNumber(order.id),
+        message: "Gateway payment session expired.",
+        rawGatewayResponse: verifyResult.rawGatewayResponse
+      };
+    }
+    if (!verifyResult.isValid && verifyResult.status !== "PAID") {
+      return {
+        success: false,
+        status: "PENDING",
+        order,
+        message: `Gateway status is ${verifyResult.status || "PENDING"}. Waiting for confirmation.`,
+        rawGatewayResponse: verifyResult.rawGatewayResponse
+      };
+    }
+    if (verifyResult.transactionId) {
+      verifiedGatewayPaymentId = verifyResult.transactionId;
+    }
+  } else if (!params.isSimulatedVerification && !gatewayConfig.isConfigured) {
+    return {
+      success: false,
+      status: "PENDING",
+      order,
+      message: "Payment Gateway is not configured with live credentials."
+    };
   }
-  let codeRes = db.exec(
-    `SELECT id, code, pin FROM redeem_codes 
-     WHERE (order_id = ? OR id = ?) AND status IN ('RESERVED', 'UNUSED') 
-     LIMIT 1;`,
-    [order.id, order.deliveredCodeId || ""]
-  );
-  if (codeRes.length === 0 || codeRes[0].values.length === 0) {
-    codeRes = db.exec(
+  let assignedCodeId = "";
+  let assignedCode = "";
+  let assignedPin = "";
+  if (order.reservedCodeId) {
+    const specificCodeRes = db.exec(
+      `SELECT id, code, pin, status FROM redeem_codes WHERE id = ?;`,
+      [order.reservedCodeId]
+    );
+    if (specificCodeRes.length > 0 && specificCodeRes[0].values.length > 0) {
+      const row = specificCodeRes[0].values[0];
+      const codeId = row[0];
+      const codeStr = row[1];
+      const pinStr = row[2];
+      const st = row[3];
+      if (st === "RESERVED" || st === "UNUSED") {
+        assignedCodeId = codeId;
+        assignedCode = codeStr;
+        assignedPin = pinStr;
+      }
+    }
+  }
+  if (!assignedCodeId) {
+    const codeRes = db.exec(
       `SELECT id, code, pin FROM redeem_codes 
        WHERE product_id = ? AND status = 'UNUSED' 
        LIMIT 1;`,
       [order.productId]
     );
+    if (codeRes.length > 0 && codeRes[0].values.length > 0) {
+      assignedCodeId = codeRes[0].values[0][0];
+      assignedCode = codeRes[0].values[0][1];
+      assignedPin = codeRes[0].values[0][2];
+    }
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  if (codeRes.length === 0 || codeRes[0].values.length === 0) {
+  if (!assignedCodeId) {
     db.run(
       `UPDATE orders 
        SET payment_status = 'PAID', delivery_status = 'OUT_OF_STOCK_PENDING_REFUND', updated_at = ? 
@@ -1394,9 +1742,6 @@ async function verifyAndFulfillPaymentOrder(params) {
     saveDb();
     throw new Error("OUT OF STOCK: Payment recorded but no unused redeem code was available. Marked for automated refund.");
   }
-  const assignedCodeId = codeRes[0].values[0][0];
-  const assignedCode = codeRes[0].values[0][1];
-  const assignedPin = codeRes[0].values[0][2];
   db.run(
     `UPDATE redeem_codes 
      SET status = 'SOLD', order_id = ?, used_at = ? 
@@ -1404,6 +1749,7 @@ async function verifyAndFulfillPaymentOrder(params) {
     [order.id, now, assignedCodeId]
   );
   const fullCodeFormatted = formatFullCode(assignedCode);
+  const paymentMethodStr = verifiedGatewayPaymentId ? `FamGateway (${verifiedGatewayPaymentId})` : "Payment Gateway (Verified)";
   db.run(
     `UPDATE orders 
      SET payment_status = 'PAID', 
@@ -1412,31 +1758,26 @@ async function verifyAndFulfillPaymentOrder(params) {
          delivered_code = ?, 
          delivered_pin = ?, 
          payment_method = ?,
+         gateway_payment_id = ?,
          updated_at = ? 
      WHERE id = ?;`,
     [
       assignedCodeId,
       fullCodeFormatted,
       assignedPin,
-      params.gatewayPaymentId ? `Gateway (${params.gatewayPaymentId})` : "Payment Gateway (Verified)",
+      paymentMethodStr,
+      verifiedGatewayPaymentId || null,
       now,
       order.id
     ]
   );
   saveDb();
-  logPaymentDiagnostic("PAYMENT_SUCCESS", {
-    orderId: order.id,
-    amount: order.amount
-  });
-  logPaymentDiagnostic("CODE_DELIVERED", {
-    orderId: order.id,
-    codeId: assignedCodeId
-  });
   const fulfilledOrder = await getOrderByIdOrNumber(order.id);
   return {
     success: true,
+    status: "PAID",
     order: fulfilledOrder,
-    message: "Payment verified successfully and redeem code delivered."
+    message: "Payment verified successfully and exact redeem code delivered."
   };
 }
 async function getUserByEmail(email) {
@@ -1476,11 +1817,13 @@ async function createUser(params) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const role = params.role || "CUSTOMER";
   const balance = params.balance !== void 0 ? params.balance : 1500;
+  const customerId = params.customerId || null;
   db.run(
-    `INSERT INTO users (id, fullName, email, username, password, googleSub, role, createdAt, balance)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO users (id, customer_id, fullName, email, username, password, googleSub, role, createdAt, balance)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       id,
+      customerId,
       params.fullName.trim(),
       params.email.trim().toLowerCase(),
       params.username.trim().toLowerCase(),
@@ -1494,6 +1837,7 @@ async function createUser(params) {
   saveDb();
   return {
     id,
+    customerId,
     fullName: params.fullName,
     email: params.email,
     username: params.username,
@@ -1503,39 +1847,402 @@ async function createUser(params) {
     balance
   };
 }
+async function isCustomerIdUnique(cid) {
+  const db = await getDb();
+  const res = db.exec(`SELECT id FROM users WHERE customer_id = ?;`, [cid]);
+  return res.length === 0 || res[0].values.length === 0;
+}
+async function generateRandomCustomerId() {
+  while (true) {
+    const num = Math.floor(Math.random() * 9e4) + 1e4;
+    const cid = `VC-${num}`;
+    if (await isCustomerIdUnique(cid)) {
+      return cid;
+    }
+  }
+}
+async function migrateToRandomCustomerIds() {
+  const db = await getDb();
+  const res = db.exec(`SELECT id, customer_id FROM users;`);
+  if (res.length === 0 || res[0].values.length === 0) return;
+  const rows = res[0].values;
+  for (const row of rows) {
+    const uid = row[0];
+    const cid = row[1];
+    if (!cid || cid.startsWith("VC-0")) {
+      const newCid = await generateRandomCustomerId();
+      db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, uid]);
+    }
+  }
+  saveDb();
+}
+async function getAllUsersForAdmin() {
+  const db = await getDb();
+  const res = db.exec(`
+    SELECT 
+      u.id, 
+      u.customer_id as customerId,
+      u.fullName, 
+      u.email, 
+      u.username, 
+      u.role, 
+      u.googleSub,
+      u.provider,
+      u.status,
+      u.createdAt, 
+      u.last_login_at as lastLoginAt,
+      u.balance
+    FROM users u
+    ORDER BY u.createdAt DESC;
+  `);
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  const users = res[0].values.map((row) => {
+    const obj = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
+  const enhancedUsers = [];
+  for (const u of users) {
+    const ordersRes = db.exec(`
+      SELECT id, amount, created_at, payment_status, delivery_status 
+      FROM orders 
+      WHERE (customer_email IS NOT NULL AND LOWER(customer_email) = ?) 
+         OR (customer_id IS NOT NULL AND customer_id = ?)
+      ORDER BY created_at DESC;
+    `, [(u.email || "").toLowerCase(), u.customerId || ""]);
+    let successfulOrdersCount = 0;
+    let totalSpent = 0;
+    let codesPurchased = 0;
+    if (ordersRes.length > 0 && ordersRes[0].values.length > 0) {
+      for (const ordRow of ordersRes[0].values) {
+        const paymentStatus = ordRow[3];
+        const amount = Number(ordRow[1]) || 0;
+        if (paymentStatus === "PAID") {
+          successfulOrdersCount++;
+          totalSpent += amount;
+          codesPurchased++;
+        }
+      }
+    }
+    enhancedUsers.push({
+      id: u.id,
+      customerId: u.customerId || "VC-000000",
+      fullName: u.fullName || u.username || "Customer",
+      email: u.email,
+      role: u.role || "CUSTOMER",
+      provider: u.googleSub ? "Google" : u.provider || "Email/Password",
+      status: u.status || "ACTIVE",
+      createdAt: u.createdAt,
+      joinedDate: u.createdAt ? u.createdAt.substring(0, 10) : "2026-10-08",
+      lastLogin: u.lastLoginAt ? u.lastLoginAt.substring(0, 16).replace("T", " ") : u.createdAt ? u.createdAt.substring(0, 16).replace("T", " ") : "Recently",
+      successfulOrders: successfulOrdersCount,
+      orderCount: successfulOrdersCount,
+      codesPurchased,
+      totalSpent,
+      totalSpentRupees: totalSpent
+    });
+  }
+  return enhancedUsers;
+}
+async function getUserDetailsWithOrders(identifier) {
+  const db = await getDb();
+  const clean = identifier.trim();
+  const userRes = db.exec(`
+    SELECT 
+      id, customer_id as customerId, fullName, email, username, role, googleSub, provider, status, createdAt, last_login_at as lastLoginAt, balance
+    FROM users 
+    WHERE id = ? OR customer_id = ? OR email = ?;
+  `, [clean, clean, clean]);
+  if (userRes.length === 0 || userRes[0].values.length === 0) return null;
+  const cols = userRes[0].columns;
+  const row = userRes[0].values[0];
+  const userObj = {};
+  cols.forEach((c, idx) => {
+    userObj[c] = row[idx];
+  });
+  const orders = await getCustomerPaidOrders(userObj.email, userObj.customerId);
+  const totalSpent = orders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+  return {
+    profile: {
+      id: userObj.id,
+      customerId: userObj.customerId || "VC-000000",
+      fullName: userObj.fullName,
+      email: userObj.email,
+      role: userObj.role,
+      provider: userObj.googleSub ? "Google" : userObj.provider || "Email",
+      status: userObj.status || "ACTIVE",
+      createdAt: userObj.createdAt,
+      lastLogin: userObj.lastLoginAt || userObj.createdAt
+    },
+    statistics: {
+      successfulOrders: orders.length,
+      codesPurchased: orders.length,
+      totalSpent
+    },
+    orders
+  };
+}
+async function updateUserStatus(identifier, status) {
+  const db = await getDb();
+  const clean = identifier.trim();
+  db.run(`UPDATE users SET status = ? WHERE id = ? OR customer_id = ? OR email = ?;`, [status, clean, clean, clean]);
+  saveDb();
+  return getUserDetailsWithOrders(clean);
+}
+async function getAdminAnalyticsSummary() {
+  const users = await getAllUsersForAdmin();
+  const allOrders = await getAllOrders();
+  const successfulOrders = allOrders.filter((o) => o.paymentStatus === "PAID");
+  const totalUsers = users.length;
+  const activeUsers = users.filter((u) => u.status === "ACTIVE").length;
+  const usersWithPurchases = users.filter((u) => u.successfulOrders > 0).length;
+  const totalCodesSold = successfulOrders.length;
+  const totalSales = successfulOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+  const todayStr = (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
+  const todaysSales = successfulOrders.filter((o) => o.createdAt && o.createdAt.startsWith(todayStr)).reduce((sum, o) => sum + Number(o.amount || 0), 0);
+  const topBuyers = [...users].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 5).map((u) => ({
+    customerId: u.customerId,
+    name: u.fullName,
+    email: u.email,
+    codesPurchased: u.codesPurchased,
+    totalSpent: u.totalSpent
+  }));
+  return {
+    totalUsers,
+    activeUsers,
+    usersWithPurchases,
+    totalCodesSold,
+    totalOrders: allOrders.length,
+    successfulOrders: successfulOrders.length,
+    totalSales,
+    todaysSales,
+    topBuyers
+  };
+}
 async function getStoreSettings() {
   const db = await getDb();
   const res = db.exec(`SELECT key, value FROM store_settings;`);
   const settings = {
     storeName: "VORTEX CODE",
+    websiteName: "VORTEX CODE",
     subtitle: "SECURE DIGITAL STORE",
+    tagline: "SECURE DIGITAL STORE",
+    logoUrl: "",
     supportEmail: "support@vortexcode.com",
     currencySymbol: "\u20B9",
-    enableAutoFulfillment: true
+    enableAutoFulfillment: true,
+    telegramEnabled: true,
+    telegramUrl: "https://t.me/VortexCodeSupport",
+    contactEnabled: true,
+    contactPlatform: "telegram",
+    contactUrl: "https://t.me/VortexCodeSupport",
+    contactIconUrl: "",
+    contactLabel: "Contact Admin",
+    contactWidgetSize: 60,
+    contactWidgetRight: 30,
+    contactWidgetBottom: 30,
+    contactWidgetMobileSize: 55,
+    contactWidgetMobileRight: 35,
+    contactWidgetMobileBottom: 110,
+    contactIconSize: 42,
+    contactMobileIconSize: 42,
+    famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || "https://famupigateway.site/api",
+    famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || "Famcfc08cd92c090e3718e9ad92155eb0fc",
+    famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || "87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f",
+    famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5,
+    appUrl: process.env.APP_URL || "https://vortexcode.shop",
+    how_to_redeem_step_1_image_enabled: false,
+    how_to_redeem_step_1_image_url: "",
+    how_to_redeem_step_2_image_enabled: false,
+    how_to_redeem_step_2_image_url: "",
+    how_to_redeem_step_3_image_enabled: false,
+    how_to_redeem_step_3_image_url: "",
+    how_to_redeem_step_4_image_enabled: false,
+    how_to_redeem_step_4_image_url: ""
   };
   if (res.length > 0 && res[0].values.length > 0) {
     res[0].values.forEach((row) => {
       const key = row[0];
       const val = row[1];
-      if (key === "enableAutoFulfillment") {
+      if (key === "enableAutoFulfillment" || key === "telegramEnabled" || key === "contactEnabled" || key.startsWith("how_to_redeem_") && key.endsWith("_enabled")) {
         settings[key] = val === "true";
+      } else if (key === "famupigatewayExpiryMinutes" || key === "contactWidgetSize" || key === "contactWidgetRight" || key === "contactWidgetBottom" || key === "contactWidgetMobileSize" || key === "contactWidgetMobileRight" || key === "contactWidgetMobileBottom" || key === "contactIconSize" || key === "contactMobileIconSize") {
+        settings[key] = Number(val) || settings[key];
       } else {
         settings[key] = val;
       }
     });
   }
+  if (settings.websiteName && !settings.storeName) settings.storeName = settings.websiteName;
+  if (settings.storeName && !settings.websiteName) settings.websiteName = settings.storeName;
+  if (settings.tagline && !settings.subtitle) settings.subtitle = settings.tagline;
+  if (settings.subtitle && !settings.tagline) settings.tagline = settings.subtitle;
   return settings;
 }
 async function updateStoreSettings(updates) {
   const db = await getDb();
-  for (const [key, value] of Object.entries(updates)) {
-    db.run(
-      `INSERT OR REPLACE INTO store_settings (key, value) VALUES (?, ?);`,
-      [key, String(value)]
-    );
+  const normalizedUpdates = { ...updates };
+  if (normalizedUpdates.websiteName && !normalizedUpdates.storeName) {
+    normalizedUpdates.storeName = normalizedUpdates.websiteName;
+  }
+  if (normalizedUpdates.storeName && !normalizedUpdates.websiteName) {
+    normalizedUpdates.websiteName = normalizedUpdates.storeName;
+  }
+  if (normalizedUpdates.tagline && !normalizedUpdates.subtitle) {
+    normalizedUpdates.subtitle = normalizedUpdates.tagline;
+  }
+  if (normalizedUpdates.subtitle && !normalizedUpdates.tagline) {
+    normalizedUpdates.tagline = normalizedUpdates.subtitle;
+  }
+  for (const [key, value] of Object.entries(normalizedUpdates)) {
+    if (value !== void 0) {
+      db.run(
+        `INSERT OR REPLACE INTO store_settings (key, value) VALUES (?, ?);`,
+        [key, String(value)]
+      );
+    }
   }
   saveDb();
   return getStoreSettings();
+}
+async function getAllNotices() {
+  const db = await getDb();
+  const res = db.exec(`
+    SELECT 
+      id, enabled, title, message, image_url as imageUrl, 
+      button_enabled as buttonEnabled, button_text as buttonText, button_url as buttonUrl, 
+      display_frequency as displayFrequency, start_at as startAt, end_at as endAt, 
+      priority, created_at as createdAt, updated_at as updatedAt
+    FROM notices
+    ORDER BY priority DESC, created_at DESC;
+  `);
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    obj.enabled = Boolean(obj.enabled);
+    obj.buttonEnabled = Boolean(obj.buttonEnabled);
+    obj.priority = Number(obj.priority || 0);
+    return obj;
+  });
+}
+async function getNoticeById(id) {
+  const db = await getDb();
+  const res = db.exec(`
+    SELECT 
+      id, enabled, title, message, image_url as imageUrl, 
+      button_enabled as buttonEnabled, button_text as buttonText, button_url as buttonUrl, 
+      display_frequency as displayFrequency, start_at as startAt, end_at as endAt, 
+      priority, created_at as createdAt, updated_at as updatedAt
+    FROM notices
+    WHERE id = ?;
+  `, [id]);
+  if (res.length === 0 || res[0].values.length === 0) return null;
+  const columns = res[0].columns;
+  const row = res[0].values[0];
+  const obj = {};
+  columns.forEach((col, idx) => {
+    obj[col] = row[idx];
+  });
+  obj.enabled = Boolean(obj.enabled);
+  obj.buttonEnabled = Boolean(obj.buttonEnabled);
+  obj.priority = Number(obj.priority || 0);
+  return obj;
+}
+async function getPublishedNotice() {
+  const notices = await getAllNotices();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const active = notices.filter((n) => {
+    if (!n.enabled) return false;
+    if (n.startAt && n.startAt > now) return false;
+    if (n.endAt && n.endAt < now) return false;
+    return true;
+  });
+  if (active.length === 0) return null;
+  active.sort((a, b) => b.priority - a.priority || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return active[0];
+}
+async function createNotice(data) {
+  const db = await getDb();
+  const id = `not_${Math.random().toString(36).substring(2, 9)}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(`
+    INSERT INTO notices (
+      id, enabled, title, message, image_url, button_enabled, button_text, button_url, 
+      display_frequency, start_at, end_at, priority, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  `, [
+    id,
+    data.enabled ? 1 : 0,
+    data.title || "",
+    data.message || "",
+    data.imageUrl || null,
+    data.buttonEnabled ? 1 : 0,
+    data.buttonText || null,
+    data.buttonUrl || null,
+    data.displayFrequency || "EVERY_LOAD",
+    data.startAt || null,
+    data.endAt || null,
+    Number(data.priority || 0),
+    now,
+    now
+  ]);
+  saveDb();
+  return getNoticeById(id);
+}
+async function updateNotice(id, updates) {
+  const db = await getDb();
+  const existing = await getNoticeById(id);
+  if (!existing) {
+    throw new Error(`Notice ${id} not found`);
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const enabled = updates.enabled !== void 0 ? updates.enabled ? 1 : 0 : existing.enabled ? 1 : 0;
+  const title = updates.title !== void 0 ? updates.title : existing.title;
+  const message = updates.message !== void 0 ? updates.message : existing.message;
+  const imageUrl = updates.imageUrl !== void 0 ? updates.imageUrl : existing.imageUrl;
+  const buttonEnabled = updates.buttonEnabled !== void 0 ? updates.buttonEnabled ? 1 : 0 : existing.buttonEnabled ? 1 : 0;
+  const buttonText = updates.buttonText !== void 0 ? updates.buttonText : existing.buttonText;
+  const buttonUrl = updates.buttonUrl !== void 0 ? updates.buttonUrl : existing.buttonUrl;
+  const displayFrequency = updates.displayFrequency !== void 0 ? updates.displayFrequency : existing.displayFrequency;
+  const startAt = updates.startAt !== void 0 ? updates.startAt : existing.startAt;
+  const endAt = updates.endAt !== void 0 ? updates.endAt : existing.endAt;
+  const priority = updates.priority !== void 0 ? Number(updates.priority) : existing.priority;
+  db.run(`
+    UPDATE notices SET
+      enabled = ?, title = ?, message = ?, image_url = ?, button_enabled = ?, 
+      button_text = ?, button_url = ?, display_frequency = ?, start_at = ?, 
+      end_at = ?, priority = ?, updated_at = ?
+    WHERE id = ?;
+  `, [
+    enabled,
+    title,
+    message,
+    imageUrl,
+    buttonEnabled,
+    buttonText,
+    buttonUrl,
+    displayFrequency,
+    startAt,
+    endAt,
+    priority,
+    now,
+    id
+  ]);
+  saveDb();
+  return getNoticeById(id);
+}
+async function deleteNotice(id) {
+  const db = await getDb();
+  db.run(`DELETE FROM notices WHERE id = ?;`, [id]);
+  saveDb();
+  return { success: true };
 }
 
 // server/routes.ts
@@ -1581,7 +2288,8 @@ var softAdminCheck = (req) => {
 };
 router.get("/products", async (req, res) => {
   try {
-    const products = await getAllProducts();
+    const isAdmin = softAdminCheck(req);
+    const products = await getAllProducts(isAdmin);
     res.json({ success: true, products });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to fetch products" });
@@ -1589,7 +2297,8 @@ router.get("/products", async (req, res) => {
 });
 router.get("/products/:id", async (req, res) => {
   try {
-    const product = await getProductById(req.params.id);
+    const isAdmin = softAdminCheck(req);
+    const product = await getProductById(req.params.id, isAdmin);
     if (!product) {
       return res.status(404).json({ success: false, error: "Product not found" });
     }
@@ -1632,6 +2341,65 @@ router.delete("/products/:id", isAdminMiddleware, async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to disable product" });
+  }
+});
+router.get("/categories", async (req, res) => {
+  try {
+    const isAdmin = softAdminCheck(req);
+    const includeDisabled = isAdmin && req.query.all === "true";
+    const categories = await getAllCategories(includeDisabled);
+    res.json({ success: true, categories });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch categories" });
+  }
+});
+router.get("/admin/categories", isAdminMiddleware, async (req, res) => {
+  try {
+    const categories = await getAllCategories(true);
+    res.json({ success: true, categories });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch categories" });
+  }
+});
+router.post("/admin/categories", isAdminMiddleware, async (req, res) => {
+  try {
+    const { name, denomination, enabled, sortOrder } = req.body;
+    if (!name || !denomination) {
+      return res.status(400).json({ success: false, error: "Name and denomination are required" });
+    }
+    const category = await createCategory({
+      name,
+      denomination,
+      enabled: enabled !== void 0 ? Boolean(enabled) : true,
+      sortOrder: Number(sortOrder || 0)
+    });
+    res.status(201).json({ success: true, category, message: "Category created successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to create category" });
+  }
+});
+router.put("/admin/categories/:id", isAdminMiddleware, async (req, res) => {
+  try {
+    const category = await updateCategory(req.params.id, req.body);
+    res.json({ success: true, category, message: "Category updated successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update category" });
+  }
+});
+router.patch("/admin/categories/:id/toggle", isAdminMiddleware, async (req, res) => {
+  try {
+    const category = await toggleCategoryStatus(req.params.id);
+    res.json({ success: true, category, message: `Category ${category?.name} status updated` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to toggle category" });
+  }
+});
+router.delete("/admin/categories/:id", isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await deleteCategory(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to delete category" });
   }
 });
 router.get("/redeem-codes", async (req, res) => {
@@ -1685,14 +2453,11 @@ router.post("/redeem-codes/bulk", isAdminMiddleware, async (req, res) => {
 });
 router.put("/redeem-codes/:id", isAdminMiddleware, async (req, res) => {
   try {
-    const { status } = req.body;
-    if (!status || !["UNUSED", "RESERVED", "SOLD"].includes(status)) {
-      return res.status(400).json({ success: false, error: "Valid status (UNUSED, RESERVED, SOLD) is required" });
-    }
-    const result = await updateRedeemCodeStatus(req.params.id, status);
-    res.json({ success: true, code: result, message: "Redeem code status updated successfully" });
+    const { status, code, pin, productId } = req.body;
+    const result = await updateRedeemCode(req.params.id, { status, code, pin, productId });
+    res.json({ success: true, code: result, message: "Redeem code updated successfully" });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message || "Failed to update code status" });
+    res.status(500).json({ success: false, error: err.message || "Failed to update code" });
   }
 });
 router.delete("/redeem-codes/:id", isAdminMiddleware, async (req, res) => {
@@ -1703,6 +2468,169 @@ router.delete("/redeem-codes/:id", isAdminMiddleware, async (req, res) => {
   } catch (err) {
     const isNotFound = err.message && err.message.includes("not found");
     res.status(isNotFound ? 404 : 400).json({ success: false, error: err.message || "Failed to delete code" });
+  }
+});
+router.get("/me", async (req, res) => {
+  try {
+    const email = (req.query.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, error: "Email is required" });
+    }
+    const user = await getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+    if (!user.customer_id || user.customer_id.startsWith("VC-0")) {
+      const newCid = await generateRandomCustomerId();
+      const db = await getDb();
+      db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, user.id]);
+      saveDb();
+      user.customer_id = newCid;
+    }
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        customerId: user.customer_id,
+        fullName: user.fullName,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        status: user.status || "ACTIVE",
+        createdAt: user.createdAt,
+        balance: user.balance !== void 0 ? user.balance : 1500
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch user profile" });
+  }
+});
+router.get("/admin/users", isAdminMiddleware, async (req, res) => {
+  try {
+    const users = await getAllUsersForAdmin();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch users" });
+  }
+});
+router.get("/admin/users/:identifier", isAdminMiddleware, async (req, res) => {
+  try {
+    const details = await getUserDetailsWithOrders(req.params.identifier);
+    if (!details) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    res.json({ success: true, ...details });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch user details" });
+  }
+});
+router.put("/admin/users/:identifier/status", isAdminMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (status !== "ACTIVE" && status !== "DISABLED") {
+      return res.status(400).json({ success: false, error: "Invalid status. Must be ACTIVE or DISABLED." });
+    }
+    const updated = await updateUserStatus(req.params.identifier, status);
+    res.json({ success: true, ...updated, message: `User status updated to ${status}` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update user status" });
+  }
+});
+router.get("/admin/analytics", isAdminMiddleware, async (req, res) => {
+  try {
+    const analytics = await getAdminAnalyticsSummary();
+    res.json({ success: true, analytics });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch analytics" });
+  }
+});
+router.get("/admin/migrate-ids", isAdminMiddleware, async (req, res) => {
+  try {
+    await migrateToRandomCustomerIds();
+    res.json({ success: true, message: "Migration complete" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+router.get("/my-orders", async (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const emailQuery = (req.query.email || "").trim().toLowerCase();
+    const customerIdQuery = (req.query.customerId || "").trim();
+    if (!emailQuery && !customerIdQuery) {
+      return res.json({
+        success: true,
+        orders: [],
+        count: 0,
+        message: "No active session or customer identification provided."
+      });
+    }
+    const paidOrders = await getCustomerPaidOrders(emailQuery, customerIdQuery);
+    const formattedOrders = paidOrders.map((ord) => {
+      const balanceNum = ord.rewardValue !== void 0 && ord.rewardValue !== null ? Number(ord.rewardValue) : Number(ord.amount || 100) * 15;
+      return {
+        id: ord.id,
+        orderNumber: ord.orderNumber,
+        productName: ord.productName || "Google Play Recharge Code",
+        denomination: ord.denomination || `\u20B9${ord.amount || 100}`,
+        balance: balanceNum,
+        balanceRupees: balanceNum,
+        pricePaid: Number(ord.amount),
+        amount: Number(ord.amount),
+        paymentStatus: "PAID",
+        deliveryStatus: "DELIVERED",
+        status: "COMPLETED",
+        paymentMethod: ord.paymentMethod || "Direct Payment Gateway",
+        gatewayOrderId: ord.gatewayOrderId || null,
+        gatewayPaymentId: ord.gatewayPaymentId || null,
+        deliveredCode: ord.deliveredCode || "",
+        deliveredPin: ord.deliveredPin || "",
+        createdAt: ord.createdAt,
+        purchaseDate: ord.createdAt
+      };
+    });
+    return res.json({
+      success: true,
+      orders: formattedOrders,
+      count: formattedOrders.length
+    });
+  } catch (err) {
+    console.error("Error in /api/my-orders:", err);
+    res.status(500).json({ success: false, error: "Unable to load your redemption history." });
+  }
+});
+router.post("/my-orders/reveal", async (req, res) => {
+  try {
+    const { orderId, email, customerId } = req.body || {};
+    if (!orderId) {
+      return res.status(400).json({ success: false, error: "Order ID is required" });
+    }
+    const cleanOrderId = String(orderId).trim();
+    const cleanEmail = (email || "").trim().toLowerCase();
+    const cleanCustomerId = (customerId || "").trim();
+    const order = await getOrderByIdOrNumber(cleanOrderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: "Order not found" });
+    }
+    const orderEmail = (order.customerEmail || "").trim().toLowerCase();
+    const orderCustomerId = (order.customerId || "").trim();
+    const isAuthorized = cleanEmail && orderEmail && cleanEmail === orderEmail || cleanCustomerId && orderCustomerId && cleanCustomerId === orderCustomerId || softAdminCheck(req);
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, error: "Unauthorized: You do not own this order." });
+    }
+    if (order.paymentStatus !== "PAID") {
+      return res.status(400).json({ success: false, error: "Order payment is not completed." });
+    }
+    return res.json({
+      success: true,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      code: order.deliveredCode || "",
+      pin: order.deliveredPin || ""
+    });
+  } catch (err) {
+    console.error("Error in /api/my-orders/reveal:", err);
+    res.status(500).json({ success: false, error: "Failed to reveal code" });
   }
 });
 router.get("/orders", async (req, res) => {
@@ -1770,19 +2698,21 @@ router.post("/orders", async (req, res) => {
     res.status(400).json({ success: false, error: err.message || "Purchase failed" });
   }
 });
-router.get("/payment/config", (req, res) => {
+router.get("/payment/config", async (req, res) => {
   try {
+    const storeSettings = await getStoreSettings();
+    paymentGateway.updateCredentials(storeSettings);
     const config = paymentGateway.getConfig();
     res.json({ success: true, config });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to fetch payment config" });
   }
 });
-router.post("/payment", async (req, res) => {
+var handleCreateCheckoutOrder = async (req, res) => {
   try {
-    const { productId, codeId, customerName, customerEmail, customerId } = req.body;
+    const { productId, codeId, customerName, customerEmail, customerId } = req.body || {};
     if (!productId) {
-      return res.status(400).json({ success: false, error: "productId is required for payment initialization" });
+      return res.status(400).json({ success: false, error: "productId is required for checkout", message: "productId is required for checkout" });
     }
     const checkoutResult = await createPendingCheckoutOrder({
       productId,
@@ -1791,78 +2721,19 @@ router.post("/payment", async (req, res) => {
       customerEmail: customerEmail || "customer@vortexcode.com",
       customerId
     });
-    res.status(201).json({
-      success: true,
-      orderId: checkoutResult.order.id,
-      paymentUrl: checkoutResult.gatewayOrder?.paymentUrl,
-      order: checkoutResult.order,
-      gatewayOrder: checkoutResult.gatewayOrder,
-      gatewayConfig: checkoutResult.gatewayConfig
-    });
-  } catch (err) {
-    logPaymentDiagnostic("PAYMENT_FAILED", {
-      error: err.message || "Payment initialization failed"
-    });
-    const isOutOfStock = err.message && err.message.includes("OUT OF STOCK");
-    res.status(isOutOfStock ? 409 : 400).json({
-      success: false,
-      error: err.message || "Failed to initiate payment",
-      isOutOfStock: Boolean(isOutOfStock)
-    });
-  }
-});
-router.post("/checkout/create-order", async (req, res) => {
-  try {
-    const { productId, codeId, customerName, customerEmail, customerId } = req.body;
-    if (!productId) {
-      return res.status(400).json({ success: false, error: "productId is required for checkout" });
-    }
-    const checkoutResult = await createPendingCheckoutOrder({
-      productId,
-      codeId,
-      customerName: customerName || "Customer",
-      customerEmail: customerEmail || "customer@vortexcode.com",
-      customerId
-    });
-    res.status(201).json(checkoutResult);
+    return res.status(201).json(checkoutResult);
   } catch (err) {
     const isOutOfStock = err.message && err.message.includes("OUT OF STOCK");
-    res.status(isOutOfStock ? 409 : 400).json({
+    return res.status(isOutOfStock ? 409 : 400).json({
       success: false,
       error: err.message || "Failed to initiate checkout",
+      message: err.message || "Failed to initiate checkout",
       isOutOfStock: Boolean(isOutOfStock)
     });
   }
-});
-router.get("/payment/status/:orderId", async (req, res) => {
-  try {
-    const orderId = req.params.orderId;
-    const email = (req.query.email || "").toLowerCase().trim();
-    const isAdmin = softAdminCheck(req);
-    const order = await getOrderByIdOrNumber(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, error: "Order not found" });
-    }
-    if (!isAdmin && email && order.customerEmail?.toLowerCase().trim() !== email) {
-      return res.status(401).json({ success: false, error: "Unauthorized to view this order status" });
-    }
-    const safeOrder = {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      productId: order.productId,
-      productName: order.productName,
-      amount: order.amount,
-      paymentStatus: order.paymentStatus,
-      deliveryStatus: order.deliveryStatus,
-      deliveredCode: order.paymentStatus === "PAID" ? order.deliveredCode : null,
-      deliveredPin: order.paymentStatus === "PAID" ? order.deliveredPin : null,
-      createdAt: order.createdAt
-    };
-    res.json({ success: true, order: safeOrder });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message || "Failed to check order status" });
-  }
-});
+};
+router.post("/checkout/create-order", handleCreateCheckoutOrder);
+router.post("/payment", handleCreateCheckoutOrder);
 router.post("/checkout/verify-payment", async (req, res) => {
   try {
     const { orderId, gatewayPaymentId, gatewayOrderId, gatewaySignature, isSimulatedVerification } = req.body;
@@ -1878,50 +2749,134 @@ router.post("/checkout/verify-payment", async (req, res) => {
     });
     res.json(verificationResult);
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message || "Payment verification failed" });
+    res.status(500).json({ success: false, error: err.message || "Payment verification exception" });
   }
 });
-router.get("/payment/mock-redirect", (req, res) => {
-  const orderId = req.query.order_id || "";
-  const amount = req.query.amount || "0";
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>FamUpiGateway Payment Simulator</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <style>
-          body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-          .card { background: #1e293b; border: 1px solid #334155; padding: 2rem; border-radius: 12px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
-          .badge { background: #3b82f6; color: white; padding: 4px 12px; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; }
-          .amount { font-size: 2.5rem; font-weight: 800; color: #38bdf8; margin: 1rem 0; }
-          .btn { display: inline-block; width: 100%; padding: 12px; margin-top: 10px; background: #22c55e; color: white; font-weight: bold; border-radius: 8px; text-decoration: none; border: none; cursor: pointer; font-size: 1rem; }
-          .btn-cancel { background: #ef4444; margin-top: 8px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <span class="badge">FamUpiGateway Simulation Mode</span>
-          <p style="margin-top:1rem; color:#94a3b8;">Order ID: ${orderId}</p>
-          <div class="amount">\u20B9${amount}</div>
-          <p style="font-size:0.9rem; color:#cbd5e1; margin-bottom: 1.5rem;">Click below to simulate instant UPI payment completion:</p>
-          <a href="/api/payment/callback?order_id=${orderId}&simulated=true" class="btn">Pay Now (Simulate UPI Success)</a>
-          <a href="/?payment_failed=true&order_id=${orderId}" class="btn btn-cancel">Cancel Payment</a>
-        </div>
-      </body>
-    </html>
-  `);
+router.get("/checkout/order-status/:id", async (req, res) => {
+  try {
+    const order = await getOrderByIdOrNumber(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: "Order not found" });
+    }
+    return res.json({
+      success: true,
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        productId: order.productId,
+        productName: order.productName,
+        amount: order.amount,
+        paymentStatus: order.paymentStatus,
+        deliveryStatus: order.deliveryStatus,
+        deliveredCode: order.paymentStatus === "PAID" ? order.deliveredCode : null,
+        deliveredPin: order.paymentStatus === "PAID" ? order.deliveredPin : null,
+        paymentMethod: order.paymentMethod,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 router.get("/payment/callback", async (req, res) => {
   try {
-    const orderId = req.query.order_id;
-    const isSimulated = req.query.simulated === "true";
+    const orderId = req.query.order_id || req.query.orderId || "";
     if (!orderId) {
-      return res.status(400).send("<h1>Error: order_id is required.</h1>");
+      return res.redirect("/?payment_failed=true&error=Missing+order_id");
     }
     const result = await verifyAndFulfillPaymentOrder({
       orderId,
-      isSimulatedVerification: isSimulated || !paymentGateway.getConfig().isConfigured
+      isSimulatedVerification: false
+    });
+    if (result.status === "PAID" || result.success) {
+      return res.redirect(`/?payment_success=true&order_id=${encodeURIComponent(orderId)}`);
+    } else if (result.status === "PENDING") {
+      return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
+    } else if (result.status === "EXPIRED") {
+      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=Payment+session+expired`);
+    } else {
+      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=${encodeURIComponent(result.message || "Payment+failed")}`);
+    }
+  } catch (err) {
+    console.error("FamGateway redirect callback exception:", err);
+    const orderId = req.query.order_id || "";
+    return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
+  }
+});
+router.get("/payment/mock-redirect", async (req, res) => {
+  const orderId = req.query.order_id || "";
+  const amount = req.query.amount || "0";
+  if (!orderId) {
+    return res.status(400).send("<h1>Error: Missing order_id</h1>");
+  }
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>FamGateway Sandbox Terminal</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4 font-sans">
+      <div class="max-w-md w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 shadow-2xl space-y-6">
+        <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
+            UPI
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-white">FamGateway Payment Simulator</h1>
+            <p class="text-xs text-slate-400">Sandbox Environment Mode</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-sm font-mono">
+          <div class="flex justify-between text-slate-400">
+            <span>Order Reference:</span>
+            <span class="text-white font-bold">${orderId}</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Total Amount:</span>
+            <span class="text-emerald-400 font-extrabold text-base">\u20B9${amount} INR</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Merchant:</span>
+            <span class="text-slate-200">Vortex Digital Store</span>
+          </div>
+        </div>
+
+        <div class="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-xl text-amber-300 text-xs leading-relaxed">
+          <strong>Sandbox Notice:</strong> Payment gateway credentials are currently in sandbox/simulation mode. Click "Complete Payment" below to instantly authorize payment and deliver your code.
+        </div>
+
+        <form action="/api/payment/mock-redirect-complete" method="POST" class="space-y-3">
+          <input type="hidden" name="orderId" value="${orderId}" />
+          <button type="submit" class="w-full py-3.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold rounded-xl transition-all shadow-lg cursor-pointer text-sm">
+            \u2713 Complete Payment (\u20B9${amount})
+          </button>
+        </form>
+
+        <a href="/?payment_failed=true&order_id=${orderId}" class="block text-center text-xs text-slate-400 hover:text-white pt-2">
+          Cancel Transaction
+        </a>
+      </div>
+    </body>
+    </html>
+  `;
+  res.setHeader("Content-Type", "text/html");
+  res.send(html);
+});
+router.post("/payment/mock-redirect-complete", async (req, res) => {
+  try {
+    const orderId = req.body.orderId;
+    if (!orderId) {
+      return res.redirect("/?payment_failed=true&error=Missing+Order+ID");
+    }
+    const result = await verifyAndFulfillPaymentOrder({
+      orderId,
+      gatewayPaymentId: `sim_pay_${Math.random().toString(36).substring(2, 9)}`,
+      isSimulatedVerification: true
     });
     if (result.success) {
       return res.redirect(`/?payment_success=true&order_id=${orderId}`);
@@ -1929,47 +2884,44 @@ router.get("/payment/callback", async (req, res) => {
       return res.redirect(`/?payment_failed=true&order_id=${orderId}`);
     }
   } catch (err) {
-    const orderId = req.query.order_id || "";
-    return res.redirect(`/?payment_failed=true&order_id=${orderId}&error=${encodeURIComponent(err.message || "Verification failed")}`);
+    return res.redirect(`/?payment_failed=true&order_id=${req.body.orderId || ""}&error=${encodeURIComponent(err.message)}`);
   }
 });
 router.post("/payment/webhook", async (req, res) => {
   try {
-    const signature = req.headers["x-razorpay-signature"] || req.headers["x-api-key"] || req.headers["x-webhook-signature"];
-    const rawBody = JSON.stringify(req.body);
-    const targetOrderId = req.body.order_id || req.body.orderId || req.body.data?.order_id || req.body.payload?.payment?.entity?.notes?.orderId;
-    logPaymentDiagnostic("PAYMENT_WEBHOOK_RECEIVED", {
-      orderId: targetOrderId,
-      hasSignature: Boolean(signature)
-    });
+    const signature = req.headers["x-fam-signature"] || req.headers["x-signature"] || req.headers["x-webhook-signature"] || req.headers["x-razorpay-signature"];
+    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
     if (signature) {
       const isValid = paymentGateway.verifyWebhookSignature(rawBody, signature);
       if (!isValid) {
-        logPaymentDiagnostic("PAYMENT_FAILED", {
-          orderId: targetOrderId,
-          error: "Invalid webhook signature"
-        });
+        console.warn("[FamGateway Webhook] Invalid webhook signature detected.");
         return res.status(400).json({ success: false, error: "Invalid webhook signature" });
       }
     }
-    logPaymentDiagnostic("PAYMENT_WEBHOOK_VERIFIED", {
-      orderId: targetOrderId
-    });
-    if (targetOrderId) {
+    const body = req.body || {};
+    const orderId = body.order_id || body.orderId || body.data?.order_id || body.payload?.payment?.entity?.notes?.orderId || req.query.order_id;
+    const rawStatus = body.status || body.data?.status || body.event || "";
+    const statusStr = String(rawStatus).toUpperCase().trim();
+    const utr = body.utr || body.bank_utr || body.transaction_id || body.txn_id || body.famgateway_id || body.data?.utr || body.data?.transaction_id || body.payload?.payment?.entity?.id || "";
+    console.log(`[FamGateway Webhook Received] Order: ${orderId} | Status: ${statusStr} | UTR: ${utr ? "YES" : "NO"}`);
+    const isPaid = statusStr === "SUCCESS" || statusStr === "PAID" || statusStr === "COMPLETED" || statusStr === "TXN_SUCCESS" || statusStr === "PAYMENT.CAPTURED" || typeof utr === "string" && utr.trim().length >= 6 && statusStr !== "FAILED" && statusStr !== "CANCELLED";
+    if (isPaid && orderId) {
       const result = await verifyAndFulfillPaymentOrder({
-        orderId: targetOrderId,
-        gatewayPaymentId: req.body.transaction_id || req.body.txn_id,
-        gatewayOrderId: req.body.gateway_order_id,
+        orderId,
+        gatewayPaymentId: utr || `fam_hook_${Date.now()}`,
         isSimulatedVerification: true
+        // Webhook is authoritative server confirmation
       });
-      return res.json({ status: "ok", fulfilled: true, result });
+      return res.json({ success: true, status: "fulfilled", result });
     }
-    res.json({ status: "ignored", message: "No matching order_id in webhook payload" });
+    if (orderId && (statusStr === "FAILED" || statusStr === "CANCELLED")) {
+      await updateOrderStatus(orderId, "FAILED", "CANCELLED");
+      return res.json({ success: true, status: "marked_failed" });
+    }
+    return res.json({ success: true, status: "received", message: "Webhook event recorded" });
   } catch (err) {
-    logPaymentDiagnostic("PAYMENT_FAILED", {
-      error: err.message || "Webhook processing exception"
-    });
-    res.status(500).json({ status: "error", error: err.message });
+    console.error("Webhook processing exception:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 router.post("/admin/login", (req, res) => {
@@ -2077,11 +3029,13 @@ router.post("/auth/google-login", async (req, res) => {
         userRecord = { ...existingUser, googleSub };
       } else {
         const username = email.split("@")[0];
+        const customerId = await generateRandomCustomerId();
         userRecord = await createUser({
           fullName,
           email,
           username,
           googleSub,
+          customerId,
           role: "CUSTOMER"
         });
       }
@@ -2090,6 +3044,7 @@ router.post("/auth/google-login", async (req, res) => {
       success: true,
       user: {
         id: userRecord.id,
+        customerId: userRecord.customerId,
         fullName: userRecord.fullName,
         email: userRecord.email,
         username: userRecord.username,
@@ -2119,18 +3074,21 @@ router.post("/auth/register", async (req, res) => {
       return res.status(409).json({ success: false, error: "An account with this email address already exists." });
     }
     const username = email.split("@")[0];
+    const customerId = await generateRandomCustomerId();
     const userRecord = await createUser({
       fullName,
       email,
       username,
       password,
       // Persisted securely in DB
+      customerId,
       role: "CUSTOMER"
     });
     res.status(201).json({
       success: true,
       user: {
         id: userRecord.id,
+        customerId: userRecord.customerId,
         fullName: userRecord.fullName,
         email: userRecord.email,
         username: userRecord.username,
@@ -2155,10 +3113,18 @@ router.post("/auth/login", async (req, res) => {
     if (!userRecord || userRecord.password !== password) {
       return res.status(401).json({ success: false, error: "Invalid email/username or password." });
     }
+    if (!userRecord.customer_id || userRecord.customer_id.startsWith("VC-0")) {
+      const newCid = await generateRandomCustomerId();
+      const db = await getDb();
+      db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, userRecord.id]);
+      saveDb();
+      userRecord.customer_id = newCid;
+    }
     res.json({
       success: true,
       user: {
         id: userRecord.id,
+        customerId: userRecord.customer_id,
         fullName: userRecord.fullName,
         email: userRecord.email,
         username: userRecord.username,
@@ -2173,10 +3139,63 @@ router.post("/auth/login", async (req, res) => {
     res.status(500).json({ success: false, error: err.message || "Login failed" });
   }
 });
+router.get("/notices/active", async (req, res) => {
+  try {
+    const notice = await getPublishedNotice();
+    res.json({ success: true, notice });
+  } catch (err) {
+    res.json({ success: true, notice: null, error: err.message });
+  }
+});
+router.get("/admin/notices", isAdminMiddleware, async (req, res) => {
+  try {
+    const notices = await getAllNotices();
+    res.json({ success: true, notices });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch notices" });
+  }
+});
+router.post("/admin/notices", isAdminMiddleware, async (req, res) => {
+  try {
+    const notice = await createNotice(req.body);
+    res.status(201).json({ success: true, notice, message: "Notice created successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to create notice" });
+  }
+});
+router.put("/admin/notices/:id", isAdminMiddleware, async (req, res) => {
+  try {
+    const notice = await updateNotice(req.params.id, req.body);
+    res.json({ success: true, notice, message: "Notice updated successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update notice" });
+  }
+});
+router.delete("/admin/notices/:id", isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await deleteNotice(req.params.id);
+    res.json({ success: true, message: "Notice deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to delete notice" });
+  }
+});
+function sanitizeStoreSettings(rawSettings) {
+  if (!rawSettings) return null;
+  const {
+    famupigatewayApiKey,
+    famupigatewayWebhookSecret,
+    ...safeSettings
+  } = rawSettings;
+  return {
+    ...safeSettings,
+    famupigatewayApiKeyConfigured: !!(famupigatewayApiKey && famupigatewayApiKey.trim()),
+    famupigatewayWebhookSecretConfigured: !!(famupigatewayWebhookSecret && famupigatewayWebhookSecret.trim())
+  };
+}
 router.get("/settings", async (req, res) => {
   try {
     const settings = await getStoreSettings();
-    res.json({ success: true, settings });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to fetch settings" });
   }
@@ -2184,18 +3203,228 @@ router.get("/settings", async (req, res) => {
 router.put("/settings", isAdminMiddleware, async (req, res) => {
   try {
     const settings = await updateStoreSettings(req.body);
-    res.json({ success: true, settings, message: "Settings updated successfully in database" });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings), message: "Settings updated successfully in database" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to update settings" });
   }
 });
+router.post("/admin/branding", isAdminMiddleware, async (req, res) => {
+  try {
+    const { logoUrl, websiteName, tagline } = req.body;
+    const settings = await updateStoreSettings({
+      logoUrl: logoUrl !== void 0 ? logoUrl.trim() : "",
+      websiteName: websiteName !== void 0 ? websiteName.trim() : "VORTEX CODE",
+      tagline: tagline !== void 0 ? tagline.trim() : "SECURE DIGITAL STORE",
+      storeName: websiteName !== void 0 ? websiteName.trim() : "VORTEX CODE",
+      subtitle: tagline !== void 0 ? tagline.trim() : "SECURE DIGITAL STORE"
+    });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings), message: "Branding updated successfully in database" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update branding" });
+  }
+});
+router.put("/admin/branding", isAdminMiddleware, async (req, res) => {
+  try {
+    const { logoUrl, websiteName, tagline } = req.body;
+    const settings = await updateStoreSettings({
+      logoUrl: logoUrl !== void 0 ? logoUrl.trim() : "",
+      websiteName: websiteName !== void 0 ? websiteName.trim() : "VORTEX CODE",
+      tagline: tagline !== void 0 ? tagline.trim() : "SECURE DIGITAL STORE",
+      storeName: websiteName !== void 0 ? websiteName.trim() : "VORTEX CODE",
+      subtitle: tagline !== void 0 ? tagline.trim() : "SECURE DIGITAL STORE"
+    });
+    res.json({ success: true, settings: sanitizeStoreSettings(settings), message: "Branding updated successfully in database" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update branding" });
+  }
+});
+function clampNumber(val, min, max, defaultVal) {
+  const n = Number(val);
+  if (isNaN(n)) return defaultVal;
+  return Math.min(Math.max(Math.round(n), min), max);
+}
+function normalizeContactConfig(body) {
+  const contactEnabled = body.contactEnabled !== void 0 ? Boolean(body.contactEnabled) : body.telegramEnabled !== void 0 ? Boolean(body.telegramEnabled) : true;
+  let platform = (body.contactPlatform || "telegram").toLowerCase().trim();
+  if (!["telegram", "whatsapp", "custom"].includes(platform)) {
+    platform = "telegram";
+  }
+  let rawUrl = (body.contactUrl || body.telegramUrl || "").trim();
+  let contactIconUrl = (body.contactIconUrl || "").trim();
+  let contactLabel = (body.contactLabel || "Contact Admin").trim();
+  const contactWidgetSize = clampNumber(body.contactWidgetSize, 40, 100, 60);
+  const contactWidgetRight = clampNumber(body.contactWidgetRight, 0, 100, 30);
+  const contactWidgetBottom = clampNumber(body.contactWidgetBottom, 0, 300, 30);
+  const contactWidgetMobileSize = clampNumber(body.contactWidgetMobileSize, 40, 100, 55);
+  const contactWidgetMobileRight = clampNumber(body.contactWidgetMobileRight, 0, 100, 35);
+  const contactWidgetMobileBottom = clampNumber(body.contactWidgetMobileBottom, 60, 300, 110);
+  const rawIconSize = clampNumber(body.contactIconSize, 20, 100, 42);
+  const contactIconSize = Math.min(rawIconSize, Math.max(20, contactWidgetSize - 4));
+  const rawMobileIconSize = clampNumber(body.contactMobileIconSize, 20, 100, 42);
+  const contactMobileIconSize = Math.min(rawMobileIconSize, Math.max(20, contactWidgetMobileSize - 4));
+  const baseErrorResult = {
+    valid: false,
+    contactEnabled,
+    contactPlatform: platform,
+    contactUrl: "",
+    contactIconUrl: "",
+    contactLabel,
+    contactWidgetSize,
+    contactWidgetRight,
+    contactWidgetBottom,
+    contactWidgetMobileSize,
+    contactWidgetMobileRight,
+    contactWidgetMobileBottom,
+    contactIconSize,
+    contactMobileIconSize
+  };
+  if (contactIconUrl) {
+    if (/^(javascript:|data:|vbscript:)/i.test(contactIconUrl)) {
+      return {
+        ...baseErrorResult,
+        error: "Invalid icon image URL scheme"
+      };
+    }
+  }
+  if (!rawUrl) {
+    if (platform === "telegram") rawUrl = "https://t.me/VortexCodeSupport";
+    else if (platform === "whatsapp") rawUrl = "https://wa.me/919999999999";
+    else rawUrl = "https://vortexcode.shop";
+  }
+  if (/^(javascript:|data:|vbscript:)/i.test(rawUrl)) {
+    return {
+      ...baseErrorResult,
+      error: "Invalid contact URL scheme"
+    };
+  }
+  let normalizedUrl = rawUrl;
+  if (platform === "telegram") {
+    if (rawUrl.startsWith("@")) {
+      normalizedUrl = `https://t.me/${rawUrl.substring(1).trim()}`;
+    } else if (rawUrl.startsWith("http://t.me/") || rawUrl.startsWith("https://t.me/")) {
+      normalizedUrl = rawUrl.replace(/^http:\/\//i, "https://");
+    } else if (rawUrl.startsWith("t.me/")) {
+      normalizedUrl = `https://${rawUrl}`;
+    } else if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+      const usernameMatch = rawUrl.match(/^[a-zA-Z0-9_]{3,64}$/);
+      if (usernameMatch) {
+        normalizedUrl = `https://t.me/${rawUrl}`;
+      } else {
+        return {
+          ...baseErrorResult,
+          error: "Invalid Telegram username or URL format"
+        };
+      }
+    }
+    try {
+      const parsed = new URL(normalizedUrl);
+      if (!["t.me", "telegram.me"].includes(parsed.hostname.toLowerCase())) {
+        return {
+          ...baseErrorResult,
+          error: "Telegram URL must point to t.me or telegram.me"
+        };
+      }
+    } catch {
+      return {
+        ...baseErrorResult,
+        error: "Malformed Telegram URL"
+      };
+    }
+  } else if (platform === "whatsapp") {
+    const digitsOnly = rawUrl.replace(/[\s\-\+\(\)]/g, "");
+    if (/^\d{7,15}$/.test(digitsOnly)) {
+      normalizedUrl = `https://wa.me/${digitsOnly}`;
+    } else if (rawUrl.startsWith("wa.me/")) {
+      normalizedUrl = `https://${rawUrl}`;
+    } else if (rawUrl.startsWith("http://wa.me/") || rawUrl.startsWith("https://wa.me/")) {
+      normalizedUrl = rawUrl.replace(/^http:\/\//i, "https://");
+    } else if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      try {
+        const parsed = new URL(rawUrl);
+        if (!parsed.hostname.includes("whatsapp.com") && !parsed.hostname.includes("wa.me")) {
+          normalizedUrl = `https://wa.me/${digitsOnly || rawUrl}`;
+        } else {
+          normalizedUrl = rawUrl;
+        }
+      } catch {
+        normalizedUrl = `https://wa.me/${digitsOnly}`;
+      }
+    } else {
+      normalizedUrl = `https://wa.me/${digitsOnly}`;
+    }
+  } else {
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      return {
+        ...baseErrorResult,
+        error: "Invalid URL for Custom Contact"
+      };
+    }
+  }
+  return {
+    valid: true,
+    contactEnabled,
+    contactPlatform: platform,
+    contactUrl: normalizedUrl,
+    contactIconUrl,
+    contactLabel: contactLabel || "Contact Admin",
+    contactWidgetSize,
+    contactWidgetRight,
+    contactWidgetBottom,
+    contactWidgetMobileSize,
+    contactWidgetMobileRight,
+    contactWidgetMobileBottom,
+    contactIconSize,
+    contactMobileIconSize
+  };
+}
+async function handleSaveContact(req, res) {
+  try {
+    const validation = normalizeContactConfig(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, error: validation.error || "Invalid contact configuration" });
+    }
+    const settings = await updateStoreSettings({
+      contactEnabled: validation.contactEnabled ? "true" : "false",
+      contactPlatform: validation.contactPlatform,
+      contactUrl: validation.contactUrl,
+      contactIconUrl: validation.contactIconUrl,
+      contactLabel: validation.contactLabel,
+      contactWidgetSize: String(validation.contactWidgetSize),
+      contactWidgetRight: String(validation.contactWidgetRight),
+      contactWidgetBottom: String(validation.contactWidgetBottom),
+      contactWidgetMobileSize: String(validation.contactWidgetMobileSize),
+      contactWidgetMobileRight: String(validation.contactWidgetMobileRight),
+      contactWidgetMobileBottom: String(validation.contactWidgetMobileBottom),
+      contactIconSize: String(validation.contactIconSize),
+      contactMobileIconSize: String(validation.contactMobileIconSize),
+      // Backward compatibility sync
+      telegramEnabled: validation.contactEnabled ? "true" : "false",
+      telegramUrl: validation.contactUrl
+    });
+    res.json({
+      success: true,
+      settings: sanitizeStoreSettings(settings),
+      message: "Contact settings updated successfully in database"
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update contact settings" });
+  }
+}
+router.post("/admin/contact", isAdminMiddleware, handleSaveContact);
+router.put("/admin/contact", isAdminMiddleware, handleSaveContact);
 var routes_default = router;
 
 // server.ts
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path3.dirname(__filename);
-var PORT = Number(process.env.PORT) || 3e3;
-var isProduction = process.env.NODE_ENV === "production";
+var __dirname = path2.dirname(__filename);
+var rawPort = process.env.PORT;
+var isSocket = Boolean(rawPort && isNaN(Number(rawPort)));
+var PORT = isSocket ? rawPort : Number(rawPort) || 3e3;
 async function bootstrap() {
   const app = express();
   app.use(express.json());
@@ -2206,24 +3435,49 @@ async function bootstrap() {
     res.status(200).json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
   app.use("/api", routes_default);
+  const distPath = path2.resolve(__dirname, "dist");
+  const hasDist = fs2.existsSync(path2.resolve(distPath, "index.html"));
+  const isBundledServer = __filename.endsWith("server.js");
+  const isExplicitDev = !isBundledServer && (process.env.NODE_ENV === "development" || Boolean(process.env.npm_lifecycle_event?.includes("dev")));
+  const isProduction = isBundledServer || process.env.NODE_ENV === "production" || hasDist && !isExplicitDev;
   if (!isProduction) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa"
-    });
-    app.use(vite.middlewares);
-    console.log("Vite middleware mounted in dev mode.");
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa"
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware mounted in dev mode.");
+    } catch (viteErr) {
+      console.warn("Vite dev middleware could not be initialized, falling back to static build:", viteErr);
+      if (hasDist) {
+        app.use(express.static(distPath));
+        app.get("*", (req, res) => {
+          res.sendFile(path2.resolve(distPath, "index.html"));
+        });
+      }
+    }
   } else {
-    const distPath = path3.resolve(__dirname, "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path3.resolve(distPath, "index.html"));
-    });
-    console.log("Serving production static build from dist.");
+    if (hasDist) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path2.resolve(distPath, "index.html"));
+      });
+      console.log("Serving production static build from dist.");
+    } else {
+      console.warn("Warning: dist directory not found. Please run npm run build.");
+    }
   }
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Vortex Full-Stack Server running on http://0.0.0.0:${PORT}`);
-  });
+  if (isSocket) {
+    app.listen(PORT, () => {
+      console.log(`Vortex Full-Stack Server listening on socket: ${PORT}`);
+    });
+  } else {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Vortex Full-Stack Server running on http://0.0.0.0:${PORT}`);
+    });
+  }
   try {
     await getDb();
     console.log("Database initialized successfully.");

@@ -108,7 +108,7 @@ export const AdminSettingsTab: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Store Configuration & Payment Gateway Settings</h1>
-          <p className="text-xs text-slate-400">Configure global store branding, FamGateway production API credentials, and webhook integration endpoints.</p>
+          <p className="text-xs text-slate-400">Configure global store branding, Trust Gateway production API credentials, and webhook integration endpoints.</p>
         </div>
       </div>
 
@@ -188,7 +188,7 @@ export const AdminSettingsTab: React.FC = () => {
                 </button>
               </div>
               <p className="text-[10px] text-slate-500">
-                Paste this Webhook URL into your FamGateway dashboard under Notification / Webhook Settings.
+                Paste this Webhook URL into your Trust Gateway dashboard under Notification / Webhook Settings.
               </p>
             </div>
 
@@ -227,8 +227,8 @@ export const AdminSettingsTab: React.FC = () => {
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>FamGateway Server Credentials</span>
-                {storeSettings.famupigatewayApiKeyConfigured ? (
+                <span>Trust Gateway Server Credentials</span>
+                {(storeSettings.trustgatewayApiKeyConfigured || storeSettings.famupigatewayApiKeyConfigured) ? (
                   <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase tracking-wider font-mono">
                     CONNECTED / CONFIGURED
                   </span>
@@ -239,9 +239,9 @@ export const AdminSettingsTab: React.FC = () => {
                 )}
               </h3>
               <p className="text-[11px] text-slate-400">
-                {storeSettings.famupigatewayApiKeyConfigured
-                  ? "🔒 Server-Side Credentials Secured. Sensitive gateway access keys and signing secrets are stored privately in server environment variables and excluded from frontend exposure."
-                  : "⚠️ Server API Key not found. Please set FAMUPIGATEWAY_API_KEY inside your server environment variable configuration to process live payments."}
+                {(storeSettings.trustgatewayApiKeyConfigured || storeSettings.famupigatewayApiKeyConfigured)
+                  ? "🔒 Server-Side Credentials Secured. Sensitive gateway access key (TRUST_GATEWAY_API_KEY) is stored privately in server environment variables and excluded from frontend exposure."
+                  : "⚠️ Server API Key not found. Please set TRUST_GATEWAY_API_KEY inside your server environment variable configuration to process live payments."}
               </p>
             </div>
           </div>

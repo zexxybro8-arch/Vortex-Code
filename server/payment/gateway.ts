@@ -8,60 +8,59 @@ import type {
 } from './types';
 
 /**
- * Modular Payment Gateway Service
+ * Trust Gateway UPI Payment Gateway Service
  * 
- * Designed to interface cleanly with Razorpay / Cashfree / Stripe or any standard Indian Payment Gateway.
- * Strictly adheres to security rules:
- * - Never trusts frontend amount or status
- * - Verifies signatures server-side
- * - Enforces idempotency
- * - Keeps credentials secure in environment variables
+ * Official documentation: https://trustgateway.in/docs
+ * Base URL: https://trustgateway.in
+ * 
+ * Security rules:
+ * - TRUST_GATEWAY_API_KEY kept strictly server-side
+ * - Uses only the documented header: X-API-Key
+ * - Safe diagnostic logging without secrets
+ * - Never trusts unverified client responses
+ * - Enforces server-side status checks & idempotency
  */
 export class PaymentGatewayManager {
   private baseUrl: string;
   private apiKey: string;
   private webhookSecret: string;
-  private expiryMinutes: number;
   private isConfigured: boolean;
-  private appUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api';
-    this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc';
-    this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f';
-    this.expiryMinutes = Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5;
-    this.appUrl = process.env.APP_URL || 'https://vortexcode.shop';
-    this.isConfigured = Boolean(this.apiKey);
+    this.baseUrl = (process.env.TRUST_GATEWAY_BASE_URL || 'https://trustgateway.in').replace(/\/+$/, '');
+    this.apiKey = (process.env.TRUST_GATEWAY_API_KEY || '').trim();
+    this.webhookSecret = (process.env.TRUST_GATEWAY_WEBHOOK_SECRET || '').trim();
+    this.isConfigured = Boolean(this.apiKey && this.apiKey.length > 0);
   }
 
   /**
-   * Dynamically reload credentials from database store settings
+   * Reload credentials from database store settings while preserving server env vars
    */
   public updateCredentials(settings: Record<string, any>) {
-    if (settings.famupigatewayBaseUrl) {
-      this.baseUrl = String(settings.famupigatewayBaseUrl).trim();
-    }
-    
-    // Ensure we keep environment variables if settings value is empty or not provided
-    if (settings.famupigatewayApiKey && String(settings.famupigatewayApiKey).trim()) {
-      this.apiKey = String(settings.famupigatewayApiKey).trim();
-    } else {
-      this.apiKey = process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc';
-    }
-    this.isConfigured = Boolean(this.apiKey);
-
-    if (settings.famupigatewayWebhookSecret && String(settings.famupigatewayWebhookSecret).trim()) {
-      this.webhookSecret = String(settings.famupigatewayWebhookSecret).trim();
-    } else {
-      this.webhookSecret = process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f';
+    if (settings.trustgatewayBaseUrl) {
+      this.baseUrl = String(settings.trustgatewayBaseUrl).trim().replace(/\/+$/, '');
+    } else if (process.env.TRUST_GATEWAY_BASE_URL) {
+      this.baseUrl = process.env.TRUST_GATEWAY_BASE_URL.trim().replace(/\/+$/, '');
     }
 
-    if (settings.famupigatewayExpiryMinutes) {
-      this.expiryMinutes = Number(settings.famupigatewayExpiryMinutes) || 5;
+    // Server-side environment variable TRUST_GATEWAY_API_KEY is authoritative and private
+    const envKey = process.env.TRUST_GATEWAY_API_KEY?.trim();
+    const candidateKey =
+      envKey ||
+      (settings.trustgatewayApiKey && String(settings.trustgatewayApiKey).trim()) ||
+      '';
+
+    if (candidateKey) {
+      this.apiKey = candidateKey.trim();
     }
-    if (settings.appUrl) {
-      this.appUrl = String(settings.appUrl).trim();
-    }
+    this.isConfigured = Boolean(this.apiKey && this.apiKey.length > 0);
+
+    const envSecret = process.env.TRUST_GATEWAY_WEBHOOK_SECRET?.trim();
+    const candidateSecret =
+      envSecret ||
+      (settings.trustgatewayWebhookSecret && String(settings.trustgatewayWebhookSecret).trim()) ||
+      '';
+    this.webhookSecret = candidateSecret;
   }
 
   /**
@@ -69,7 +68,7 @@ export class PaymentGatewayManager {
    */
   public getConfig(): PaymentGatewayConfig {
     return {
-      provider: 'famupigateway',
+      provider: 'trustgateway',
       isConfigured: this.isConfigured,
       currency: 'INR',
       publicKey: undefined,
@@ -79,45 +78,48 @@ export class PaymentGatewayManager {
   }
 
   /**
-   * Initializes a payment order with the gateway provider
-   * (Amount is strictly calculated and enforced from server database)
+   * Initializes a payment order with Trust Gateway
+   * POST /api/v1/orders/create with header X-API-Key
    */
   public async createGatewayOrder(params: CreatePaymentOrderParams): Promise<PaymentGatewayOrderResponse> {
+    if (process.env.TEST_MODE === 'true') {
+      return {
+        gatewayOrderId: `FAM_TEST_${params.orderId}`,
+        amount: params.amount,
+        requestedAmount: params.amount,
+        currency: params.currency || 'INR',
+        provider: 'trustgateway',
+        status: 'ready',
+        paymentUrl: `https://trustgateway.in/checkout/FAM_TEST_${params.orderId}`,
+      };
+    }
+
     if (!this.isConfigured || !this.apiKey) {
       return {
-        gatewayOrderId: `fam_${params.orderId}`,
+        gatewayOrderId: `sim_${params.orderId}`,
         amount: params.amount,
+        requestedAmount: params.amount,
         currency: params.currency || 'INR',
-        provider: 'famgateway',
+        provider: 'trustgateway',
         status: 'unconfigured',
         paymentUrl: `/api/payment/mock-redirect?order_id=${params.orderId}&amount=${params.amount}`,
       };
     }
 
-    const cleanAppUrl = (this.appUrl || 'https://vortexcode.shop').replace(/\/+$/, '');
-    const callbackUrl = params.callbackUrl || `${cleanAppUrl}/api/payment/callback?order_id=${params.orderId}`;
-    const webhookUrl = `${cleanAppUrl}/api/payment/webhook`;
-
     try {
+      const formattedAmount = Number(params.amount).toFixed(2);
       const payload = {
-        amount: Number(params.amount.toFixed(2)),
-        order_id: params.orderId,
-        customer_name: params.customerName || 'Customer',
-        customer_mobile: '9876543210',
-        callback_url: callbackUrl,
-        redirect_url: callbackUrl,
-        webhook_url: webhookUrl,
-        description: `Digital Code - ${params.productName}`,
-        expiry_minutes: this.expiryMinutes,
+        amount: formattedAmount,
+        note: `Order ${params.orderNumber || params.orderId}`,
       };
 
-      const response = await fetch(`${this.baseUrl}/create-order`, {
+      const endpoint = `${this.baseUrl}/api/v1/orders/create`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-API-Key': this.apiKey,
-          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(payload),
       });
@@ -125,55 +127,64 @@ export class PaymentGatewayManager {
       const responseContentType = response.headers.get('content-type') || '';
       const rawText = await response.text();
 
-      // Safe server logging (Excludes API Key & Secrets)
-      console.log(`[FamGateway Request] Endpoint: ${this.baseUrl}/create-order | OrderID: ${params.orderId} | Status: ${response.status} | ContentType: ${responseContentType}`);
+      // Safe diagnostic logging (Excludes API Key & Secrets)
+      console.log(`[TrustGateway Request] POST ${endpoint} | Order: ${params.orderId} | HTTP Status: ${response.status} | Content-Type: ${responseContentType}`);
 
       let resData: any = null;
       try {
         resData = rawText.trim() ? JSON.parse(rawText) : null;
-      } catch (e) {
-        console.warn(`[FamGateway Parse Notice] Non-JSON response for Order ${params.orderId}:`, rawText.substring(0, 150));
+      } catch {
+        console.warn(`[TrustGateway Parse Warning] Non-JSON response for Order ${params.orderId}:`, rawText.substring(0, 150));
       }
 
       if (!response.ok) {
-        const errorMsg = resData?.message || resData?.error || `Gateway returned HTTP ${response.status} ${response.statusText}`;
-        throw new Error(`FamGateway order creation failed: ${errorMsg}`);
+        const errorMsg =
+          resData?.message ||
+          resData?.error ||
+          `Gateway returned HTTP ${response.status} ${response.statusText}`;
+        console.error(`[TrustGateway Exception] Order ${params.orderId} failed: HTTP ${response.status} - ${errorMsg}`);
+        const err: any = new Error(`Trust Gateway order creation failed: ${errorMsg}`);
+        err.statusCode = response.status;
+        throw err;
       }
 
-      if (!resData || (!resData.status && !resData.success)) {
-        const errorMsg = resData?.message || resData?.error || 'Order creation declined by gateway';
-        throw new Error(`FamGateway Error: ${errorMsg}`);
+      if (!resData || (resData.success === false && !resData.data)) {
+        const errorMsg = resData?.message || resData?.error || 'Order creation was declined by gateway';
+        throw new Error(`Trust Gateway Error: ${errorMsg}`);
       }
 
       const data = resData.data || resData;
-      const paymentUrl = data.payment_url || resData.payment_url;
-      const gatewayOrderId = data.order_id || data.id || data.token || params.orderId;
+      const gatewayOrderId = data.order_id || data.id || params.orderId;
+      // Trust Gateway may adjust payable amount slightly (up to ₹0.20) for concurrent payments
+      const payableAmount = Number(data.amount !== undefined ? data.amount : params.amount);
+      const checkoutPath = data.checkout_url || `/checkout/${gatewayOrderId}`;
+      const paymentUrl = checkoutPath.startsWith('http')
+        ? checkoutPath
+        : `${this.baseUrl}${checkoutPath.startsWith('/') ? '' : '/'}${checkoutPath}`;
 
-      if (!paymentUrl) {
-        throw new Error('FamGateway Error: Gateway succeeded but no payment_url was returned');
-      }
+      console.log(`[TrustGateway Order Created] Local Order: ${params.orderId} | Gateway Order: ${gatewayOrderId} | Payable: ₹${payableAmount}`);
 
-      // Safe Server Log as requested in STEP 1
-      console.log(`[PAYMENT CREATED]\nlocalTransactionId: ${params.orderId}\nmerchantOrderId: ${params.orderNumber || params.orderId}\ngatewayOrderId: ${gatewayOrderId}\namount: ${params.amount}`);
+      const requestedAmount = Number(data.requested_amount !== undefined ? data.requested_amount : params.amount);
 
       return {
         gatewayOrderId,
-        amount: Number(data.amount || params.amount),
+        amount: payableAmount,
+        requestedAmount,
         currency: 'INR',
-        provider: 'famgateway',
+        provider: 'trustgateway',
         status: 'ready',
         paymentUrl,
-        token: data.token,
         expiresAt: data.expires_at,
       };
     } catch (error: any) {
-      console.error(`[FamGateway Exception] Order ${params.orderId} failed:`, error.message);
+      console.error(`[TrustGateway Exception] Order ${params.orderId} failed:`, error.message);
       throw error;
     }
   }
 
   /**
-   * Check status of FamGateway order with comprehensive identifier support
+   * Check status of Trust Gateway order
+   * GET /api/v1/orders/status/:order_id with header X-API-Key
    */
   public async checkPaymentStatus(orderId: string, expectedAmount?: number): Promise<PaymentVerificationResult> {
     if (!this.isConfigured || !this.apiKey) {
@@ -187,55 +198,40 @@ export class PaymentGatewayManager {
     }
 
     try {
-      // STEP 1 & 2: Safe request logging and exact identifier query
-      const checkEndpoint = `${this.baseUrl}/check-status`;
-      console.log(`[PAYMENT VERIFY REQUEST]\nidentifier being sent: ${orderId}\nverification endpoint: ${checkEndpoint}\namount: ${expectedAmount ?? 'N/A'}`);
+      const endpoint = `${this.baseUrl}/api/v1/orders/status/${encodeURIComponent(orderId)}`;
+      console.log(`[TrustGateway Status Request] GET ${endpoint} | Expected Amount: ${expectedAmount ?? 'N/A'}`);
 
-      let response = await fetch(checkEndpoint, {
-        method: 'POST',
+      const response = await fetch(endpoint, {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-API-Key': this.apiKey,
-          'Authorization': `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({ order_id: orderId }),
       });
 
-      // Fallback: If POST returns 404, check alternative PHP query endpoints supported by FamGateway
-      if (response.status === 404) {
-        const altEndpoint = `${this.baseUrl}/checkout-status.php?order_id=${encodeURIComponent(orderId)}&api_key=${encodeURIComponent(this.apiKey)}`;
-        const altRes = await fetch(altEndpoint, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'X-API-Key': this.apiKey,
-          },
-        });
-        if (altRes.ok) {
-          response = altRes;
-        }
-      }
-
-      const responseContentType = response.headers.get('content-type') || '';
       const rawText = await response.text();
       let resData: any = null;
       try {
         resData = rawText.trim() ? JSON.parse(rawText) : null;
-      } catch (e) {
-        console.warn(`[FamGateway check-status Parse Notice] Non-JSON for Order ${orderId}:`, rawText.substring(0, 150));
+      } catch {
+        console.warn(`[TrustGateway Status Warning] Non-JSON for Order ${orderId}:`, rawText.substring(0, 150));
       }
 
-      // STEP 2: Safely log the real sanitized gateway response
-      console.log(`[PAYMENT VERIFY RESPONSE]\nHTTP Status: ${response.status}\nContent-Type: ${responseContentType}\nResponse Body: ${JSON.stringify(resData || rawText.substring(0, 300))}`);
+      // Safe diagnostic logging without secrets
+      console.log(`[TrustGateway Status Response] HTTP Status: ${response.status} | Data: ${JSON.stringify(resData || rawText.substring(0, 200))}`);
 
       if (!response.ok) {
+        const errorMsg = resData?.message || resData?.error || `Status query returned HTTP ${response.status}`;
+        // If order not found (404) or bad request (400), it's not a pending payment
+        const statusType = (response.status === 404 || response.status === 400 || response.status === 401 || response.status === 403)
+          ? 'FAILED'
+          : 'PENDING';
         return {
           isValid: false,
-          status: 'PENDING',
+          status: statusType,
           orderId,
           amount: expectedAmount || 0,
-          error: resData?.message || resData?.error || `Status query returned HTTP ${response.status}`,
+          error: errorMsg,
           rawGatewayResponse: resData,
         };
       }
@@ -251,37 +247,63 @@ export class PaymentGatewayManager {
       }
 
       const data = resData.data || resData;
-      const rawStatus = data.status !== undefined ? data.status : resData.status;
-      const statusStr = String(rawStatus || '').toUpperCase().trim();
-      const utr = data.utr || data.bank_utr || data.transaction_id || data.txn_id || data.famgateway_id || '';
-      const settledAmount = Number(data.settled_amount || data.amount || resData.amount || expectedAmount || 0);
+      const rawStatus = String(data.status || resData.status || '').toLowerCase().trim();
+      const isPaid = Boolean(
+        resData.paid === true ||
+        data.paid === true ||
+        rawStatus === 'completed' ||
+        rawStatus === 'paid' ||
+        rawStatus === 'success' ||
+        rawStatus === 'captured'
+      );
 
-      const isPaid =
-        statusStr === 'SUCCESS' ||
-        statusStr === 'PAID' ||
-        statusStr === 'COMPLETED' ||
-        statusStr === 'TXN_SUCCESS' ||
-        statusStr === 'CAPTURED' ||
-        (rawStatus === true && !statusStr.includes('FAIL')) ||
-        (typeof utr === 'string' && utr.trim().length >= 6 && statusStr !== 'FAILED' && statusStr !== 'CANCELLED');
+      const isFailed = Boolean(
+        rawStatus === 'failed' ||
+        rawStatus === 'declined' ||
+        rawStatus === 'rejected' ||
+        rawStatus === 'failure'
+      );
 
-      const isFailed =
-        statusStr === 'FAILED' ||
-        statusStr === 'CANCELLED' ||
-        statusStr === 'DECLINED' ||
-        statusStr === 'REJECTED' ||
-        statusStr === 'FAILURE';
+      const isExpired = Boolean(
+        rawStatus === 'expired' ||
+        rawStatus === 'timeout'
+      );
 
-      const isExpired = statusStr === 'EXPIRED' || statusStr === 'TIMEOUT';
+      const isPending = Boolean(
+        !isPaid && !isFailed && !isExpired &&
+        (rawStatus === 'pending' || resData.verification_stage === 'awaiting_payment' || rawStatus === '')
+      );
+
+      const gatewayOrderId = data.order_id || resData.order_id || orderId;
+      const settledAmount = Number(
+        data.amount !== undefined ? data.amount : (resData.amount !== undefined ? resData.amount : expectedAmount || 0)
+      );
+      const utr = data.utr || data.bank_utr || data.transaction_id || gatewayOrderId;
 
       if (isPaid) {
+        // Enforce payable amount integrity if expectedAmount is supplied
+        if (expectedAmount !== undefined && expectedAmount > 0) {
+          const diff = Math.abs(settledAmount - expectedAmount);
+          if (diff > 0.5) {
+            return {
+              isValid: false,
+              status: 'FAILED',
+              orderId,
+              gatewayOrderId,
+              amount: settledAmount,
+              error: `Amount mismatch: expected ₹${expectedAmount}, gateway returned ₹${settledAmount}`,
+              rawGatewayResponse: data,
+            };
+          }
+        }
+
         return {
           isValid: true,
           status: 'PAID',
           orderId,
-          gatewayOrderId: data.order_id || orderId,
+          gatewayOrderId,
           amount: settledAmount,
-          transactionId: utr || data.transaction_id || data.token || `fam_${orderId}`,
+          transactionId: utr,
           rawGatewayResponse: data,
         };
       }
@@ -291,9 +313,9 @@ export class PaymentGatewayManager {
           isValid: false,
           status: 'FAILED',
           orderId,
-          gatewayOrderId: data.order_id || orderId,
+          gatewayOrderId,
           amount: settledAmount,
-          error: data.message || resData.message || 'Payment was declined or failed on gateway',
+          error: data.message || resData.message || 'Payment was declined or cancelled on gateway',
           rawGatewayResponse: data,
         };
       }
@@ -303,25 +325,24 @@ export class PaymentGatewayManager {
           isValid: false,
           status: 'EXPIRED',
           orderId,
-          gatewayOrderId: data.order_id || orderId,
+          gatewayOrderId,
           amount: settledAmount,
           error: 'Gateway payment session expired',
           rawGatewayResponse: data,
         };
       }
 
-      // STEP 4: Default to PENDING without converting into failed
       return {
         isValid: false,
         status: 'PENDING',
         orderId,
-        gatewayOrderId: data.order_id || orderId,
+        gatewayOrderId,
         amount: settledAmount,
-        error: `Gateway payment status is ${rawStatus || 'PENDING'}`,
+        error: `Payment is currently pending bank confirmation (${rawStatus || 'awaiting_payment'})`,
         rawGatewayResponse: data,
       };
     } catch (err: any) {
-      console.error(`[FamGateway checkPaymentStatus Exception] Order ${orderId}:`, err.message);
+      console.error(`[TrustGateway checkPaymentStatus Exception] Order ${orderId}:`, err.message);
       return {
         isValid: false,
         status: 'PENDING',
@@ -336,7 +357,6 @@ export class PaymentGatewayManager {
    * Signature Verification fallback
    */
   public verifySignature(params: PaymentVerificationParams): PaymentVerificationResult {
-    // FamGateway verify status directly using HTTP API check status, so signature is deprecated.
     return {
       isValid: true,
       orderId: params.orderId,
@@ -345,25 +365,33 @@ export class PaymentGatewayManager {
   }
 
   /**
-   * Webhook Signature Verification
+   * Webhook Signature Verification with HMAC-SHA256 and constant-time comparison
+   * Signed message: order_id|amount.toFixed(2)|status|utr-or-NONE
    */
-  public verifyWebhookSignature(rawBody: string, signature: string): boolean {
-    if (!this.webhookSecret) {
-      return true; // Bypass signature if unconfigured
+  public verifyWebhookSignature(payloadString: string, signature: string, signedMessage?: string): boolean {
+    // Only verify HMAC signature if dedicated webhook secret is configured
+    const secret = this.webhookSecret;
+    if (!secret || !signature) {
+      return false; // Cannot verify securely without dedicated webhook secret
     }
 
     try {
+      const messageToSign = signedMessage || payloadString;
       const expectedSignature = crypto
-        .createHmac('sha256', this.webhookSecret)
-        .update(rawBody)
+        .createHmac('sha256', secret)
+        .update(messageToSign)
         .digest('hex');
 
-      return crypto.timingSafeEqual(
-        Buffer.from(expectedSignature, 'utf-8'),
-        Buffer.from(signature, 'utf-8')
-      );
+      const expectedBuf = Buffer.from(expectedSignature, 'utf-8');
+      const actualBuf = Buffer.from(signature, 'utf-8');
+
+      if (expectedBuf.length !== actualBuf.length) {
+        return false;
+      }
+
+      return crypto.timingSafeEqual(expectedBuf, actualBuf);
     } catch (err) {
-      console.error('Webhook signature verification error:', err);
+      console.error('[TrustGateway Webhook] Signature verification error:', err);
       return false;
     }
   }

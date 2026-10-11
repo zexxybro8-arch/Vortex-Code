@@ -67,9 +67,17 @@ export const Header: React.FC = () => {
             
             {/* Customer ID Box (Immediately to the LEFT of Cart when logged in) */}
             {user && user.customerId && (
-              <div className="flex items-center px-2.5 py-1.5 rounded-xl bg-slate-900 border border-emerald-500/30 text-emerald-400 font-mono font-bold text-xs shadow-md tracking-wider shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setDashboardTab('purchase-history');
+                  setCurrentView('dashboard');
+                }}
+                className="flex items-center px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 font-mono font-bold text-xs shadow-md tracking-wider shrink-0 transition-all cursor-pointer"
+                title="View Account Dashboard & Purchase History"
+              >
                 {user.customerId}
-              </div>
+              </button>
             )}
 
             {/* Cart / Orders Button (Always on the RIGHT) */}
@@ -205,10 +213,18 @@ export const Header: React.FC = () => {
             {/* Bottom Sticky Section for Customer ID & Logout */}
             {user && (
               <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0 space-y-3">
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900 border border-emerald-500/20 text-xs font-mono font-bold text-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setDashboardTab('purchase-history');
+                    setCurrentView('dashboard');
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800/80 border border-emerald-500/20 hover:border-emerald-500/40 text-xs font-mono font-bold text-slate-200 transition-all cursor-pointer text-left"
+                >
                   <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Customer ID:</span>
                   <span className="text-white font-extrabold tracking-wider">{user.customerId}</span>
-                </div>
+                </button>
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);

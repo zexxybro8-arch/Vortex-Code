@@ -370,7 +370,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   </div>
 
                   <p className="text-xs text-slate-300 max-w-sm">
-                    Please click the button below to proceed to the secure FamGateway payment page to complete your transaction of <strong className="text-white">₹{order.amount}</strong>.
+                    Please click the button below to proceed to the secure Trust Gateway payment page to complete your transaction of <strong className="text-white">₹{checkoutData.gatewayOrder?.amount || order.amount}</strong>.
                   </p>
 
                   <a

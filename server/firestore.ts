@@ -93,9 +93,9 @@ export async function restoreDbFromFirestore(db: any): Promise<boolean> {
       ordersSnap.forEach((doc) => {
         const o = doc.data();
         db.run(
-          `INSERT OR REPLACE INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, amount, payment_status, delivery_status, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-          [o.id, o.order_number, o.product_id, o.product_name, o.customer_name, o.customer_email, o.amount, o.payment_status, o.delivery_status, o.delivered_code_id, o.delivered_code, o.delivered_pin, o.payment_method, o.created_at, o.updated_at]
+          `INSERT OR REPLACE INTO orders (id, order_number, product_id, product_name, customer_name, customer_email, amount, payment_status, delivery_status, reserved_code_id, delivered_code_id, delivered_code, delivered_pin, payment_method, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          [o.id, o.order_number, o.product_id, o.product_name, o.customer_name, o.customer_email, o.amount, o.payment_status, o.delivery_status, o.reserved_code_id || null, o.delivered_code_id, o.delivered_code, o.delivered_pin, o.payment_method, o.created_at, o.updated_at]
         );
       });
 

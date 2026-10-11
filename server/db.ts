@@ -197,6 +197,14 @@ export async function getDb(): Promise<Database> {
   }
 
   try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN reserved_code_id TEXT;`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN requested_amount REAL;`);
+  } catch (e) {}
+
+  try {
     dbInstance.run(`ALTER TABLE users ADD COLUMN customer_id TEXT;`);
   } catch (e) {}
 
@@ -269,12 +277,12 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconSize', '42');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactMobileIconSize', '42');`);
 
-  // FamGateway Live Production Credentials
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayApiKey', 'Famcfc08cd92c090e3718e9ad92155eb0fc');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayWebhookSecret', '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayExpiryMinutes', '5');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
+  // Trust Gateway Base URL & Store Configuration (API Key is kept strictly server-side in TRUST_GATEWAY_API_KEY)
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('trustgatewayBaseUrl', 'https://trustgateway.in');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://trustgateway.in');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
+  // Clean up any legacy or truncated API keys from DB so server environment key is strictly used
+  dbInstance.run(`DELETE FROM store_settings WHERE key IN ('famupigatewayApiKey', 'trustgatewayApiKey') AND value LIKE 'fam_live_58cf91%';`);
 
   // Seed default categories if empty
   try {
@@ -1290,6 +1298,8 @@ export async function getOrderByIdOrNumber(identifier: string) {
       customer_name as customerName, 
       customer_email as customerEmail, 
       amount, 
+      requested_amount as requestedAmount,
+      reserved_code_id as reservedCodeId,
       payment_status as paymentStatus, 
       delivery_status as deliveryStatus, 
       delivered_code_id as deliveredCodeId, 
@@ -1322,6 +1332,18 @@ export async function updateOrderStatus(
 ) {
   const db = await getDb();
   const now = new Date().toISOString();
+
+  // If order failed, expired or was cancelled, release any reserved code back to UNUSED inventory
+  if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED' || paymentStatus === 'EXPIRED') {
+    const existing = await getOrderByIdOrNumber(id);
+    if (existing?.reservedCodeId) {
+      db.run(
+        `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE id = ? AND status = 'RESERVED';`,
+        [existing.reservedCodeId]
+      );
+    }
+  }
+
   db.run(
     `UPDATE orders 
      SET payment_status = ?, delivery_status = ?, updated_at = ? 
@@ -1509,11 +1531,19 @@ export async function createPendingCheckoutOrder(params: {
 
   const now = new Date().toISOString();
   const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const orderNumber = `VRX-2026-${randomSuffix}`;
+  const randomSuffix = `${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderNumber = `VRX-${randomSuffix}`;
 
   // Amount MUST come strictly from product.price in DB
   const verifiedAmount = product.price;
+
+  // If specific code was requested, mark it RESERVED so it cannot be taken concurrently
+  if (params.codeId && availableCodeId) {
+    db.run(
+      `UPDATE redeem_codes SET status = 'RESERVED', order_id = ? WHERE id = ? AND status = 'UNUSED';`,
+      [orderId, availableCodeId]
+    );
+  }
 
   // Insert PENDING order record (No code delivered yet!)
   db.run(
@@ -1526,6 +1556,8 @@ export async function createPendingCheckoutOrder(params: {
       customer_email, 
       customer_id,
       amount, 
+      requested_amount,
+      reserved_code_id,
       payment_status, 
       delivery_status, 
       delivered_code_id, 
@@ -1534,7 +1566,7 @@ export async function createPendingCheckoutOrder(params: {
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Trust Gateway', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1544,6 +1576,8 @@ export async function createPendingCheckoutOrder(params: {
       params.customerEmail || 'customer@vortexcode.com',
       params.customerId || null,
       verifiedAmount,
+      verifiedAmount,
+      params.codeId ? availableCodeId : null,
       now,
       now,
     ]
@@ -1555,22 +1589,35 @@ export async function createPendingCheckoutOrder(params: {
   const storeSettings = await getStoreSettings();
   paymentGateway.updateCredentials(storeSettings);
 
-  const gatewayOrder = await paymentGateway.createGatewayOrder({
-    orderId,
-    orderNumber,
-    amount: verifiedAmount,
-    currency: 'INR',
-    productId: product.id,
-    productName: product.name,
-    customerName: params.customerName || 'Customer',
-    customerEmail: params.customerEmail || 'customer@vortexcode.com',
-  });
+  let gatewayOrder;
+  try {
+    gatewayOrder = await paymentGateway.createGatewayOrder({
+      orderId,
+      orderNumber,
+      amount: verifiedAmount,
+      currency: 'INR',
+      productId: product.id,
+      productName: product.name,
+      customerName: params.customerName || 'Customer',
+      customerEmail: params.customerEmail || 'customer@vortexcode.com',
+    });
+  } catch (gatewayErr: any) {
+    if (params.codeId && availableCodeId) {
+      db.run(
+        `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE id = ? AND status = 'RESERVED';`,
+        [availableCodeId]
+      );
+    }
+    db.run(`DELETE FROM orders WHERE id = ?;`, [orderId]);
+    saveDb();
+    throw gatewayErr;
+  }
 
-  // Store gatewayOrderId if returned from gateway
+  // Store gatewayOrderId if returned from gateway and update exact payable amount
   if (gatewayOrder.gatewayOrderId) {
     db.run(
-      `UPDATE orders SET gateway_order_id = ? WHERE id = ?;`,
-      [gatewayOrder.gatewayOrderId, orderId]
+      `UPDATE orders SET gateway_order_id = ?, amount = ? WHERE id = ?;`,
+      [gatewayOrder.gatewayOrderId, gatewayOrder.amount, orderId]
     );
     saveDb();
   }
@@ -1586,7 +1633,10 @@ export async function createPendingCheckoutOrder(params: {
       productName: product.name,
       denomination: product.denomination,
       rewardValue: product.rewardValue,
-      amount: verifiedAmount,
+      amount: gatewayOrder.amount,
+      requestedAmount: verifiedAmount,
+      gatewayOrderId: gatewayOrder.gatewayOrderId || null,
+      reservedCodeId: params.codeId ? availableCodeId : null,
       currency: 'INR',
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING',
@@ -1656,6 +1706,12 @@ export async function verifyAndFulfillPaymentOrder(params: {
 
     if (verifyResult.status === 'FAILED') {
       const now = new Date().toISOString();
+      if (order.reservedCodeId) {
+        db.run(
+          `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE id = ? AND status = 'RESERVED';`,
+          [order.reservedCodeId]
+        );
+      }
       db.run(
         `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ?;`,
         [now, order.id]
@@ -1672,6 +1728,12 @@ export async function verifyAndFulfillPaymentOrder(params: {
 
     if (verifyResult.status === 'EXPIRED') {
       const now = new Date().toISOString();
+      if (order.reservedCodeId) {
+        db.run(
+          `UPDATE redeem_codes SET status = 'UNUSED', order_id = NULL WHERE id = ? AND status = 'RESERVED';`,
+          [order.reservedCodeId]
+        );
+      }
       db.run(
         `UPDATE orders SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ? WHERE id = ?;`,
         [now, order.id]
@@ -1686,13 +1748,33 @@ export async function verifyAndFulfillPaymentOrder(params: {
       };
     }
 
-    if (!verifyResult.isValid && verifyResult.status !== 'PAID') {
+    if (verifyResult.status !== 'PAID' || !verifyResult.isValid) {
       return {
         success: false,
-        status: 'PENDING' as const,
+        status: (verifyResult.status || 'PENDING') as 'PENDING' | 'FAILED' | 'EXPIRED',
         order,
-        message: `Gateway status is ${verifyResult.status || 'PENDING'}. Waiting for confirmation.`,
+        message: verifyResult.error || `Gateway payment not confirmed (status: ${verifyResult.status || 'UNKNOWN'})`,
         rawGatewayResponse: verifyResult.rawGatewayResponse,
+      };
+    }
+
+    // Verify gateway order ID matches saved order
+    if (order.gatewayOrderId && verifyResult.gatewayOrderId && order.gatewayOrderId !== verifyResult.gatewayOrderId) {
+      return {
+        success: false,
+        status: 'FAILED' as const,
+        order,
+        message: `Gateway order ID mismatch: expected ${order.gatewayOrderId}, got ${verifyResult.gatewayOrderId}`,
+      };
+    }
+
+    // Verify exact payable amount matches saved order amount
+    if (verifyResult.amount !== undefined && Math.abs(verifyResult.amount - order.amount) > 0.5) {
+      return {
+        success: false,
+        status: 'FAILED' as const,
+        order,
+        message: `Payable amount mismatch: expected ₹${order.amount}, got ₹${verifyResult.amount}`,
       };
     }
 
@@ -1708,31 +1790,48 @@ export async function verifyAndFulfillPaymentOrder(params: {
     };
   }
 
-  // Atomically select ONE UNUSED code for this product from DB
-  const codeRes = db.exec(
-    `SELECT id, code, pin FROM redeem_codes 
-     WHERE product_id = ? AND status = 'UNUSED' 
-     LIMIT 1;`,
-    [order.productId]
-  );
-
   const now = new Date().toISOString();
+  let assignedCodeId = order.reservedCodeId;
+  let assignedCode: string | null = null;
+  let assignedPin: string | null = null;
 
-  if (codeRes.length === 0 || codeRes[0].values.length === 0) {
-    // Edge case: Out of stock between checkout initiation and payment verification
-    db.run(
-      `UPDATE orders 
-       SET payment_status = 'PAID', delivery_status = 'OUT_OF_STOCK_PENDING_REFUND', updated_at = ? 
-       WHERE id = ?;`,
-      [now, order.id]
+  // If a specific code was reserved during checkout, fulfill that exact code
+  if (assignedCodeId) {
+    const reservedRes = db.exec(
+      `SELECT id, code, pin FROM redeem_codes WHERE id = ?;`,
+      [assignedCodeId]
     );
-    saveDb();
-    throw new Error('OUT OF STOCK: Payment recorded but no unused redeem code was available. Marked for automated refund.');
+    if (reservedRes.length > 0 && reservedRes[0].values.length > 0) {
+      assignedCode = reservedRes[0].values[0][1] as string;
+      assignedPin = reservedRes[0].values[0][2] as string;
+    }
   }
 
-  const assignedCodeId = codeRes[0].values[0][0] as string;
-  const assignedCode = codeRes[0].values[0][1] as string;
-  const assignedPin = codeRes[0].values[0][2] as string;
+  // Otherwise, atomically select ONE UNUSED code for this product from DB
+  if (!assignedCode) {
+    const codeRes = db.exec(
+      `SELECT id, code, pin FROM redeem_codes 
+       WHERE product_id = ? AND status = 'UNUSED' 
+       LIMIT 1;`,
+      [order.productId]
+    );
+
+    if (codeRes.length === 0 || codeRes[0].values.length === 0) {
+      // Edge case: Out of stock between checkout initiation and payment verification
+      db.run(
+        `UPDATE orders 
+         SET payment_status = 'PAID', delivery_status = 'OUT_OF_STOCK_PENDING_REFUND', updated_at = ? 
+         WHERE id = ?;`,
+        [now, order.id]
+      );
+      saveDb();
+      throw new Error('OUT OF STOCK: Payment recorded but no unused redeem code was available. Marked for automated refund.');
+    }
+
+    assignedCodeId = codeRes[0].values[0][0] as string;
+    assignedCode = codeRes[0].values[0][1] as string;
+    assignedPin = codeRes[0].values[0][2] as string;
+  }
 
   // 1. Mark code SOLD
   db.run(
@@ -1742,11 +1841,11 @@ export async function verifyAndFulfillPaymentOrder(params: {
     [order.id, now, assignedCodeId]
   );
 
-  // 2. Mark order PAID & DELIVERED with the exact 16-character code
+  // 2. Mark order PAID & DELIVERED with the exact code
   const fullCodeFormatted = formatFullCode(assignedCode);
   const paymentMethodStr = verifiedGatewayPaymentId
-    ? `FamGateway (${verifiedGatewayPaymentId})`
-    : 'Payment Gateway (Verified)';
+    ? `Trust Gateway (${verifiedGatewayPaymentId})`
+    : 'Trust Gateway (Verified)';
 
   db.run(
     `UPDATE orders 
@@ -2093,11 +2192,12 @@ export async function getStoreSettings() {
     contactWidgetMobileRight: 35,
     contactWidgetMobileBottom: 110,
     contactIconSize: 42,
-    contactMobileIconSize: 42,
-    famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
-    famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc',
-    famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
-    famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5,
+    trustgatewayBaseUrl: process.env.TRUST_GATEWAY_BASE_URL || 'https://trustgateway.in',
+    trustgatewayApiKeyConfigured: Boolean(process.env.TRUST_GATEWAY_API_KEY?.trim()),
+    trustgatewayWebhookConfigured: Boolean(process.env.TRUST_GATEWAY_WEBHOOK_SECRET?.trim()),
+    famupigatewayBaseUrl: process.env.TRUST_GATEWAY_BASE_URL || 'https://trustgateway.in',
+    famupigatewayApiKeyConfigured: Boolean(process.env.TRUST_GATEWAY_API_KEY?.trim()),
+    famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 10,
     appUrl: process.env.APP_URL || 'https://vortexcode.shop',
     how_to_redeem_step_1_image_enabled: false,
     how_to_redeem_step_1_image_url: '',

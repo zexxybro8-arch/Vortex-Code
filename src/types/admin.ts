@@ -34,11 +34,13 @@ export interface AdminUser {
 export interface AdminDashboardStats {
   totalSalesRupees: number;
   todaysSalesRupees: number;
+  todaysOrders: number;
   totalOrders: number;
   pendingOrders: number;
   availableRedeemCodes: number;
   usedRedeemCodes: number;
   registeredCustomers: number;
+  activeMembers: number;
 }
 
 export interface AdminOrder {
