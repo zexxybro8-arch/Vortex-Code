@@ -104,6 +104,7 @@ export class TrustGatewayProvider implements IPaymentGatewayProvider {
     const requestPayload = {
       amount: formattedAmount,
       note: orderNote,
+      redirect_url: 'https://vortexcode.shop/payment/return',
     };
 
     const endpoint = `${this.baseUrl}/api/v1/orders/create`;

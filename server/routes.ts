@@ -781,6 +781,15 @@ router.get('/checkout/order-status/:id', async (req, res) => {
 });
 
 /**
+ * GET /payment/return
+ * Handles browser redirect from payment gateway, forwarding to callback logic
+ */
+router.get('/payment/return', (req, res) => {
+  const query = new URLSearchParams(req.query as any).toString();
+  return res.redirect(`/api/payment/callback?${query}`);
+});
+
+/**
  * GET /api/payment/callback
  * Handles browser redirect from payment gateway callback
  */
