@@ -378,13 +378,29 @@ export const CustomerDashboard: React.FC = () => {
             
             {/* SELECT RECHARGE AMOUNT / DENOMINATION FILTER BAR */}
             <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
+              {/* CATEGORY TABS */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveTab('redeem-code')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs ${activeTab === 'redeem-code' ? 'bg-emerald-400 text-slate-950' : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'}`}
+                >
+                  <Ticket className="w-4 h-4" />
+                  REDEEM CODE
+                </button>
+                <button
+                  onClick={() => setActiveTab('diamonds')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs ${activeTab === 'diamonds' ? 'bg-emerald-400 text-slate-950' : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'}`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  DIAMONDS
+                </button>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Tag className="w-3.5 h-3.5" />
                   <span>SELECT REDEEM CODE / AMOUNT:</span>
                 </div>
-
-
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
@@ -576,6 +592,52 @@ export const CustomerDashboard: React.FC = () => {
               </div>
             )}
 
+          </div>
+        )}
+
+        {activeTab === 'diamonds' && (
+          <div className="space-y-6">
+            <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveTab('redeem-code')}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs bg-slate-950 border border-slate-800 text-slate-300 hover:text-white"
+                >
+                  <Ticket className="w-4 h-4" />
+                  REDEEM CODE
+                </button>
+                <button
+                  onClick={() => setActiveTab('diamonds')}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs bg-emerald-400 text-slate-950"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  DIAMONDS
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {products
+                .filter(p => p.enabled && p.category === 'DIAMONDS')
+                .map((p) => (
+                  <div key={p.id} className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-4 flex flex-col items-center text-center space-y-3">
+                    <div className="w-16 h-16 bg-slate-950 rounded-full flex items-center justify-center">
+                      <Sparkles className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <div className="font-black text-white">{p.name}</div>
+                    <div className="text-emerald-400 font-mono font-bold">₹{p.priceRupees}</div>
+                    <button 
+                      onClick={() => handleBuyNow(p)}
+                      className="w-full py-2 bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs cursor-pointer"
+                    >
+                      BUY NOW
+                    </button>
+                  </div>
+              ))}
+            </div>
+            {products.filter(p => p.enabled && p.category === 'DIAMONDS').length === 0 && (
+                <div className="text-center py-12 text-slate-400">No diamond products currently available.</div>
+            )}
           </div>
         )}
 
