@@ -618,47 +618,60 @@ export const CustomerDashboard: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              {products
-                .filter(p => p.enabled && p.category === 'DIAMONDS')
-                .map((p) => (
-                  <div 
-                    key={p.id} 
-                    onClick={() => handleBuyNow(p)}
-                    className="bg-slate-950/90 border border-cyan-500/40 rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 hover:shadow-[0_0_25px_rgba(6,182,212,0.25)] transition-all duration-300 relative overflow-hidden backdrop-blur-xl"
-                  >
-                    {/* Top Decorative Neon Frame & Title */}
-                    <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 font-black text-[11px] tracking-wider mb-3 shadow-[inset_0_1px_3px_rgba(6,182,212,0.3)]">
-                      <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                      <span>DIAMONDS</span>
-                    </div>
+              {(products.filter(p => p.enabled && p.category === 'DIAMONDS').length > 0
+                ? products.filter(p => p.enabled && p.category === 'DIAMONDS')
+                : [{
+                    id: 'demo-100-diamonds',
+                    name: '100 Diamonds',
+                    quantity: 100,
+                    priceRupees: 80,
+                    image: 'https://i.ibb.co/HDkCvRrY/file-00000000e09c82119087489c4d51e78a.png',
+                    enabled: true,
+                    category: 'DIAMONDS'
+                  }]
+              ).map((p) => (
+                    <div 
+                      key={p.id} 
+                      onClick={() => handleBuyNow(p)}
+                      className="bg-slate-950/90 border border-cyan-500 rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl"
+                      style={{
+                        boxShadow: '0 0 5px #00F5FF, 0 0 12px rgba(0, 245, 255, 0.8), 0 0 25px rgba(0, 140, 255, 0.55), 0 0 45px rgba(0, 100, 255, 0.25)'
+                      }}
+                    >
+                      {/* Top Decorative Neon Frame & Title */}
+                      <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 font-black text-[11px] tracking-wider mb-3 shadow-[inset_0_1px_3px_rgba(6,182,212,0.3)]">
+                        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>DIAMONDS</span>
+                      </div>
 
-                    {/* Middle Image Section */}
-                    <div className="w-full aspect-square bg-slate-900/60 rounded-2xl overflow-hidden flex items-center justify-center p-2 border border-cyan-500/20 group-hover:border-cyan-500/50 transition-all">
+                      {/* Middle Image Section */}
                       <img 
                         src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt={p.name || 'Free Fire Diamonds'} 
-                        className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300" 
+                        className="w-full aspect-square object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300" 
                       />
-                    </div>
 
-                    {/* Bottom Futuristic Price Button */}
-                    <div 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleBuyNow(p);
-                      }}
-                      className="mt-3 w-full bg-slate-900/90 border border-cyan-500/60 rounded-2xl p-1.5 flex items-center justify-between text-white group-hover:bg-cyan-950/80 group-hover:border-cyan-400 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)] active:scale-[0.98]"
-                    >
-                      <div className="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
-                        <ShoppingBag className="w-3.5 h-3.5" />
+                      {/* Bottom Futuristic Price Button */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBuyNow(p);
+                        }}
+                        className="mt-3 w-full bg-gradient-to-br from-slate-900 to-slate-950 border border-cyan-500 rounded-2xl p-1.5 flex items-center justify-between text-white transition-all duration-300 hover:border-cyan-300 hover:scale-[1.02] active:scale-[0.98] active:from-cyan-950"
+                        style={{
+                          boxShadow: 'inset 0 0 10px rgba(0, 245, 255, 0.2), 0 0 8px rgba(0, 245, 255, 0.4), 0 0 15px rgba(0, 140, 255, 0.3)'
+                        }}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-300 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)] shrink-0">
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-black text-white text-base tracking-wider px-1 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+                          ₹{p.priceRupees}
+                        </span>
+                        <div className="w-8 h-8 rounded-xl bg-cyan-950/50 border border-cyan-500/60 flex items-center justify-center text-cyan-300 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)] shrink-0">
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </div>
                       </div>
-                      <span className="font-black text-white text-sm sm:text-base tracking-wide px-1">
-                        ₹{p.priceRupees}
-                      </span>
-                      <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 group-hover:bg-cyan-400 group-hover:text-slate-950 transition-all shrink-0">
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </div>
-                    </div>
                   </div>
               ))}
             </div>

@@ -1502,24 +1502,26 @@ export async function createPendingCheckoutOrder(params: {
 
   // Stock verification: count available UNUSED codes
   let availableCodeId: string | null = null;
-  if (params.codeId) {
-    const specificCodeRes = db.exec(
-      `SELECT id FROM redeem_codes WHERE id = ? AND product_id = ? AND status = 'UNUSED' LIMIT 1;`,
-      [params.codeId, product.id]
-    );
-    if (specificCodeRes.length === 0 || specificCodeRes[0].values.length === 0) {
-      throw new Error('OUT OF STOCK: The requested redeem code is no longer available.');
+  if (product.category !== 'DIAMONDS') {
+    if (params.codeId) {
+      const specificCodeRes = db.exec(
+        `SELECT id FROM redeem_codes WHERE id = ? AND product_id = ? AND status = 'UNUSED' LIMIT 1;`,
+        [params.codeId, product.id]
+      );
+      if (specificCodeRes.length === 0 || specificCodeRes[0].values.length === 0) {
+        throw new Error('OUT OF STOCK: The requested redeem code is no longer available.');
+      }
+      availableCodeId = specificCodeRes[0].values[0][0] as string;
+    } else {
+      const stockRes = db.exec(
+        `SELECT id FROM redeem_codes WHERE product_id = ? AND status = 'UNUSED' LIMIT 1;`,
+        [product.id]
+      );
+      if (stockRes.length === 0 || stockRes[0].values.length === 0) {
+        throw new Error('OUT OF STOCK: No available redeem codes for this product.');
+      }
+      availableCodeId = stockRes[0].values[0][0] as string;
     }
-    availableCodeId = specificCodeRes[0].values[0][0] as string;
-  } else {
-    const stockRes = db.exec(
-      `SELECT id FROM redeem_codes WHERE product_id = ? AND status = 'UNUSED' LIMIT 1;`,
-      [product.id]
-    );
-    if (stockRes.length === 0 || stockRes[0].values.length === 0) {
-      throw new Error('OUT OF STOCK: No available redeem codes for this product.');
-    }
-    availableCodeId = stockRes[0].values[0][0] as string;
   }
 
   const now = new Date().toISOString();
@@ -1531,6 +1533,7 @@ export async function createPendingCheckoutOrder(params: {
   const verifiedAmount = product.price;
 
   // Insert PENDING order record (No code delivered yet!)
+  const orderType = product.category === 'DIAMONDS' ? 'DIAMOND_PURCHASE' : 'PURCHASE';
   db.run(
     `INSERT INTO orders (
       id, 
@@ -1551,7 +1554,7 @@ export async function createPendingCheckoutOrder(params: {
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PURCHASE', 'PENDING', 'PENDING', NULL, NULL, NULL, 'Trust Gateway UPI', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Trust Gateway UPI', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1562,6 +1565,7 @@ export async function createPendingCheckoutOrder(params: {
       params.customerId || null,
       verifiedAmount,
       verifiedAmount,
+      orderType,
       now,
       now,
     ]
@@ -1583,7 +1587,7 @@ export async function createPendingCheckoutOrder(params: {
     customerName: params.customerName || 'Customer',
     customerEmail: params.customerEmail || 'customer@vortexcode.com',
     customerId: params.customerId,
-    orderType: 'PURCHASE',
+    orderType: orderType,
   });
 
   const payableAmount = gatewayOrder.payableAmount || verifiedAmount;
@@ -1610,7 +1614,7 @@ export async function createPendingCheckoutOrder(params: {
       rewardValue: product.rewardValue,
       amount: verifiedAmount,
       payableAmount,
-      orderType: 'PURCHASE',
+      orderType: orderType,
       checkoutUrl,
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING',
@@ -1962,6 +1966,26 @@ async function executeVerifyAndFulfillPaymentOrder(params: {
       order: fulfilledOrder,
       newBalance,
       message: `Deposit verified successfully! ₹${creditAmount} credited to wallet balance.`,
+    };
+  }
+
+  // Branch C: DIAMOND PURCHASE FULFILLMENT
+  if (order.orderType === 'DIAMOND_PURCHASE') {
+    db.run(
+      `UPDATE orders 
+       SET payment_status = 'PAID', 
+           delivery_status = 'DELIVERED', 
+           updated_at = ? 
+       WHERE id = ?;`,
+      [now, order.id]
+    );
+    saveDb();
+    const fulfilledOrder = await getOrderByIdOrNumber(order.id);
+    return {
+      success: true,
+      status: 'PAID' as const,
+      order: fulfilledOrder,
+      message: 'Diamond purchase verified successfully.',
     };
   }
 
