@@ -138,11 +138,15 @@ router.get('/products/:id', async (req, res) => {
 router.post('/products', isAdminMiddleware, async (req, res) => {
   try {
     const { name, category, description, price, rewardValue, denomination, image } = req.body;
-    if (!name || price === undefined) {
+    let finalName = name;
+    if (!finalName && category === 'DIAMONDS') {
+        finalName = `${rewardValue} Diamonds`;
+    }
+    if (!finalName || price === undefined) {
       return res.status(400).json({ success: false, error: 'Name and price are required' });
     }
     const created = await createProduct({
-      name,
+      name: finalName,
       category: category || 'Google Play',
       description: description || '',
       price: Number(price),

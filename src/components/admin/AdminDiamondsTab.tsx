@@ -13,18 +13,22 @@ export const AdminDiamondsTab: React.FC = () => {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const quantity = formData.get('quantity') as string;
     const prodData = {
-      name: formData.get('name') as string,
+      name: `${quantity} Diamonds`,
       priceRupees: Number(formData.get('price')),
-      rewardValueRupees: Number(formData.get('quantity')),
-      denomination: `${formData.get('quantity')} Diamonds`,
+      rewardValueRupees: Number(quantity),
+      denomination: `${quantity} Diamonds`,
       category: 'DIAMONDS' as any,
       description: formData.get('description') as string,
       image: formData.get('image') as string,
       enabled: formData.get('status') === 'enabled',
+      sortOrder: Number(formData.get('sortOrder') || 0),
     };
 
     if (editingProduct) {
+      // Remove name from update if we want to keep it or update it automatically
+      // Actually, updating name is fine based on new quantity
       await updateProduct(editingProduct.id, prodData);
     } else {
       await addProduct(prodData);
@@ -52,7 +56,6 @@ export const AdminDiamondsTab: React.FC = () => {
          <table className="w-full text-left text-xs font-sans">
           <thead>
             <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
-              <th className="py-3 px-3">Product Name</th>
               <th className="py-3 px-3">Quantity</th>
               <th className="py-3 px-3">Price</th>
               <th className="py-3 px-3">Status</th>
@@ -62,8 +65,7 @@ export const AdminDiamondsTab: React.FC = () => {
           <tbody className="divide-y divide-slate-800/80">
              {diamondProducts.map(p => (
                <tr key={p.id} className="hover:bg-slate-950/50">
-                 <td className="py-3 px-3 font-bold">{p.name}</td>
-                 <td className="py-3 px-3">{p.rewardValueRupees}</td>
+                 <td className="py-3 px-3">{p.rewardValueRupees} Diamonds</td>
                  <td className="py-3 px-3">₹{p.priceRupees}</td>
                  <td className="py-3 px-3">{p.enabled ? 'Enabled' : 'Disabled'}</td>
                  <td className="py-3 px-3 text-right">
@@ -80,7 +82,6 @@ export const AdminDiamondsTab: React.FC = () => {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleSave} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-4">
             <h2 className="text-lg font-bold text-white">{editingProduct ? 'Edit' : 'Add'} Diamond Product</h2>
-            <input name="name" defaultValue={editingProduct?.name} placeholder="Product Name" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="quantity" type="number" defaultValue={editingProduct?.rewardValueRupees} placeholder="Diamond Quantity" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="price" type="number" defaultValue={editingProduct?.priceRupees} placeholder="Price (INR)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="image" defaultValue={editingProduct?.image} placeholder="Image URL" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
