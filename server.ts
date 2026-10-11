@@ -4,7 +4,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import apiRouter from './server/routes';
 import { getDb } from './server/db';
-import { paymentGateway } from './server/payment/gateway';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,12 +26,6 @@ async function bootstrap() {
 
   // Mount API endpoints
   app.use('/api', apiRouter);
-
-  // Webhook alias supporting direct /webhook/payment if called without /api prefix
-  app.post('/webhook/payment', (req, res, next) => {
-    req.url = '/webhook/payment';
-    apiRouter(req, res, next);
-  });
 
   const distPath = path.resolve(__dirname, 'dist');
   const hasDist = fs.existsSync(path.resolve(distPath, 'index.html'));
@@ -85,16 +78,8 @@ async function bootstrap() {
 
   // Initialize SQLite database asynchronously in parallel
   try {
-    const db = await getDb();
-    const settingsRows = db.exec(`SELECT key, value FROM store_settings;`);
-    const settings: Record<string, any> = {};
-    if (settingsRows.length > 0) {
-      for (const row of settingsRows[0].values) {
-        settings[String(row[0])] = String(row[1]);
-      }
-    }
-    paymentGateway.updateCredentials(settings);
-    console.log('Database initialized successfully. Payment Gateway credentials updated.');
+    await getDb();
+    console.log('Database initialized successfully.');
   } catch (err) {
     console.error('Non-fatal database initialization warning:', err);
   }

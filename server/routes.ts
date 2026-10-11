@@ -45,7 +45,6 @@ import {
   deleteNotice,
 } from './db';
 import { paymentGateway } from './payment/gateway';
-import { trustGateway } from './payment/trustGateway';
 
 const router = Router();
 
@@ -850,247 +849,81 @@ router.post('/payment/mock-redirect-complete', async (req, res) => {
 });
 
 /**
- * Trust Gateway & Payment Webhooks
- * POST /api/v1/orders/webhook and POST /api/payment/webhook
- * HMAC-SHA256 signature verification with authenticated order-status verification fallback
+ * POST /api/payment/webhook
+ * Incoming gateway webhook verification & idempotent fulfillment
+ * Supports FamGateway native payloads (order_id, status, utr) as well as standard gateways
  */
-const handlePaymentWebhook = async (req: any, res: any) => {
+router.post('/payment/webhook', async (req, res) => {
   try {
     const signature =
-      (req.headers['x-gateway-signature'] as string) ||
       (req.headers['x-fam-signature'] as string) ||
       (req.headers['x-signature'] as string) ||
-      '';
-
-    const body = req.body || {};
-    const orderId = body.order_id || body.orderId || body.data?.order_id || (req.query.order_id as string);
-    const amountVal = body.amount ?? body.data?.amount;
-    const rawStatus = body.status || body.data?.status || '';
-    const utr = body.utr || body.bank_utr || body.transaction_id || body.data?.utr || 'NONE';
+      (req.headers['x-webhook-signature'] as string) ||
+      (req.headers['x-razorpay-signature'] as string);
 
     const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    const amountFixed = amountVal !== undefined ? Number(amountVal).toFixed(2) : '0.00';
-    const signedMessage = `${orderId}|${amountFixed}|${rawStatus}|${utr || 'NONE'}`;
 
     if (signature) {
-      const isValid =
-        paymentGateway.verifyWebhookSignature(rawBody, signature, signedMessage) ||
-        paymentGateway.verifyWebhookSignature(rawBody, signature);
-      if (!isValid && process.env.TRUST_GATEWAY_WEBHOOK_SECRET) {
-        console.warn('[TrustGateway Webhook] Invalid webhook signature detected.');
-        return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
+      const isValid = paymentGateway.verifyWebhookSignature(rawBody, signature);
+      if (!isValid) {
+        console.warn('[FamGateway Webhook] Invalid webhook signature detected.');
+        return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
       }
     }
 
-    if (!orderId) {
-      return res.status(400).json({ success: false, error: 'Missing order_id' });
-    }
+    const body = req.body || {};
+    const orderId =
+      body.order_id ||
+      body.orderId ||
+      body.data?.order_id ||
+      body.payload?.payment?.entity?.notes?.orderId ||
+      (req.query.order_id as string);
 
-    const order = await getOrderByIdOrNumber(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Order not found in database' });
-    }
+    const rawStatus = body.status || body.data?.status || body.event || '';
+    const statusStr = String(rawStatus).toUpperCase().trim();
+    const utr =
+      body.utr ||
+      body.bank_utr ||
+      body.transaction_id ||
+      body.txn_id ||
+      body.famgateway_id ||
+      body.data?.utr ||
+      body.data?.transaction_id ||
+      body.payload?.payment?.entity?.id ||
+      '';
 
-    // Idempotency check: If order has already been fulfilled, return existing status without repeating delivery
-    if (order.paymentStatus === 'PAID' && order.deliveredCode) {
-      return res.json({
-        success: true,
-        status: 'fulfilled',
-        alreadyFulfilled: true,
-        message: 'Order was already verified and fulfilled',
-      });
-    }
+    console.log(`[FamGateway Webhook Received] Order: ${orderId} | Status: ${statusStr} | UTR: ${utr ? 'YES' : 'NO'}`);
 
-    // Always query authenticated Trust Gateway status as the authoritative check
-    const statusResult = await paymentGateway.checkPaymentStatus(order.gatewayOrderId || orderId, order.amount);
+    const isPaid =
+      statusStr === 'SUCCESS' ||
+      statusStr === 'PAID' ||
+      statusStr === 'COMPLETED' ||
+      statusStr === 'TXN_SUCCESS' ||
+      statusStr === 'PAYMENT.CAPTURED' ||
+      (typeof utr === 'string' && utr.trim().length >= 6 && statusStr !== 'FAILED' && statusStr !== 'CANCELLED');
 
-    if (statusResult.status === 'PAID' && statusResult.isValid) {
-      const orderIdMatches = !order.gatewayOrderId || statusResult.gatewayOrderId === order.gatewayOrderId;
-      const amountMatches = Math.abs(statusResult.amount - order.amount) < 0.5;
-
-      if (!orderIdMatches || !amountMatches) {
-        return res.status(400).json({ success: false, error: 'Payment verification failed: Amount or ID mismatch' });
-      }
-
-      // Idempotent fulfillment
-      const fulfillRes = await verifyAndFulfillPaymentOrder({
-        orderId: order.id,
-        gatewayOrderId: statusResult.gatewayOrderId,
-        gatewayPaymentId: statusResult.transactionId || (utr !== 'NONE' ? utr : undefined),
-        isSimulatedVerification: false,
-      });
-
-      return res.json({ success: true, status: 'fulfilled', result: fulfillRes });
-    }
-
-    if (statusResult.status === 'FAILED' || statusResult.status === 'EXPIRED') {
-      await updateOrderStatus(order.id, statusResult.status, statusResult.status === 'FAILED' ? 'CANCELLED' : 'EXPIRED');
-      return res.json({ success: true, status: statusResult.status.toLowerCase() });
-    }
-
-    return res.json({ success: true, status: 'pending', message: 'Awaiting bank confirmation' });
-  } catch (err: any) {
-    console.error('[TrustGateway Webhook Exception]:', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-};
-
-// Webhook endpoint configured in Trust Gateway dashboard: https://vortexcode.shop/api/webhook/payment
-router.post('/webhook/payment', handlePaymentWebhook);
-router.post('/payment/webhook', handlePaymentWebhook);
-router.post('/v1/orders/webhook', handlePaymentWebhook);
-
-// ===================== TRUST GATEWAY V1 ENDPOINTS =====================
-
-/**
- * POST /api/v1/orders/create
- * Creates local pending order and initiates Trust Gateway payment session
- */
-router.post('/v1/orders/create', async (req, res) => {
-  try {
-    const { amount, note, productId, customerName, customerEmail } = req.body || {};
-    if (!amount) {
-      return res.status(400).json({ success: false, error: 'amount is required' });
-    }
-
-    const numAmount = Number(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid amount' });
-    }
-
-    const db = await getDb();
-    const product = productId ? await getProductById(productId) : (await getAllProducts())[0];
-    const resolvedProdId = product?.id || 'prod_100';
-    const resolvedProdName = product?.name || (note || 'Digital Code Recharge');
-
-    const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const orderNumber = `VRX-2026-${randomSuffix}`;
-    const now = new Date().toISOString();
-
-    // Call Trust Gateway API directly with server-side key
-    const gatewayOrder = await paymentGateway.createGatewayOrder({
-      orderId,
-      orderNumber,
-      amount: numAmount,
-      currency: 'INR',
-      productId: resolvedProdId,
-      productName: resolvedProdName,
-      customerName: customerName || 'Customer',
-      customerEmail: customerEmail || 'customer@vortexcode.com',
-    });
-
-    const payableAmount = gatewayOrder.amount;
-    const requestedAmount = gatewayOrder.requestedAmount ?? numAmount;
-    const gatewayOrderId = gatewayOrder.gatewayOrderId || orderId;
-
-    // Persist data.order_id, data.amount (the exact payable amount), data.requested_amount, and local order ID
-    db.run(
-      `INSERT INTO orders (
-        id, order_number, product_id, product_name, customer_name, customer_email,
-        amount, requested_amount, gateway_order_id, payment_status, delivery_status,
-        payment_method, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', 'Trust Gateway', ?, ?);`,
-      [
+    if (isPaid && orderId) {
+      const result = await verifyAndFulfillPaymentOrder({
         orderId,
-        orderNumber,
-        resolvedProdId,
-        resolvedProdName,
-        customerName || 'Customer',
-        customerEmail || 'customer@vortexcode.com',
-        payableAmount,
-        requestedAmount,
-        gatewayOrderId,
-        now,
-        now,
-      ]
-    );
-    saveDb();
-
-    return res.status(201).json({
-      success: true,
-      data: {
-        order_id: gatewayOrderId,
-        local_order_id: orderId,
-        order_number: orderNumber,
-        amount: payableAmount,
-        requested_amount: requestedAmount,
-        checkout_url: gatewayOrder.paymentUrl,
-        payment_url: gatewayOrder.paymentUrl,
-        status: 'pending',
-      },
-    });
-  } catch (err: any) {
-    console.error('[TrustGateway Route Exception] /api/v1/orders/create failed:', err.message);
-    const status = err.statusCode || (err.message?.includes('credentials') ? 401 : 500);
-    return res.status(status).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * GET /api/v1/orders/status/:order_id
- * Queries Trust Gateway status and fulfills order idempotently if paid === true
- */
-router.get('/v1/orders/status/:order_id', async (req, res) => {
-  try {
-    const orderIdentifier = req.params.order_id;
-    if (!orderIdentifier) {
-      return res.status(400).json({ success: false, error: 'order_id is required' });
+        gatewayPaymentId: utr || `fam_hook_${Date.now()}`,
+        isSimulatedVerification: true, // Webhook is authoritative server confirmation
+      });
+      return res.json({ success: true, status: 'fulfilled', result });
     }
 
-    const order = await getOrderByIdOrNumber(orderIdentifier);
-    const gatewayOrderId = order?.gatewayOrderId || orderIdentifier;
-
-    const statusResult = await paymentGateway.checkPaymentStatus(gatewayOrderId, order?.amount);
-
-    // If order exists in local DB and payment verified paid === true
-    if (order && statusResult.status === 'PAID') {
-      const orderIdMatches = !order.gatewayOrderId || statusResult.gatewayOrderId === order.gatewayOrderId;
-      const amountMatches = Math.abs(statusResult.amount - order.amount) < 0.05;
-
-      if (orderIdMatches && amountMatches) {
-        const fulfillRes = await verifyAndFulfillPaymentOrder({
-          orderId: order.id,
-          gatewayOrderId: statusResult.gatewayOrderId,
-          gatewayPaymentId: statusResult.transactionId,
-          isSimulatedVerification: false,
-        });
-
-        return res.json({
-          success: true,
-          paid: true,
-          status: 'completed',
-          data: {
-            order_id: statusResult.gatewayOrderId,
-            local_order_id: order.id,
-            amount: statusResult.amount,
-            paid: true,
-            status: 'completed',
-            delivered_code: fulfillRes.order?.deliveredCode,
-            fulfillment: fulfillRes,
-          },
-        });
-      }
+    if (orderId && (statusStr === 'FAILED' || statusStr === 'CANCELLED')) {
+      await updateOrderStatus(orderId, 'FAILED', 'CANCELLED');
+      return res.json({ success: true, status: 'marked_failed' });
     }
 
-    const currentStatus = (statusResult.status || 'PENDING').toLowerCase();
-    return res.json({
-      success: statusResult.isValid,
-      paid: statusResult.status === 'PAID',
-      status: currentStatus,
-      data: {
-        order_id: statusResult.gatewayOrderId || gatewayOrderId,
-        amount: statusResult.amount,
-        paid: statusResult.status === 'PAID',
-        status: currentStatus,
-        error: statusResult.error,
-      },
-    });
+    return res.json({ success: true, status: 'received', message: 'Webhook event recorded' });
   } catch (err: any) {
-    console.error('[TrustGateway Route Exception] /api/v1/orders/status failed:', err.message);
+    console.error('Webhook processing exception:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ===================== ADMIN AUTH =====================
 
 router.post('/admin/login', (req, res) => {
   const { identifier, password } = req.body;
@@ -1405,8 +1238,6 @@ router.delete('/admin/notices/:id', isAdminMiddleware, async (req, res) => {
 function sanitizeStoreSettings(rawSettings: any) {
   if (!rawSettings) return null;
   const {
-    trustgatewayApiKey,
-    trustgatewayWebhookSecret,
     famupigatewayApiKey,
     famupigatewayWebhookSecret,
     ...safeSettings
@@ -1414,22 +1245,8 @@ function sanitizeStoreSettings(rawSettings: any) {
 
   return {
     ...safeSettings,
-    trustgatewayApiKeyConfigured: !!(
-      (trustgatewayApiKey && trustgatewayApiKey.trim()) ||
-      (process.env.TRUST_GATEWAY_API_KEY && process.env.TRUST_GATEWAY_API_KEY.trim())
-    ),
-    trustgatewayWebhookConfigured: !!(
-      (trustgatewayWebhookSecret && trustgatewayWebhookSecret.trim()) ||
-      (process.env.TRUST_GATEWAY_WEBHOOK_SECRET && process.env.TRUST_GATEWAY_WEBHOOK_SECRET.trim())
-    ),
-    famupigatewayApiKeyConfigured: !!(
-      (famupigatewayApiKey && famupigatewayApiKey.trim()) ||
-      (process.env.TRUST_GATEWAY_API_KEY && process.env.TRUST_GATEWAY_API_KEY.trim())
-    ),
-    famupigatewayWebhookSecretConfigured: !!(
-      (famupigatewayWebhookSecret && famupigatewayWebhookSecret.trim()) ||
-      (process.env.TRUST_GATEWAY_WEBHOOK_SECRET && process.env.TRUST_GATEWAY_WEBHOOK_SECRET.trim())
-    ),
+    famupigatewayApiKeyConfigured: !!(famupigatewayApiKey && famupigatewayApiKey.trim()),
+    famupigatewayWebhookSecretConfigured: !!(famupigatewayWebhookSecret && famupigatewayWebhookSecret.trim()),
   };
 }
 

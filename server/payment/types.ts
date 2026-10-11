@@ -1,5 +1,5 @@
 export interface PaymentGatewayConfig {
-  provider: 'razorpay' | 'cashfree' | 'stripe' | 'famupigateway' | 'trustgateway' | 'custom';
+  provider: 'razorpay' | 'cashfree' | 'stripe' | 'famupigateway' | 'custom';
   isConfigured: boolean;
   currency: string;
   publicKey?: string;
@@ -29,7 +29,6 @@ export interface PaymentGatewayOrderResponse {
   paymentUrl?: string;
   token?: string;
   expiresAt?: string;
-  requestedAmount?: number;
 }
 
 export interface PaymentVerificationParams {

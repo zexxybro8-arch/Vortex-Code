@@ -298,16 +298,6 @@ export const api = {
     }
   },
 
-  async getPurchaseHistory(customerId?: string, email?: string): Promise<{ success: boolean; purchases: any[] }> {
-    try {
-      const orders = await this.getMyOrders(email, customerId);
-      return { success: true, purchases: orders };
-    } catch (err) {
-      console.warn('api.getPurchaseHistory error:', err);
-      return { success: false, purchases: [] };
-    }
-  },
-
   async revealOrderCode(orderId: string, email?: string, customerId?: string): Promise<any> {
     return safeFetchJson('/api/my-orders/reveal', {
       method: 'POST',
@@ -332,12 +322,6 @@ export const api = {
       if (err.message?.includes('404') || err.message?.includes('not found')) return null;
       throw err;
     }
-  },
-
-  async auditOrders(): Promise<any> {
-    return safeFetchJson('/api/admin/orders/audit', {
-      headers: { 'x-admin-token': 'SAGAR551' },
-    });
   },
 
   async updateOrderStatus(id: string, paymentStatus: string, deliveryStatus: string): Promise<any> {
