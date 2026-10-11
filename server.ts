@@ -73,6 +73,13 @@ async function bootstrap() {
     console.error('Non-fatal database initialization warning:', err);
   }
 
+  // Validate critical production configuration
+  if (!process.env.TRUST_GATEWAY_API_KEY) {
+    console.warn('⚠️ WARNING: TRUST_GATEWAY_API_KEY is not set. Live UPI payments will be disabled.');
+  } else {
+    console.log('✅ TRUST_GATEWAY_API_KEY is configured.');
+  }
+
   // Bind server listener so incoming requests are served immediately
   if (isSocket) {
     app.listen(PORT, () => {
