@@ -170,26 +170,7 @@ export async function getDb(): Promise<Database> {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-
-    CREATE TABLE IF NOT EXISTS wallet_transactions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      order_id TEXT,
-      type TEXT NOT NULL,
-      amount REAL NOT NULL,
-      balance_before REAL NOT NULL,
-      balance_after REAL NOT NULL,
-      description TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
   `);
-
-  try {
-    dbInstance.run(`ALTER TABLE users ADD COLUMN balance REAL NOT NULL DEFAULT 1500.0;`);
-  } catch (e) {
-    // Ignore error if column already exists
-  }
 
   try {
     dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_order_id TEXT;`);

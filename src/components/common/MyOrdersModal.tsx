@@ -182,10 +182,10 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
 
               <div className="space-y-1.5 max-w-sm mx-auto">
                 <h3 className="text-lg sm:text-xl font-black text-white tracking-wide">
-                  No verified purchase record found.
+                  NO REDEMPTIONS YET
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                  No verified purchase records found for this account. Your successful purchases and secure digital code keys will appear here once verified.
+                  You haven't purchased any redeem codes yet. Your successful purchases and secure digital code keys will appear here.
                 </p>
               </div>
 
@@ -245,7 +245,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
                           {ord.productName}
                         </h4>
                         <div className="flex items-center gap-3 mt-1 text-xs font-mono">
-                          <span className="text-slate-400">Balance: <strong className="text-emerald-400">₹{ord.balance}</strong></span>
+
                           <span className="text-slate-400">Price Paid: <strong className="text-white">₹{ord.pricePaid}</strong></span>
                           <span className="text-slate-400">Payment: <strong className="text-emerald-400">PAID</strong></span>
                         </div>

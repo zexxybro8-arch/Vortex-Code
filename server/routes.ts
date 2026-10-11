@@ -366,7 +366,6 @@ router.get('/me', async (req, res) => {
         role: user.role,
         status: user.status || 'ACTIVE',
         createdAt: user.createdAt,
-        balance: user.balance !== undefined ? user.balance : 1500.0,
       },
     });
   } catch (err: any) {
@@ -666,58 +665,7 @@ const handleCreateCheckoutOrder = async (req: any, res: any) => {
 router.post('/checkout/create-order', handleCreateCheckoutOrder);
 router.post('/payment', handleCreateCheckoutOrder);
 
-/**
- * 4. POST /api/wallet/deposit
- * Server-side wallet deposit order creation with Trust Gateway UPI
- */
-router.post('/wallet/deposit', async (req, res) => {
-  try {
-    const { amount, customerId, customerName, customerEmail } = req.body || {};
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      return res.status(400).json({ success: false, error: 'A valid deposit amount is required' });
-    }
 
-    if (!paymentGateway.isConfigured()) {
-      return res.status(503).json({
-        success: false,
-        error: 'Payment service temporarily unavailable. Please try again later.',
-        message: 'Payment service temporarily unavailable. Please try again later.',
-      });
-    }
-
-    const depositResult = await createPendingDepositOrder({
-      amount: Number(amount),
-      customerId,
-      customerName: customerName || 'Customer',
-      customerEmail: customerEmail || 'customer@vortexcode.com',
-    });
-
-    return res.status(201).json(depositResult);
-  } catch (err: any) {
-    return res.status(400).json({
-      success: false,
-      error: err.message || 'Failed to initiate deposit order',
-      message: err.message || 'Failed to initiate deposit order',
-    });
-  }
-});
-
-/**
- * GET /api/wallet/transactions
- * Retrieve user's verified deposit ledger and balance history
- */
-router.get('/wallet/transactions', async (req, res) => {
-  try {
-    const identifier = (req.query.userId as string) || (req.query.customerId as string) || (req.query.email as string) || '';
-    if (!identifier) {
-      return res.status(400).json({ success: false, error: 'User identifier required' });
-    }
-    const transactions = await getUserWalletTransactions(identifier);
-    return res.json({ success: true, transactions });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 /**
  * 2. PAYMENT STATUS VERIFICATION

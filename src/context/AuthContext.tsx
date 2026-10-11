@@ -108,15 +108,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setOrders([]);
         return;
       }
-      const apiOrders = await api.getMyOrders(user.email, user.customerId || user.id);
+      const apiOrders = await api.getMyOrders(user.email, user.id);
       if (apiOrders) {
         const mappedOrders: OrderItem[] = apiOrders.map((o: any) => ({
           id: o.id,
           orderNumber: o.orderNumber,
           codeTitle: o.productName,
           priceRupees: Number(o.pricePaid || o.amount),
-          rewardValueRupees: Number(o.balance || o.amount * 15),
-          codeValue: Number(o.balance || o.amount * 15),
+          rewardValueRupees: Number(o.amount * 15),
+          codeValue: Number(o.amount * 15),
           redeemCode: o.deliveredCode || 'XXXX XXXX XXXX XXXX',
           pin: o.deliveredPin || '',
           category: 'GOOGLE PLAY',

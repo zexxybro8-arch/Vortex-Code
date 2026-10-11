@@ -14,6 +14,7 @@ import {
   Key,
   Check,
   Tag,
+
   ArrowUpDown,
   Sparkles,
   Info,
@@ -26,8 +27,6 @@ import {
   Copy,
   Gift,
   ArrowRight,
-  Wallet,
-  PlusCircle,
   X,
 } from 'lucide-react';
 
@@ -51,10 +50,7 @@ export const CustomerDashboard: React.FC = () => {
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
-  // Wallet Deposit Modal State
-  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [depositAmount, setDepositAmount] = useState<number>(500);
-  const [isInitiatingDeposit, setIsInitiatingDeposit] = useState(false);
+
 
   // Live Products and securely masked unused codes from single source of truth (Database)
   const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -286,7 +282,7 @@ export const CustomerDashboard: React.FC = () => {
             codeRecord: c,
             maskedCode: c.codeMasked || c.code || 'CSGY AGTS **** ****',
             isOutOfStock: false,
-            availableStockCount: totalStock,
+            availableStockCount: 1,
           });
         });
       } else {
@@ -369,43 +365,7 @@ export const CustomerDashboard: React.FC = () => {
     }
   };
 
-  const handleInitiateDeposit = async () => {
-    if (!user) {
-      triggerAuthRequired('Deposit into Wallet');
-      return;
-    }
 
-    if (!depositAmount || isNaN(depositAmount) || depositAmount < 10) {
-      addToast('error', 'Minimum deposit amount is ₹10.00.');
-      return;
-    }
-
-    setIsInitiatingDeposit(true);
-    try {
-      const res = await api.createDepositOrder({
-        amount: Number(depositAmount),
-        customerId: user.customerId || user.id,
-        customerName: user.fullName,
-        customerEmail: user.email,
-      });
-
-      if (!res.success) {
-        addToast('info', res.error || 'Payment service temporarily unavailable. Please try again later.');
-        return;
-      }
-
-      if (res.checkoutUrl) {
-        addToast('info', 'Redirecting to Trust Gateway UPI Checkout...');
-        window.location.href = res.checkoutUrl;
-      } else {
-        addToast('error', 'No checkout URL returned from Trust Gateway.');
-      }
-    } catch (err: any) {
-      addToast('info', err.message || 'Payment service temporarily unavailable. Please try again later.');
-    } finally {
-      setIsInitiatingDeposit(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
@@ -424,23 +384,7 @@ export const CustomerDashboard: React.FC = () => {
                   <span>SELECT REDEEM CODE / AMOUNT:</span>
                 </div>
 
-                {user && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-emerald-500/30 text-xs font-mono">
-                      <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-slate-400 text-[11px]">Wallet:</span>
-                      <strong className="text-emerald-400">₹{(user.balance ?? 0).toLocaleString('en-IN')}</strong>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsDepositModalOpen(true)}
-                      className="py-1.5 px-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      <span>Deposit Funds</span>
-                    </button>
-                  </div>
-                )}
+
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
@@ -713,86 +657,7 @@ export const CustomerDashboard: React.FC = () => {
         }}
       />
 
-      {/* WALLET DEPOSIT MODAL */}
-      {isDepositModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-white">Deposit to Wallet</h3>
-                  <p className="text-[11px] font-mono text-emerald-400">Trust Gateway UPI Instant Credit</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsDepositModalOpen(false)}
-                className="p-1.5 rounded-lg bg-slate-950 text-slate-400 hover:text-white border border-slate-800 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between font-mono text-xs">
-              <span className="text-slate-400">Current Balance:</span>
-              <strong className="text-emerald-400 text-sm">₹{(user?.balance ?? 0).toLocaleString('en-IN')}</strong>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-300">Quick Select Amount</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[100, 250, 500, 1000, 2000, 5000].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setDepositAmount(amt)}
-                    className={`py-2 px-3 rounded-xl font-mono text-xs font-bold border transition-all cursor-pointer ${
-                      depositAmount === amt
-                        ? 'bg-emerald-400 text-slate-950 border-emerald-300 shadow-md shadow-emerald-500/20'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    ₹{amt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-300">Deposit Amount (₹ INR)</label>
-              <input
-                type="number"
-                min="10"
-                step="1"
-                value={depositAmount || ''}
-                onChange={(e) => setDepositAmount(Math.max(0, Number(e.target.value)))}
-                className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white font-mono focus:outline-none focus:border-emerald-400"
-                placeholder="Enter deposit amount..."
-              />
-              <span className="text-[10px] text-slate-500 font-mono">Minimum deposit: ₹10.00</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleInitiateDeposit}
-              disabled={isInitiatingDeposit || !depositAmount || depositAmount < 10}
-              className="w-full py-3.5 px-4 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {isInitiatingDeposit ? (
-                <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  <span>Deposit ₹{depositAmount || 0} via Trust Gateway UPI</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
 
     </div>
   );
