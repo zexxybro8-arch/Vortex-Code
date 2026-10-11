@@ -128,7 +128,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
       const result = await api.verifyPayment({
         orderId: order.id,
         gatewayOrderId: checkoutData.gatewayOrder?.gatewayOrderId,
-        isSimulatedVerification: !isGatewayReady,
       });
 
       if (result.status === 'PAID' || result.order?.deliveredCode) {
@@ -161,7 +160,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               const pollRes = await api.verifyPayment({
                 orderId: order.id,
                 gatewayOrderId: checkoutData.gatewayOrder?.gatewayOrderId,
-                isSimulatedVerification: !isGatewayReady,
               });
               if (pollRes.status === 'PAID' || pollRes.order?.deliveredCode) {
                 stopPolling();
@@ -348,103 +346,100 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </div>
             )}
 
-            {/* 2. PAYMENT METHOD & QR SECTION */}
+            {/* 2. PAYMENT METHOD & TRUST GATEWAY SECTION */}
             <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-white">
                   <CreditCard className="w-4 h-4 text-emerald-400" />
-                  <span>UPI & Payment Gateway Section</span>
+                  <span>Trust Gateway UPI Payment</span>
                 </div>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  STATUS: PENDING
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                  isGatewayReady
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                }`}>
+                  {isGatewayReady ? 'GATEWAY: READY' : 'STATUS: OFFLINE'}
                 </span>
               </div>
 
               {isGatewayReady ? (
-                /* LIVE GATEWAY MODE */
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center space-y-4 text-center">
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Smartphone className="w-4 h-4 text-emerald-400" />
-                    <span>Real-time Secure Payment Gateway</span>
+                /* LIVE TRUST GATEWAY CHECKOUT INTERFACE */
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-center">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-sm font-bold text-white">Trust Gateway UPI Checkout</h4>
+                      <p className="text-xs text-emerald-300 font-mono">
+                        Exact Amount Payable: <strong className="text-white font-extrabold">₹{checkoutData.gatewayOrder?.payableAmount || (checkoutData.order as any)?.payableAmount || order.amount}</strong>
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-sm mx-auto leading-relaxed">
+                      You will be securely redirected to the official Trust Gateway hosted checkout page to complete UPI payment (PhonePe, Google Pay, Paytm, CRED).
+                    </p>
                   </div>
 
-                  <p className="text-xs text-slate-300 max-w-sm">
-                    Please click the button below to proceed to the secure FamGateway payment page to complete your transaction of <strong className="text-white">₹{order.amount}</strong>.
-                  </p>
+                  {/* Actions */}
+                  <div className="space-y-2 pt-1">
+                    {(checkoutData.gatewayOrder?.paymentUrl || (checkoutData.order as any)?.checkoutUrl) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetUrl = checkoutData.gatewayOrder?.paymentUrl || (checkoutData.order as any)?.checkoutUrl;
+                          if (targetUrl) {
+                            window.location.href = targetUrl;
+                          }
+                        }}
+                        className="w-full py-3.5 px-4 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>Pay ₹{checkoutData.gatewayOrder?.payableAmount || (checkoutData.order as any)?.payableAmount || order.amount} on Trust Gateway</span>
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                    )}
 
-                  <a
-                    href={checkoutData.gatewayOrder?.paymentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-4 px-4 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/35 hover:scale-[1.01]"
-                  >
-                    <span>Proceed to Pay (Open Gateway)</span>
-                    <ExternalLink className="w-4 h-4 shrink-0" />
-                  </a>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 text-[10px] text-emerald-300 border border-emerald-500/20 max-w-sm leading-relaxed">
-                    ℹ️ <strong>Status:</strong> Once the payment is completed on the gateway page, return to this window and click the verification button below to fetch and deliver your code instantly.
+                    <button
+                      type="button"
+                      onClick={executeVerification}
+                      disabled={isVerifying}
+                      className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs rounded-xl border border-slate-800 hover:border-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isVerifying ? 'animate-spin' : ''}`} />
+                      <span>{isVerifying ? 'Verifying with Bank...' : 'I have Completed Payment — Verify Status'}</span>
+                    </button>
                   </div>
                 </div>
               ) : (
-                /* UPI QR PAYMENT CODE DISPLAY (SIMULATION MODE) */
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 flex flex-col items-center justify-center space-y-3 text-center">
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Smartphone className="w-4 h-4 text-emerald-400" />
-                    <span>Scan & Pay via UPI / QR (Simulation Mode)</span>
-                  </div>
-
-                  {/* Dynamically generated UPI QR Code image matching exact DB order amount */}
-                  <div className="p-3 bg-white rounded-2xl shadow-lg border border-slate-200">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                        `upi://pay?pa=vortexcode@upi&pn=VortexCode&am=${order.amount}&cu=INR&tn=${order.orderNumber}`
-                      )}`}
-                      alt="Payment QR Code"
-                      className="w-40 h-40 object-contain"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="text-xs font-mono font-extrabold text-emerald-400">
-                      AMOUNT: ₹{order.amount} INR
+                /* OFFLINE PAYMENT SERVICE NOTIFICATION */
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center space-y-3 text-center">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <AlertCircle className="w-5 h-5" />
                     </div>
-                    <div className="text-[11px] font-mono text-slate-400">
-                      UPI ID: <strong className="text-slate-200">vortexcode@upi</strong>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white">Payment Gateway Offline</h4>
+                      <p className="text-xs text-amber-300 font-semibold">
+                        Payment service temporarily unavailable. Please try again later.
+                      </p>
                     </div>
+                    <p className="text-[11px] text-slate-400 max-w-sm leading-relaxed">
+                      Trust Gateway credentials have not been configured on this host yet. Live payments will activate as soon as TRUST_GATEWAY_API_KEY is supplied.
+                    </p>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-slate-950 text-[10px] text-amber-300 border border-amber-500/20 max-w-sm leading-relaxed">
-                    ⚠️ <strong>Notice:</strong> Scanning or opening this QR code does NOT automatically deliver a code or mark payment as completed. Payment must be verified server-side.
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full py-3.5 px-4 bg-slate-800 text-slate-500 font-extrabold text-xs sm:text-sm rounded-xl cursor-not-allowed opacity-60 flex items-center justify-center gap-2 border border-slate-700"
+                    >
+                      <Lock className="w-4 h-4 text-slate-500" />
+                      <span>Payment service temporarily unavailable. Please try again later.</span>
+                    </button>
                   </div>
                 </div>
               )}
-
-              {/* PAYMENT VERIFICATION ACTION */}
-              <div className="pt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => executeVerification()}
-                  disabled={isVerifying}
-                  className="w-full py-3.5 px-4 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
-                >
-                  {isVerifying ? (
-                    <div className="flex items-center gap-2">
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Checking with Bank & Verifying...</span>
-                    </div>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span>Verify Payment & Claim Code (₹{order.amount})</span>
-                    </>
-                  )}
-                </button>
-                <p className="text-[10px] text-slate-500 text-center">
-                  Executes server-side verification, atomic code assignment (1 code max), and updates order status to PAID.
-                </p>
-              </div>
 
             </div>
 

@@ -21,13 +21,6 @@ export const AdminSettingsTab: React.FC = () => {
   const [step4Enabled, setStep4Enabled] = useState(storeSettings.how_to_redeem_step_4_image_enabled ?? false);
   const [step4Url, setStep4Url] = useState(storeSettings.how_to_redeem_step_4_image_url || '');
 
-  // FamGateway Credentials & Domain URLs
-  const [famupigatewayBaseUrl, setFamupigatewayBaseUrl] = useState(
-    storeSettings.famupigatewayBaseUrl || 'https://famupigateway.site/api'
-  );
-  const [famupigatewayExpiryMinutes, setFamupigatewayExpiryMinutes] = useState(
-    storeSettings.famupigatewayExpiryMinutes || 5
-  );
   const [appUrl, setAppUrl] = useState(storeSettings.appUrl || 'https://vortexcode.shop');
 
   const [copiedWebhook, setCopiedWebhook] = useState(false);
@@ -52,8 +45,6 @@ export const AdminSettingsTab: React.FC = () => {
       if (storeSettings.how_to_redeem_step_3_image_url !== undefined) setStep3Url(storeSettings.how_to_redeem_step_3_image_url);
       if (storeSettings.how_to_redeem_step_4_image_enabled !== undefined) setStep4Enabled(storeSettings.how_to_redeem_step_4_image_enabled);
       if (storeSettings.how_to_redeem_step_4_image_url !== undefined) setStep4Url(storeSettings.how_to_redeem_step_4_image_url);
-      if (storeSettings.famupigatewayBaseUrl) setFamupigatewayBaseUrl(storeSettings.famupigatewayBaseUrl);
-      if (storeSettings.famupigatewayExpiryMinutes) setFamupigatewayExpiryMinutes(storeSettings.famupigatewayExpiryMinutes);
       if (storeSettings.appUrl) setAppUrl(storeSettings.appUrl);
 
       // Mark as initialized so subsequent 3-second background polling ticks don't wipe out typed inputs
@@ -85,8 +76,6 @@ export const AdminSettingsTab: React.FC = () => {
       supportEmail,
       currencySymbol,
       enableAutoFulfillment,
-      famupigatewayBaseUrl,
-      famupigatewayExpiryMinutes,
       appUrl,
       how_to_redeem_step_1_image_enabled: step1Enabled,
       how_to_redeem_step_1_image_url: step1Url,
@@ -108,7 +97,7 @@ export const AdminSettingsTab: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Store Configuration & Payment Gateway Settings</h1>
-          <p className="text-xs text-slate-400">Configure global store branding, FamGateway production API credentials, and webhook integration endpoints.</p>
+          <p className="text-xs text-slate-400">Configure global store branding, application domain, and webhook endpoints.</p>
         </div>
       </div>
 
@@ -121,23 +110,8 @@ export const AdminSettingsTab: React.FC = () => {
             <span>API / Endpoint Settings</span>
           </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Payment API URL <span className="text-emerald-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={famupigatewayBaseUrl}
-                onChange={(e) => setFamupigatewayBaseUrl(e.target.value)}
-                placeholder="https://famupigateway.site/api"
-                className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-emerald-300 font-mono focus:outline-none focus:border-emerald-400"
-                required
-              />
-              <p className="text-[10px] text-slate-500 mt-1">Default API Endpoint: <code className="text-slate-400">https://famupigateway.site/api</code></p>
-            </div>
-
-            <div className="sm:col-span-2">
+          <div className="grid grid-cols-1 gap-4">
+            <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 Application Domain URL (<code className="text-emerald-400">APP_URL</code>)
               </label>
@@ -151,20 +125,6 @@ export const AdminSettingsTab: React.FC = () => {
               <p className="text-[10px] text-slate-500 mt-1">
                 Primary production URL of your store (e.g. <code className="text-slate-300">https://vortexcode.shop</code>)
               </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Payment Link Expiry (Minutes)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={60}
-                value={famupigatewayExpiryMinutes}
-                onChange={(e) => setFamupigatewayExpiryMinutes(Number(e.target.value))}
-                className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
-              />
             </div>
           </div>
 
@@ -188,7 +148,7 @@ export const AdminSettingsTab: React.FC = () => {
                 </button>
               </div>
               <p className="text-[10px] text-slate-500">
-                Paste this Webhook URL into your FamGateway dashboard under Notification / Webhook Settings.
+                Webhook URL reserved for your future payment gateway dashboard notification settings.
               </p>
             </div>
 
@@ -213,36 +173,56 @@ export const AdminSettingsTab: React.FC = () => {
           </div>
         </div>
 
-        {/* B. PAYMENT GATEWAY SECURED STATUS CARD */}
-        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 space-y-4 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 px-3 py-1 bg-emerald-500/10 border-b border-l border-emerald-500/30 rounded-bl-xl text-[10px] font-mono text-emerald-400 font-bold">
-            SECURED ENDPOINT
-          </div>
-
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
-            <CreditCard className="w-4 h-4 text-emerald-400" />
-            <span>Payment Gateway Credentials Status</span>
+        {/* B. TRUST GATEWAY UPI CONFIGURATION CARD */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-emerald-400" />
+              <span>Trust Gateway UPI Integration</span>
+            </div>
+            <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold font-mono border ${
+              storeSettings?.trustGatewayConfigured
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+            }`}>
+              {storeSettings?.trustGatewayConfigured ? 'STATUS: ACTIVE' : 'AWAITING TRUST_GATEWAY_API_KEY'}
+            </span>
           </h2>
 
-          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
             <div className="space-y-1">
-              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>FamGateway Server Credentials</span>
-                {storeSettings.famupigatewayApiKeyConfigured ? (
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase tracking-wider font-mono">
-                    CONNECTED / CONFIGURED
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider font-mono">
-                    NOT CONFIGURED
-                  </span>
-                )}
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                {storeSettings.famupigatewayApiKeyConfigured
-                  ? "🔒 Server-Side Credentials Secured. Sensitive gateway access keys and signing secrets are stored privately in server environment variables and excluded from frontend exposure."
-                  : "⚠️ Server API Key not found. Please set FAMUPIGATEWAY_API_KEY inside your server environment variable configuration to process live payments."}
+              <h3 className="text-xs font-bold text-white">Trust Gateway UPI API Endpoints</h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Trust Gateway UPI integration is active in Vortex Code. Payment creation, status verification, and HMAC-SHA256 webhooks are fully implemented.
               </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Base URL</span>
+                <div className="text-emerald-400 font-bold truncate">https://trustgateway.in</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Create Order</span>
+                <div className="text-slate-200 truncate">POST /api/v1/orders/create</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Status Verification</span>
+                <div className="text-slate-200 truncate">GET /api/v1/orders/status/:id</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-bold">Webhook Security</span>
+                <div className="text-teal-400 truncate">HMAC-SHA256 (Constant-Time)</div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+              <strong className="text-white block font-sans">Hosting Dashboard Configuration:</strong>
+              <p>Add these server-side environment variables in your hosting dashboard (e.g. Cloud Run, Vercel, Railway, or VPS):</p>
+              <div className="font-mono text-[10px] text-emerald-300 bg-slate-950 p-2 rounded border border-slate-800 space-y-0.5">
+                <div>TRUST_GATEWAY_API_KEY=&lt;Your-TrustGateway-API-Key&gt;</div>
+                <div>TRUST_GATEWAY_WEBHOOK_SECRET=&lt;Your-TrustGateway-Webhook-Secret&gt;</div>
+              </div>
             </div>
           </div>
         </div>

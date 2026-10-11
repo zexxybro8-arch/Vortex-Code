@@ -170,6 +170,19 @@ export async function getDb(): Promise<Database> {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS wallet_transactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      order_id TEXT,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      balance_before REAL NOT NULL,
+      balance_after REAL NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
 
   try {
@@ -195,6 +208,22 @@ export async function getDb(): Promise<Database> {
   } catch (e) {
     // Ignore error if column already exists
   }
+
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN payable_amount REAL;`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN order_type TEXT DEFAULT 'PURCHASE';`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN checkout_url TEXT;`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN expires_at TEXT;`);
+  } catch (e) {}
 
   try {
     dbInstance.run(`ALTER TABLE users ADD COLUMN customer_id TEXT;`);
@@ -248,6 +277,7 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('storeName', 'VORTEX CODE');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('websiteName', 'VORTEX CODE');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('subtitle', 'SECURE DIGITAL STORE');`);
+  dbInstance.run(`DELETE FROM store_settings WHERE key LIKE 'famupi%';`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('tagline', 'SECURE DIGITAL STORE');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('logoUrl', '');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('supportEmail', 'support@vortexcode.com');`);
@@ -269,11 +299,6 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactIconSize', '42');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactMobileIconSize', '42');`);
 
-  // FamGateway Live Production Credentials
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayBaseUrl', 'https://famupigateway.site/api');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayApiKey', 'Famcfc08cd92c090e3718e9ad92155eb0fc');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayWebhookSecret', '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f');`);
-  dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('famupigatewayExpiryMinutes', '5');`);
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
 
   // Seed default categories if empty
@@ -1289,7 +1314,11 @@ export async function getOrderByIdOrNumber(identifier: string) {
       product_name as productName, 
       customer_name as customerName, 
       customer_email as customerEmail, 
+      customer_id as customerId,
       amount, 
+      payable_amount as payableAmount,
+      order_type as orderType,
+      checkout_url as checkoutUrl,
       payment_status as paymentStatus, 
       delivery_status as deliveryStatus, 
       delivered_code_id as deliveredCodeId, 
@@ -1298,11 +1327,12 @@ export async function getOrderByIdOrNumber(identifier: string) {
       payment_method as paymentMethod, 
       gateway_order_id as gatewayOrderId,
       gateway_payment_id as gatewayPaymentId,
+      expires_at as expiresAt,
       created_at as createdAt, 
       updated_at as updatedAt 
     FROM orders 
-    WHERE id = ? OR order_number = ? OR gateway_order_id = ? OR customer_email = ?;`,
-    [clean, clean, clean, clean]
+    WHERE id = ? OR order_number = ? OR gateway_order_id = ?;`,
+    [clean, clean, clean]
   );
 
   if (res.length === 0 || res[0].values.length === 0) return null;
@@ -1472,6 +1502,10 @@ export async function createPendingCheckoutOrder(params: {
   customerEmail: string;
   customerId?: string;
 }) {
+  if (!paymentGateway.isConfigured()) {
+    throw new Error('Payment service temporarily unavailable. Please try again later.');
+  }
+
   const db = await getDb();
   const product = await getProductById(params.productId);
   if (!product) {
@@ -1526,6 +1560,8 @@ export async function createPendingCheckoutOrder(params: {
       customer_email, 
       customer_id,
       amount, 
+      payable_amount,
+      order_type,
       payment_status, 
       delivery_status, 
       delivered_code_id, 
@@ -1534,7 +1570,7 @@ export async function createPendingCheckoutOrder(params: {
       payment_method, 
       created_at, 
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING', NULL, NULL, NULL, 'Payment Gateway', ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PURCHASE', 'PENDING', 'PENDING', NULL, NULL, NULL, 'Trust Gateway UPI', ?, ?);`,
     [
       orderId,
       orderNumber,
@@ -1543,6 +1579,7 @@ export async function createPendingCheckoutOrder(params: {
       params.customerName || 'Customer',
       params.customerEmail || 'customer@vortexcode.com',
       params.customerId || null,
+      verifiedAmount,
       verifiedAmount,
       now,
       now,
@@ -1564,16 +1601,19 @@ export async function createPendingCheckoutOrder(params: {
     productName: product.name,
     customerName: params.customerName || 'Customer',
     customerEmail: params.customerEmail || 'customer@vortexcode.com',
+    customerId: params.customerId,
+    orderType: 'PURCHASE',
   });
 
-  // Store gatewayOrderId if returned from gateway
-  if (gatewayOrder.gatewayOrderId) {
-    db.run(
-      `UPDATE orders SET gateway_order_id = ? WHERE id = ?;`,
-      [gatewayOrder.gatewayOrderId, orderId]
-    );
-    saveDb();
-  }
+  const payableAmount = gatewayOrder.payableAmount || verifiedAmount;
+  const checkoutUrl = gatewayOrder.paymentUrl || '';
+  const expiresAt = gatewayOrder.expiresAt || null;
+
+  db.run(
+    `UPDATE orders SET gateway_order_id = ?, payable_amount = ?, checkout_url = ?, expires_at = ? WHERE id = ?;`,
+    [gatewayOrder.gatewayOrderId || orderId, payableAmount, checkoutUrl, expiresAt, orderId]
+  );
+  saveDb();
 
   const gatewayConfig = paymentGateway.getConfig();
 
@@ -1587,15 +1627,133 @@ export async function createPendingCheckoutOrder(params: {
       denomination: product.denomination,
       rewardValue: product.rewardValue,
       amount: verifiedAmount,
-      currency: 'INR',
+      payableAmount,
+      orderType: 'PURCHASE',
+      checkoutUrl,
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING',
       customerName: params.customerName,
       customerEmail: params.customerEmail,
+      customerId: params.customerId,
       createdAt: now,
     },
     gatewayOrder,
     gatewayConfig,
+    checkoutUrl,
+  };
+}
+
+/**
+ * 4. WALLET & DEPOSIT INTEGRATION
+ * Creates a server-verified deposit intent with Trust Gateway.
+ */
+export async function createPendingDepositOrder(params: {
+  amount: number;
+  customerId?: string;
+  customerName?: string;
+  customerEmail?: string;
+}) {
+  if (!params.amount || params.amount <= 0 || isNaN(params.amount)) {
+    throw new Error('Deposit amount must be a positive number.');
+  }
+
+  const verifiedAmount = Number(params.amount.toFixed(2));
+  if (verifiedAmount < 10) {
+    throw new Error('Minimum deposit amount is ₹10.00.');
+  }
+
+  const storeSettings = await getStoreSettings();
+  paymentGateway.updateCredentials(storeSettings);
+
+  if (!paymentGateway.isConfigured()) {
+    throw new Error('Payment service temporarily unavailable. Please try again later.');
+  }
+
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const orderId = `dep_${Math.random().toString(36).substring(2, 9)}`;
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const orderNumber = `DEP-2026-${randomSuffix}`;
+
+  // Insert PENDING deposit order
+  db.run(
+    `INSERT INTO orders (
+      id,
+      order_number,
+      product_id,
+      product_name,
+      customer_name,
+      customer_email,
+      customer_id,
+      amount,
+      payable_amount,
+      order_type,
+      payment_status,
+      delivery_status,
+      delivered_code_id,
+      delivered_code,
+      delivered_pin,
+      payment_method,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, 'WALLET_DEPOSIT', 'Wallet Deposit', ?, ?, ?, ?, ?, 'DEPOSIT', 'PENDING', 'PENDING', NULL, NULL, NULL, 'Trust Gateway UPI', ?, ?);`,
+    [
+      orderId,
+      orderNumber,
+      params.customerName || 'Customer',
+      params.customerEmail || 'customer@vortexcode.com',
+      params.customerId || null,
+      verifiedAmount,
+      verifiedAmount,
+      now,
+      now,
+    ]
+  );
+  saveDb();
+
+  const gatewayOrder = await paymentGateway.createGatewayOrder({
+    orderId,
+    orderNumber,
+    amount: verifiedAmount,
+    currency: 'INR',
+    productId: 'WALLET_DEPOSIT',
+    productName: 'Wallet Balance Deposit',
+    customerName: params.customerName || 'Customer',
+    customerEmail: params.customerEmail || 'customer@vortexcode.com',
+    customerId: params.customerId,
+    orderType: 'DEPOSIT',
+  });
+
+  const payableAmount = gatewayOrder.payableAmount || verifiedAmount;
+  const checkoutUrl = gatewayOrder.paymentUrl || '';
+  const expiresAt = gatewayOrder.expiresAt || null;
+
+  db.run(
+    `UPDATE orders SET gateway_order_id = ?, payable_amount = ?, checkout_url = ?, expires_at = ? WHERE id = ?;`,
+    [gatewayOrder.gatewayOrderId || orderId, payableAmount, checkoutUrl, expiresAt, orderId]
+  );
+  saveDb();
+
+  return {
+    success: true,
+    order: {
+      id: orderId,
+      orderNumber,
+      productId: 'WALLET_DEPOSIT',
+      productName: 'Wallet Balance Deposit',
+      amount: verifiedAmount,
+      payableAmount,
+      orderType: 'DEPOSIT',
+      paymentStatus: 'PENDING',
+      deliveryStatus: 'PENDING',
+      customerName: params.customerName,
+      customerEmail: params.customerEmail,
+      customerId: params.customerId,
+      checkoutUrl,
+      createdAt: now,
+    },
+    gatewayOrder,
+    checkoutUrl,
   };
 }
 
@@ -1608,12 +1766,40 @@ export async function createPendingCheckoutOrder(params: {
  * 3. Atomic UNUSED code selection & status update to SOLD
  * 4. Update order to PAID + DELIVERED
  */
+const fulfillmentLocks = new Map<string, Promise<any>>();
+
 export async function verifyAndFulfillPaymentOrder(params: {
   orderId: string;
   gatewayPaymentId?: string;
   gatewayOrderId?: string;
   gatewaySignature?: string;
-  isSimulatedVerification?: boolean;
+  expectedCustomerId?: string;
+  expectedCustomerEmail?: string;
+}) {
+  const lockKey = params.orderId;
+  if (fulfillmentLocks.has(lockKey)) {
+    return await fulfillmentLocks.get(lockKey);
+  }
+
+  const fulfillmentPromise = (async () => {
+    try {
+      return await executeVerifyAndFulfillPaymentOrder(params);
+    } finally {
+      fulfillmentLocks.delete(lockKey);
+    }
+  })();
+
+  fulfillmentLocks.set(lockKey, fulfillmentPromise);
+  return await fulfillmentPromise;
+}
+
+async function executeVerifyAndFulfillPaymentOrder(params: {
+  orderId: string;
+  gatewayPaymentId?: string;
+  gatewayOrderId?: string;
+  gatewaySignature?: string;
+  expectedCustomerId?: string;
+  expectedCustomerEmail?: string;
 }) {
   const db = await getDb();
   const order = await getOrderByIdOrNumber(params.orderId);
@@ -1621,93 +1807,183 @@ export async function verifyAndFulfillPaymentOrder(params: {
     throw new Error('Order not found in database.');
   }
 
-  // Idempotency check: If already paid, return existing delivered code
-  if (order.paymentStatus === 'PAID' && order.deliveredCode) {
+  // Idempotency check: If already paid, return existing fulfilled record
+  if (order.paymentStatus === 'PAID') {
     return {
       success: true,
       status: 'PAID' as const,
       alreadyFulfilled: true,
       order,
-      message: 'Order was already verified and delivered.',
+      message: order.orderType === 'DEPOSIT'
+        ? 'Deposit was already verified and credited to wallet.'
+        : 'Order was already verified and delivered.',
     };
   }
 
-  // Signature / Authenticity Verification with latest DB credentials
+  // Ownership verification: ensure order belongs to requesting customer
+  if (params.expectedCustomerId && order.customerId && order.customerId !== params.expectedCustomerId) {
+    throw new Error('Order does not belong to the authenticated user.');
+  }
+  if (params.expectedCustomerEmail && order.customerEmail && order.customerEmail.toLowerCase() !== params.expectedCustomerEmail.toLowerCase()) {
+    throw new Error('Order does not belong to the authenticated user.');
+  }
+
+  // Ensure latest Trust Gateway credentials from DB / environment
   const storeSettings = await getStoreSettings();
   paymentGateway.updateCredentials(storeSettings);
 
   const gatewayConfig = paymentGateway.getConfig();
   let verifiedGatewayPaymentId = params.gatewayPaymentId;
 
-  if (gatewayConfig.isConfigured && !params.isSimulatedVerification) {
-    const identifierToCheck = order.gatewayOrderId || params.gatewayOrderId || order.id;
-    const verifyResult = await paymentGateway.checkPaymentStatus(identifierToCheck, order.amount);
-
-    // STEP 4: Handle PENDING without converting into failed
-    if (verifyResult.status === 'PENDING') {
-      return {
-        success: false,
-        status: 'PENDING' as const,
-        order,
-        message: 'Payment is currently pending bank/gateway confirmation. Polling in progress.',
-        rawGatewayResponse: verifyResult.rawGatewayResponse,
-      };
-    }
-
-    if (verifyResult.status === 'FAILED') {
-      const now = new Date().toISOString();
-      db.run(
-        `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ?;`,
-        [now, order.id]
-      );
-      saveDb();
-      return {
-        success: false,
-        status: 'FAILED' as const,
-        order: await getOrderByIdOrNumber(order.id),
-        message: verifyResult.error || 'Payment was declined or failed on gateway.',
-        rawGatewayResponse: verifyResult.rawGatewayResponse,
-      };
-    }
-
-    if (verifyResult.status === 'EXPIRED') {
-      const now = new Date().toISOString();
-      db.run(
-        `UPDATE orders SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ? WHERE id = ?;`,
-        [now, order.id]
-      );
-      saveDb();
-      return {
-        success: false,
-        status: 'EXPIRED' as const,
-        order: await getOrderByIdOrNumber(order.id),
-        message: 'Gateway payment session expired.',
-        rawGatewayResponse: verifyResult.rawGatewayResponse,
-      };
-    }
-
-    if (!verifyResult.isValid && verifyResult.status !== 'PAID') {
-      return {
-        success: false,
-        status: 'PENDING' as const,
-        order,
-        message: `Gateway status is ${verifyResult.status || 'PENDING'}. Waiting for confirmation.`,
-        rawGatewayResponse: verifyResult.rawGatewayResponse,
-      };
-    }
-
-    if (verifyResult.transactionId) {
-      verifiedGatewayPaymentId = verifyResult.transactionId;
-    }
-  } else if (!params.isSimulatedVerification && !gatewayConfig.isConfigured) {
+  if (!gatewayConfig.isConfigured) {
     return {
       success: false,
       status: 'PENDING' as const,
       order,
-      message: 'Payment Gateway is not configured with live credentials.',
+      message: 'Payment service temporarily unavailable. Please try again later.',
     };
   }
 
+  const identifierToCheck = order.gatewayOrderId || params.gatewayOrderId || order.id;
+  const expectedAmount = Number(order.payableAmount || order.amount || 0);
+
+  // Authenticated server-to-server query to Trust Gateway status API
+  const verifyResult = await paymentGateway.verifyPayment({
+    orderId: identifierToCheck,
+    gatewayOrderId: params.gatewayOrderId || order.gatewayOrderId,
+    gatewayPaymentId: params.gatewayPaymentId,
+    gatewaySignature: params.gatewaySignature,
+    expectedAmount,
+  });
+
+  if (verifyResult.status === 'PENDING') {
+    return {
+      success: false,
+      status: 'PENDING' as const,
+      order,
+      message: 'Payment is currently pending confirmation.',
+      rawGatewayResponse: verifyResult.rawGatewayResponse,
+    };
+  }
+
+  if (verifyResult.status === 'FAILED') {
+    const now = new Date().toISOString();
+    db.run(
+      `UPDATE orders SET payment_status = 'FAILED', delivery_status = 'CANCELLED', updated_at = ? WHERE id = ?;`,
+      [now, order.id]
+    );
+    saveDb();
+    return {
+      success: false,
+      status: 'FAILED' as const,
+      order: await getOrderByIdOrNumber(order.id),
+      message: verifyResult.error || 'Payment was declined or failed on gateway.',
+      rawGatewayResponse: verifyResult.rawGatewayResponse,
+    };
+  }
+
+  if (verifyResult.status === 'EXPIRED') {
+    const now = new Date().toISOString();
+    db.run(
+      `UPDATE orders SET payment_status = 'EXPIRED', delivery_status = 'EXPIRED', updated_at = ? WHERE id = ?;`,
+      [now, order.id]
+    );
+    saveDb();
+    return {
+      success: false,
+      status: 'EXPIRED' as const,
+      order: await getOrderByIdOrNumber(order.id),
+      message: 'Trust Gateway payment session expired.',
+      rawGatewayResponse: verifyResult.rawGatewayResponse,
+    };
+  }
+
+  if (!verifyResult.isValid || verifyResult.status !== 'PAID') {
+    return {
+      success: false,
+      status: 'PENDING' as const,
+      order,
+      message: `Gateway status is ${verifyResult.status || 'PENDING'}. Waiting for confirmation.`,
+      rawGatewayResponse: verifyResult.rawGatewayResponse,
+    };
+  }
+
+  // Security Check 1: Gateway Order ID must match saved order
+  if (order.gatewayOrderId && verifyResult.gatewayOrderId && order.gatewayOrderId !== verifyResult.gatewayOrderId) {
+    throw new Error(`Gateway order ID mismatch: expected ${order.gatewayOrderId} but gateway recorded ${verifyResult.gatewayOrderId}.`);
+  }
+
+  // Security Check 2: Actual payable amount must match saved payable amount
+  if (verifyResult.payableAmount && expectedAmount > 0) {
+    const diff = Math.abs(verifyResult.payableAmount - expectedAmount);
+    if (diff > 0.05) {
+      throw new Error(`Payment amount mismatch: expected ₹${expectedAmount} but gateway recorded ₹${verifyResult.payableAmount}.`);
+    }
+  }
+
+  if (verifyResult.transactionId) {
+    verifiedGatewayPaymentId = verifyResult.transactionId;
+  }
+
+  const now = new Date().toISOString();
+
+  // Branch A: WALLET DEPOSIT ORDER FULFILLMENT
+  if (order.orderType === 'DEPOSIT') {
+    let userRow: any = null;
+    if (order.customerId) {
+      const uRes = db.exec(`SELECT id, balance, email FROM users WHERE id = ? OR customer_id = ?;`, [order.customerId, order.customerId]);
+      if (uRes.length > 0 && uRes[0].values.length > 0) {
+        userRow = { id: uRes[0].values[0][0], balance: Number(uRes[0].values[0][1] || 0), email: uRes[0].values[0][2] };
+      }
+    }
+    if (!userRow && order.customerEmail) {
+      const uRes = db.exec(`SELECT id, balance, email FROM users WHERE LOWER(email) = ?;`, [order.customerEmail.toLowerCase()]);
+      if (uRes.length > 0 && uRes[0].values.length > 0) {
+        userRow = { id: uRes[0].values[0][0], balance: Number(uRes[0].values[0][1] || 0), email: uRes[0].values[0][2] };
+      }
+    }
+
+    const currentBalance = userRow ? userRow.balance : 0;
+    const creditAmount = Number(order.amount);
+    const newBalance = Number((currentBalance + creditAmount).toFixed(2));
+    const txId = `tx_${Math.random().toString(36).substring(2, 9)}`;
+
+    if (userRow) {
+      db.run(`UPDATE users SET balance = ? WHERE id = ?;`, [newBalance, userRow.id]);
+      db.run(
+        `INSERT INTO wallet_transactions (id, user_id, order_id, type, amount, balance_before, balance_after, description, status, created_at)
+         VALUES (?, ?, ?, 'DEPOSIT', ?, ?, ?, 'Wallet Deposit via Trust Gateway UPI', 'COMPLETED', ?);`,
+        [txId, userRow.id, order.id, creditAmount, currentBalance, newBalance, now]
+      );
+    }
+
+    const paymentMethodStr = verifiedGatewayPaymentId
+      ? `Trust Gateway UPI (${verifiedGatewayPaymentId})`
+      : 'Trust Gateway UPI (Verified)';
+
+    db.run(
+      `UPDATE orders 
+       SET payment_status = 'PAID', 
+           delivery_status = 'DELIVERED', 
+           payment_method = ?,
+           gateway_payment_id = ?,
+           updated_at = ? 
+       WHERE id = ?;`,
+      [paymentMethodStr, verifiedGatewayPaymentId || null, now, order.id]
+    );
+
+    saveDb();
+    const fulfilledOrder = await getOrderByIdOrNumber(order.id);
+    return {
+      success: true,
+      status: 'PAID' as const,
+      order: fulfilledOrder,
+      newBalance,
+      message: `Deposit verified successfully! ₹${creditAmount} credited to wallet balance.`,
+    };
+  }
+
+  // Branch B: PRODUCT ORDER FULFILLMENT (Deliver 16-digit redeem code)
   // Atomically select ONE UNUSED code for this product from DB
   const codeRes = db.exec(
     `SELECT id, code, pin FROM redeem_codes 
@@ -1715,8 +1991,6 @@ export async function verifyAndFulfillPaymentOrder(params: {
      LIMIT 1;`,
     [order.productId]
   );
-
-  const now = new Date().toISOString();
 
   if (codeRes.length === 0 || codeRes[0].values.length === 0) {
     // Edge case: Out of stock between checkout initiation and payment verification
@@ -1745,8 +2019,8 @@ export async function verifyAndFulfillPaymentOrder(params: {
   // 2. Mark order PAID & DELIVERED with the exact 16-character code
   const fullCodeFormatted = formatFullCode(assignedCode);
   const paymentMethodStr = verifiedGatewayPaymentId
-    ? `FamGateway (${verifiedGatewayPaymentId})`
-    : 'Payment Gateway (Verified)';
+    ? `Trust Gateway UPI (${verifiedGatewayPaymentId})`
+    : 'Trust Gateway UPI (Verified)';
 
   db.run(
     `UPDATE orders 
@@ -1780,6 +2054,40 @@ export async function verifyAndFulfillPaymentOrder(params: {
     order: fulfilledOrder,
     message: 'Payment verified successfully and redeem code delivered.',
   };
+}
+
+export async function getUserWalletTransactions(userIdentifier: string) {
+  const db = await getDb();
+  const clean = userIdentifier.trim();
+  const res = db.exec(
+    `SELECT 
+      wt.id,
+      wt.user_id as userId,
+      wt.order_id as orderId,
+      wt.type,
+      wt.amount,
+      wt.balance_before as balanceBefore,
+      wt.balance_after as balanceAfter,
+      wt.description,
+      wt.status,
+      wt.created_at as createdAt
+    FROM wallet_transactions wt
+    LEFT JOIN users u ON u.id = wt.user_id
+    WHERE wt.user_id = ? OR u.customer_id = ? OR LOWER(u.email) = ?
+    ORDER BY wt.created_at DESC
+    LIMIT 50;`,
+    [clean, clean, clean.toLowerCase()]
+  );
+
+  if (res.length === 0 || res[0].values.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
 }
 
 export async function getUserByEmail(email: string) {
@@ -2094,10 +2402,6 @@ export async function getStoreSettings() {
     contactWidgetMobileBottom: 110,
     contactIconSize: 42,
     contactMobileIconSize: 42,
-    famupigatewayBaseUrl: process.env.FAMUPIGATEWAY_BASE_URL || 'https://famupigateway.site/api',
-    famupigatewayApiKey: process.env.FAMUPIGATEWAY_API_KEY || 'Famcfc08cd92c090e3718e9ad92155eb0fc',
-    famupigatewayWebhookSecret: process.env.FAMUPIGATEWAY_WEBHOOK_SECRET || '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
-    famupigatewayExpiryMinutes: Number(process.env.FAMUPIGATEWAY_EXPIRY_MINUTES) || 5,
     appUrl: process.env.APP_URL || 'https://vortexcode.shop',
     how_to_redeem_step_1_image_enabled: false,
     how_to_redeem_step_1_image_url: '',
@@ -2121,7 +2425,6 @@ export async function getStoreSettings() {
       ) {
         settings[key] = val === 'true';
       } else if (
-        key === 'famupigatewayExpiryMinutes' ||
         key === 'contactWidgetSize' ||
         key === 'contactWidgetRight' ||
         key === 'contactWidgetBottom' ||

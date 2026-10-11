@@ -23,7 +23,9 @@ import {
   updateOrderStatus,
   purchaseProductDirect,
   createPendingCheckoutOrder,
+  createPendingDepositOrder,
   verifyAndFulfillPaymentOrder,
+  getUserWalletTransactions,
   getUserByEmail,
   getUserByGoogleSub,
   createUser,
@@ -615,8 +617,6 @@ router.post('/orders', async (req, res) => {
 // GET /api/payment/config - Gateway status & public credentials
 router.get('/payment/config', async (req, res) => {
   try {
-    const storeSettings = await getStoreSettings();
-    paymentGateway.updateCredentials(storeSettings);
     const config = paymentGateway.getConfig();
     res.json({ success: true, config });
   } catch (err: any) {
@@ -629,6 +629,14 @@ const handleCreateCheckoutOrder = async (req: any, res: any) => {
     const { productId, codeId, customerName, customerEmail, customerId } = req.body || {};
     if (!productId) {
       return res.status(400).json({ success: false, error: 'productId is required for checkout', message: 'productId is required for checkout' });
+    }
+
+    if (!paymentGateway.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Payment service temporarily unavailable. Please try again later.',
+        message: 'Payment service temporarily unavailable. Please try again later.',
+      });
     }
 
     const checkoutResult = await createPendingCheckoutOrder({
@@ -653,19 +661,124 @@ const handleCreateCheckoutOrder = async (req: any, res: any) => {
 
 /**
  * POST /api/checkout/create-order and POST /api/payment
+ * Creates product checkout intent with Trust Gateway UPI
  */
 router.post('/checkout/create-order', handleCreateCheckoutOrder);
 router.post('/payment', handleCreateCheckoutOrder);
 
 /**
+ * 4. POST /api/wallet/deposit
+ * Server-side wallet deposit order creation with Trust Gateway UPI
+ */
+router.post('/wallet/deposit', async (req, res) => {
+  try {
+    const { amount, customerId, customerName, customerEmail } = req.body || {};
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: 'A valid deposit amount is required' });
+    }
+
+    if (!paymentGateway.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Payment service temporarily unavailable. Please try again later.',
+        message: 'Payment service temporarily unavailable. Please try again later.',
+      });
+    }
+
+    const depositResult = await createPendingDepositOrder({
+      amount: Number(amount),
+      customerId,
+      customerName: customerName || 'Customer',
+      customerEmail: customerEmail || 'customer@vortexcode.com',
+    });
+
+    return res.status(201).json(depositResult);
+  } catch (err: any) {
+    return res.status(400).json({
+      success: false,
+      error: err.message || 'Failed to initiate deposit order',
+      message: err.message || 'Failed to initiate deposit order',
+    });
+  }
+});
+
+/**
+ * GET /api/wallet/transactions
+ * Retrieve user's verified deposit ledger and balance history
+ */
+router.get('/wallet/transactions', async (req, res) => {
+  try {
+    const identifier = (req.query.userId as string) || (req.query.customerId as string) || (req.query.email as string) || '';
+    if (!identifier) {
+      return res.status(400).json({ success: false, error: 'User identifier required' });
+    }
+    const transactions = await getUserWalletTransactions(identifier);
+    return res.json({ success: true, transactions });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * 2. PAYMENT STATUS VERIFICATION
+ * GET /api/payment/status/:order_id
+ * Secure backend endpoint checking Trust Gateway status API:
+ * GET https://trustgateway.in/api/v1/orders/status/:order_id
+ */
+router.get('/payment/status/:order_id', async (req, res) => {
+  try {
+    const orderId = req.params.order_id;
+    if (!orderId) {
+      return res.status(400).json({ success: false, error: 'order_id parameter is required' });
+    }
+
+    if (!paymentGateway.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Payment service temporarily unavailable. Please try again later.',
+      });
+    }
+
+    const order = await getOrderByIdOrNumber(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found in database' });
+    }
+
+    // Optional user validation if customer ID / email header provided
+    const customerIdHeader = (req.headers['x-customer-id'] as string) || undefined;
+    const customerEmailHeader = (req.headers['x-customer-email'] as string) || undefined;
+
+    const verificationResult = await verifyAndFulfillPaymentOrder({
+      orderId: order.id,
+      gatewayOrderId: order.gatewayOrderId,
+      expectedCustomerId: customerIdHeader,
+      expectedCustomerEmail: customerEmailHeader,
+    });
+
+    return res.json(verificationResult);
+  } catch (err: any) {
+    console.error('Payment status check exception:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Payment status verification failed' });
+  }
+});
+
+/**
  * POST /api/checkout/verify-payment
- * Server-side payment verification & atomic code delivery
+ * Server-side payment verification & atomic fulfillment
  */
 router.post('/checkout/verify-payment', async (req, res) => {
   try {
-    const { orderId, gatewayPaymentId, gatewayOrderId, gatewaySignature, isSimulatedVerification } = req.body;
+    const { orderId, gatewayPaymentId, gatewayOrderId, gatewaySignature, customerId, customerEmail } = req.body;
     if (!orderId) {
       return res.status(400).json({ success: false, error: 'orderId is required for verification' });
+    }
+
+    if (!paymentGateway.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Payment service temporarily unavailable. Please try again later.',
+        message: 'Payment service temporarily unavailable. Please try again later.',
+      });
     }
 
     const verificationResult = await verifyAndFulfillPaymentOrder({
@@ -673,7 +786,8 @@ router.post('/checkout/verify-payment', async (req, res) => {
       gatewayPaymentId,
       gatewayOrderId,
       gatewaySignature,
-      isSimulatedVerification: Boolean(isSimulatedVerification),
+      expectedCustomerId: customerId,
+      expectedCustomerEmail: customerEmail,
     });
 
     res.json(verificationResult);
@@ -701,6 +815,9 @@ router.get('/checkout/order-status/:id', async (req, res) => {
         productId: order.productId,
         productName: order.productName,
         amount: order.amount,
+        payableAmount: order.payableAmount || order.amount,
+        orderType: order.orderType || 'PURCHASE',
+        checkoutUrl: order.checkoutUrl,
         paymentStatus: order.paymentStatus,
         deliveryStatus: order.deliveryStatus,
         deliveredCode: order.paymentStatus === 'PAID' ? order.deliveredCode : null,
@@ -717,9 +834,7 @@ router.get('/checkout/order-status/:id', async (req, res) => {
 
 /**
  * GET /api/payment/callback
- * Handles the browser redirect from FamGateway when a customer completes their payment.
- * If status is PENDING, does NOT treat as failure; redirects with payment_pending=true
- * so client polling can seamlessly finalize verification.
+ * Handles browser redirect from payment gateway callback
  */
 router.get('/payment/callback', async (req, res) => {
   try {
@@ -728,15 +843,17 @@ router.get('/payment/callback', async (req, res) => {
       return res.redirect('/?payment_failed=true&error=Missing+order_id');
     }
 
+    if (!paymentGateway.isConfigured()) {
+      return res.redirect('/?payment_failed=true&error=Payment+service+temporarily+unavailable.+Please+try+again+later.');
+    }
+
     const result = await verifyAndFulfillPaymentOrder({
       orderId,
-      isSimulatedVerification: false,
     });
 
     if (result.status === 'PAID' || result.success) {
       return res.redirect(`/?payment_success=true&order_id=${encodeURIComponent(orderId)}`);
     } else if (result.status === 'PENDING') {
-      // Payment is pending bank settlement! DO NOT FAIL IT!
       return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
     } else if (result.status === 'EXPIRED') {
       return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=Payment+session+expired`);
@@ -744,182 +861,92 @@ router.get('/payment/callback', async (req, res) => {
       return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=${encodeURIComponent(result.message || 'Payment+failed')}`);
     }
   } catch (err: any) {
-    console.error('FamGateway redirect callback exception:', err);
-    const orderId = (req.query.order_id as string) || '';
-    return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
+    console.error('Payment callback exception:', err);
+    return res.redirect('/?payment_failed=true&error=Payment+callback+failed');
   }
 });
 
 /**
- * GET /api/payment/mock-redirect
- * Sandbox / Simulation portal when FamGateway credentials are not active
- */
-router.get('/payment/mock-redirect', async (req, res) => {
-  const orderId = (req.query.order_id as string) || '';
-  const amount = (req.query.amount as string) || '0';
-
-  if (!orderId) {
-    return res.status(400).send('<h1>Error: Missing order_id</h1>');
-  }
-
-  const html = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>FamGateway Sandbox Terminal</title>
-      <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4 font-sans">
-      <div class="max-w-md w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 shadow-2xl space-y-6">
-        <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
-          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
-            UPI
-          </div>
-          <div>
-            <h1 class="text-lg font-bold text-white">FamGateway Payment Simulator</h1>
-            <p class="text-xs text-slate-400">Sandbox Environment Mode</p>
-          </div>
-        </div>
-
-        <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-sm font-mono">
-          <div class="flex justify-between text-slate-400">
-            <span>Order Reference:</span>
-            <span class="text-white font-bold">${orderId}</span>
-          </div>
-          <div class="flex justify-between text-slate-400">
-            <span>Total Amount:</span>
-            <span class="text-emerald-400 font-extrabold text-base">₹${amount} INR</span>
-          </div>
-          <div class="flex justify-between text-slate-400">
-            <span>Merchant:</span>
-            <span class="text-slate-200">Vortex Digital Store</span>
-          </div>
-        </div>
-
-        <div class="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-xl text-amber-300 text-xs leading-relaxed">
-          <strong>Sandbox Notice:</strong> Payment gateway credentials are currently in sandbox/simulation mode. Click "Complete Payment" below to instantly authorize payment and deliver your code.
-        </div>
-
-        <form action="/api/payment/mock-redirect-complete" method="POST" class="space-y-3">
-          <input type="hidden" name="orderId" value="${orderId}" />
-          <button type="submit" class="w-full py-3.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold rounded-xl transition-all shadow-lg cursor-pointer text-sm">
-            ✓ Complete Payment (₹${amount})
-          </button>
-        </form>
-
-        <a href="/?payment_failed=true&order_id=${orderId}" class="block text-center text-xs text-slate-400 hover:text-white pt-2">
-          Cancel Transaction
-        </a>
-      </div>
-    </body>
-    </html>
-  `;
-
-  res.setHeader('Content-Type', 'text/html');
-  res.send(html);
-});
-
-/**
- * POST /api/payment/mock-redirect-complete
- * Handles sandbox payment completion
- */
-router.post('/payment/mock-redirect-complete', async (req, res) => {
-  try {
-    const orderId = req.body.orderId;
-    if (!orderId) {
-      return res.redirect('/?payment_failed=true&error=Missing+Order+ID');
-    }
-
-    const result = await verifyAndFulfillPaymentOrder({
-      orderId,
-      gatewayPaymentId: `sim_pay_${Math.random().toString(36).substring(2, 9)}`,
-      isSimulatedVerification: true,
-    });
-
-    if (result.success) {
-      return res.redirect(`/?payment_success=true&order_id=${orderId}`);
-    } else {
-      return res.redirect(`/?payment_failed=true&order_id=${orderId}`);
-    }
-  } catch (err: any) {
-    return res.redirect(`/?payment_failed=true&order_id=${req.body.orderId || ''}&error=${encodeURIComponent(err.message)}`);
-  }
-});
-
-/**
+ * 3. WEBHOOK INTEGRATION
  * POST /api/payment/webhook
- * Incoming gateway webhook verification & idempotent fulfillment
- * Supports FamGateway native payloads (order_id, status, utr) as well as standard gateways
+ * Public HTTPS webhook endpoint with HMAC-SHA256 signature verification & idempotent duplicate handling
  */
 router.post('/payment/webhook', async (req, res) => {
   try {
-    const signature =
-      (req.headers['x-fam-signature'] as string) ||
-      (req.headers['x-signature'] as string) ||
-      (req.headers['x-webhook-signature'] as string) ||
-      (req.headers['x-razorpay-signature'] as string);
-
-    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-
-    if (signature) {
-      const isValid = paymentGateway.verifyWebhookSignature(rawBody, signature);
-      if (!isValid) {
-        console.warn('[FamGateway Webhook] Invalid webhook signature detected.');
-        return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
-      }
+    if (!paymentGateway.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Payment service temporarily unavailable. Please try again later.',
+      });
     }
 
-    const body = req.body || {};
-    const orderId =
-      body.order_id ||
-      body.orderId ||
-      body.data?.order_id ||
-      body.payload?.payment?.entity?.notes?.orderId ||
-      (req.query.order_id as string);
-
-    const rawStatus = body.status || body.data?.status || body.event || '';
-    const statusStr = String(rawStatus).toUpperCase().trim();
-    const utr =
-      body.utr ||
-      body.bank_utr ||
-      body.transaction_id ||
-      body.txn_id ||
-      body.famgateway_id ||
-      body.data?.utr ||
-      body.data?.transaction_id ||
-      body.payload?.payment?.entity?.id ||
+    const signature =
+      (req.headers['x-gateway-signature'] as string) ||
+      (req.headers['x-webhook-signature'] as string) ||
       '';
 
-    console.log(`[FamGateway Webhook Received] Order: ${orderId} | Status: ${statusStr} | UTR: ${utr ? 'YES' : 'NO'}`);
+    if (!signature) {
+      return res.status(400).json({ success: false, error: 'Missing X-Gateway-Signature header' });
+    }
 
-    const isPaid =
-      statusStr === 'SUCCESS' ||
-      statusStr === 'PAID' ||
-      statusStr === 'COMPLETED' ||
-      statusStr === 'TXN_SUCCESS' ||
-      statusStr === 'PAYMENT.CAPTURED' ||
-      (typeof utr === 'string' && utr.trim().length >= 6 && statusStr !== 'FAILED' && statusStr !== 'CANCELLED');
+    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const bodyObj = typeof req.body === 'object' ? req.body : JSON.parse(req.body || '{}');
 
-    if (isPaid && orderId) {
-      const result = await verifyAndFulfillPaymentOrder({
-        orderId,
-        gatewayPaymentId: utr || `fam_hook_${Date.now()}`,
-        isSimulatedVerification: true, // Webhook is authoritative server confirmation
+    // Constant-time HMAC-SHA256 signature verification
+    const isValidSignature = paymentGateway.verifyWebhookSignature(rawBody, signature, bodyObj);
+    if (!isValidSignature) {
+      return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
+    }
+
+    const gatewayOrderId =
+      bodyObj.order_id ||
+      bodyObj.orderId ||
+      bodyObj.data?.order_id ||
+      bodyObj.gateway_order_id ||
+      '';
+
+    if (!gatewayOrderId) {
+      return res.status(400).json({ success: false, error: 'Missing order_id in webhook payload' });
+    }
+
+    // Validate gateway order ID against database
+    const order = await getOrderByIdOrNumber(gatewayOrderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found in database' });
+    }
+
+    // Idempotent handling of duplicate callbacks: Never fulfill twice
+    if (order.paymentStatus === 'PAID') {
+      return res.status(200).json({
+        success: true,
+        alreadyFulfilled: true,
+        status: 'PAID',
+        message: 'Order already fulfilled.',
       });
-      return res.json({ success: true, status: 'fulfilled', result });
     }
 
-    if (orderId && (statusStr === 'FAILED' || statusStr === 'CANCELLED')) {
-      await updateOrderStatus(orderId, 'FAILED', 'CANCELLED');
-      return res.json({ success: true, status: 'marked_failed' });
+    // Validate amount from webhook against saved order amount
+    const webhookAmount = Number(bodyObj.amount !== undefined ? bodyObj.amount : bodyObj.data?.amount);
+    const expectedAmount = Number(order.payableAmount || order.amount);
+    if (!isNaN(webhookAmount) && webhookAmount > 0 && Math.abs(webhookAmount - expectedAmount) > 0.05) {
+      return res.status(400).json({
+        success: false,
+        error: `Webhook amount mismatch: expected ₹${expectedAmount}, got ₹${webhookAmount}`,
+      });
     }
 
-    return res.json({ success: true, status: 'received', message: 'Webhook event recorded' });
+    // Authenticated gateway status query for verified recovery
+    const fulfillmentResult = await verifyAndFulfillPaymentOrder({
+      orderId: order.id,
+      gatewayOrderId,
+      gatewayPaymentId: bodyObj.utr || bodyObj.data?.utr || bodyObj.transaction_id,
+      gatewaySignature: signature,
+    });
+
+    return res.status(200).json(fulfillmentResult);
   } catch (err: any) {
     console.error('Webhook processing exception:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err.message || 'Webhook processing failed' });
   }
 });
 
@@ -1237,17 +1264,16 @@ router.delete('/admin/notices/:id', isAdminMiddleware, async (req, res) => {
 
 function sanitizeStoreSettings(rawSettings: any) {
   if (!rawSettings) return null;
-  const {
-    famupigatewayApiKey,
-    famupigatewayWebhookSecret,
-    ...safeSettings
-  } = rawSettings;
-
-  return {
-    ...safeSettings,
-    famupigatewayApiKeyConfigured: !!(famupigatewayApiKey && famupigatewayApiKey.trim()),
-    famupigatewayWebhookSecretConfigured: !!(famupigatewayWebhookSecret && famupigatewayWebhookSecret.trim()),
-  };
+  const sanitized = { ...rawSettings };
+  delete sanitized.trustGatewayApiKey;
+  delete sanitized.trustGatewayWebhookSecret;
+  delete sanitized.famupigatewayApiKey;
+  delete sanitized.famupigatewayWebhookSecret;
+  delete sanitized.famupigatewayBaseUrl;
+  delete sanitized.famupigatewayExpiryMinutes;
+  sanitized.trustGatewayConfigured = paymentGateway.isConfigured();
+  sanitized.gatewayConfigured = paymentGateway.isConfigured();
+  return sanitized;
 }
 
 router.get('/settings', async (req, res) => {
@@ -1523,5 +1549,10 @@ async function handleSaveContact(req: any, res: any) {
 
 router.post('/admin/contact', isAdminMiddleware, handleSaveContact);
 router.put('/admin/contact', isAdminMiddleware, handleSaveContact);
+
+// 404 handler for unhandled /api/* requests so they return JSON rather than falling through to index.html
+router.use((req, res) => {
+  res.status(404).json({ success: false, error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
+});
 
 export default router;

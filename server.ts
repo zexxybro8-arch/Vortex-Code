@@ -65,7 +65,15 @@ async function bootstrap() {
     }
   }
 
-  // Bind server listener immediately so health checks pass without delay
+  // Initialize SQLite database before listening to ensure immediate availability
+  try {
+    await getDb();
+    console.log('Database initialized successfully.');
+  } catch (err) {
+    console.error('Non-fatal database initialization warning:', err);
+  }
+
+  // Bind server listener so incoming requests are served immediately
   if (isSocket) {
     app.listen(PORT, () => {
       console.log(`Vortex Full-Stack Server listening on socket: ${PORT}`);
@@ -74,14 +82,6 @@ async function bootstrap() {
     app.listen(PORT as number, '0.0.0.0', () => {
       console.log(`Vortex Full-Stack Server running on http://0.0.0.0:${PORT}`);
     });
-  }
-
-  // Initialize SQLite database asynchronously in parallel
-  try {
-    await getDb();
-    console.log('Database initialized successfully.');
-  } catch (err) {
-    console.error('Non-fatal database initialization warning:', err);
   }
 }
 

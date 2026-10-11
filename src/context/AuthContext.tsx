@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setOrders([]);
         return;
       }
-      const apiOrders = await api.getMyOrders(user.email, user.id);
+      const apiOrders = await api.getMyOrders(user.email, user.customerId || user.id);
       if (apiOrders) {
         const mappedOrders: OrderItem[] = apiOrders.map((o: any) => ({
           id: o.id,

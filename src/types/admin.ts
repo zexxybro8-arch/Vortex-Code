@@ -39,6 +39,8 @@ export interface AdminDashboardStats {
   availableRedeemCodes: number;
   usedRedeemCodes: number;
   registeredCustomers: number;
+  todaysOrders?: number;
+  activeMembers?: number;
 }
 
 export interface AdminOrder {

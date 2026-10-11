@@ -54,37 +54,85 @@ export interface ApiOrder {
 
 /**
  * Safe HTTP JSON fetcher that reads raw response text first
- * to prevent 'Unexpected end of JSON input' SyntaxErrors.
+ * to prevent 'Unexpected end of JSON input' SyntaxErrors,
+ * and automatically retries if the server is still booting up (e.g. dev container warmup).
  */
-async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
-  const raw = await res.text();
+async function safeFetchJson<T = any>(url: string, options?: RequestInit, maxRetries = 3): Promise<T> {
+  let attempt = 0;
 
-  let data: any = null;
-  try {
-    data = raw.trim() ? JSON.parse(raw) : null;
-  } catch (err) {
-    console.error(`Invalid non-JSON response from [${options?.method || 'GET'} ${url}]:`, raw.substring(0, 300));
-    throw new Error(`Server returned an invalid non-JSON response (${res.status} ${res.statusText}).`);
+  while (true) {
+    try {
+      const res = await fetch(url, options);
+      const raw = await res.text();
+
+      // Check if response is the dev container "Starting Server..." interstitial or HTML error
+      const isServerStartingOrHtml =
+        raw.includes('Starting Server') ||
+        (res.headers.get('content-type')?.includes('text/html') && url.startsWith('/api/')) ||
+        (raw.trim().startsWith('<!doctype') && url.startsWith('/api/')) ||
+        (raw.trim().startsWith('<html') && url.startsWith('/api/'));
+
+      if (isServerStartingOrHtml && attempt < maxRetries) {
+        attempt++;
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        continue;
+      }
+
+      let data: any = null;
+      try {
+        data = raw.trim() ? JSON.parse(raw) : null;
+      } catch (err) {
+        if (attempt < maxRetries) {
+          attempt++;
+          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+        console.warn(`Non-JSON response from [${options?.method || 'GET'} ${url}]:`, raw.substring(0, 150));
+        throw new Error(`Server returned a non-JSON response (${res.status} ${res.statusText}).`);
+      }
+
+      if (!res.ok) {
+        if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt < maxRetries) {
+          attempt++;
+          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+        const errorMsg = data?.error || data?.message || `Request failed with status ${res.status} ${res.statusText}`;
+        throw new Error(errorMsg);
+      }
+
+      if (data && typeof data === 'object' && data.success === false && data.status !== 'PENDING') {
+        throw new Error(data.error || data.message || 'Operation failed on server');
+      }
+
+      return data;
+    } catch (err: any) {
+      if (
+        attempt < maxRetries &&
+        (err.name === 'TypeError' ||
+          err.message?.includes('fetch') ||
+          err.message?.includes('NetworkError') ||
+          err.message?.includes('non-JSON'))
+      ) {
+        attempt++;
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        continue;
+      }
+      throw err;
+    }
   }
-
-  if (!res.ok) {
-    const errorMsg = data?.error || data?.message || `Request failed with status ${res.status} ${res.statusText}`;
-    throw new Error(errorMsg);
-  }
-
-  if (data && typeof data === 'object' && data.success === false && data.status !== 'PENDING') {
-    throw new Error(data.error || data.message || 'Operation failed on server');
-  }
-
-  return data;
 }
 
 export const api = {
   // Products
   async getProducts(): Promise<ApiProduct[]> {
-    const data = await safeFetchJson('/api/products');
-    return data.products || [];
+    try {
+      const data = await safeFetchJson('/api/products');
+      return data?.products || [];
+    } catch (err) {
+      console.warn('api.getProducts fallback notice:', err);
+      return [];
+    }
   },
 
   async getProduct(id: string): Promise<ApiProduct> {
@@ -386,7 +434,6 @@ export const api = {
     gatewayPaymentId?: string;
     gatewayOrderId?: string;
     gatewaySignature?: string;
-    isSimulatedVerification?: boolean;
   }): Promise<{
     success: boolean;
     status?: 'PAID' | 'PENDING' | 'FAILED' | 'EXPIRED';
@@ -407,6 +454,41 @@ export const api = {
     order: any;
   }> {
     return safeFetchJson(`/api/checkout/order-status/${encodeURIComponent(id)}`);
+  },
+
+  async createDepositOrder(data: {
+    amount: number;
+    customerId?: string;
+    customerName?: string;
+    customerEmail?: string;
+  }): Promise<{
+    success: boolean;
+    order: any;
+    gatewayOrder: any;
+    checkoutUrl: string;
+    error?: string;
+  }> {
+    return safeFetchJson('/api/wallet/deposit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getWalletTransactions(identifier: string): Promise<{
+    success: boolean;
+    transactions: any[];
+  }> {
+    return safeFetchJson(`/api/wallet/transactions?customerId=${encodeURIComponent(identifier)}`);
+  },
+
+  async getPaymentStatus(orderId: string): Promise<{
+    success: boolean;
+    status?: 'PAID' | 'PENDING' | 'FAILED' | 'EXPIRED';
+    order: any;
+    message?: string;
+  }> {
+    return safeFetchJson(`/api/payment/status/${encodeURIComponent(orderId)}`);
   },
 
   // Store Settings & Branding

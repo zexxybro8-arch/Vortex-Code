@@ -153,11 +153,6 @@ interface AdminContextType {
     contactWidgetMobileRight?: number;
     contactWidgetMobileBottom?: number;
     contactIconSize?: number;
-    contactMobileIconSize?: number;
-    famupigatewayBaseUrl: string;
-    famupigatewayApiKey: string;
-    famupigatewayWebhookSecret: string;
-    famupigatewayExpiryMinutes: number;
     appUrl: string;
     [key: string]: any;
   };
@@ -292,10 +287,6 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactWidgetMobileBottom: 110,
     contactIconSize: 42,
     contactMobileIconSize: 42,
-    famupigatewayBaseUrl: 'https://famupigateway.site/api',
-    famupigatewayApiKey: 'Famcfc08cd92c090e3718e9ad92155eb0fc',
-    famupigatewayWebhookSecret: '87116d2de22f33c0250df8cf721461952ad1545632beb18caca04a9b2ac1916f',
-    famupigatewayExpiryMinutes: 5,
     appUrl: 'https://vortexcode.shop',
   });
 
