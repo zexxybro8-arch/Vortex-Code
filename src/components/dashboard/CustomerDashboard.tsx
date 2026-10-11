@@ -629,9 +629,16 @@ export const CustomerDashboard: React.FC = () => {
                     <div className="w-full aspect-square bg-slate-950 overflow-hidden">
                       <img src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} alt={p.name} className="w-full h-full object-cover" />
                     </div>
-                    <div className="w-full bg-slate-800/50 py-3 font-black text-white text-sm">
-                      ₹{p.priceRupees}
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBuyNow(p);
+                      }}
+                      className="w-full py-3 flex items-center justify-center gap-1.5 font-black text-white text-sm bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-[0.98]"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>₹{p.priceRupees}</span>
+                    </button>
                   </div>
               ))}
             </div>
