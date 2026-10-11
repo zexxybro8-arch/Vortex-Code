@@ -318,7 +318,8 @@ export const CustomerDashboard: React.FC = () => {
       return;
     }
 
-    if (product.stockStatus === 'OUT OF STOCK' || (product.stock !== undefined && product.stock <= 0)) {
+    // Skip stock check for Diamond products
+    if (product.category !== 'DIAMONDS' && (product.stockStatus === 'OUT OF STOCK' || (product.stock !== undefined && product.stock <= 0))) {
       addToast('error', 'OUT OF STOCK: No redeem codes available for this product.');
       return;
     }
