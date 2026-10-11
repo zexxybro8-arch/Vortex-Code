@@ -1617,6 +1617,7 @@ export async function createPendingCheckoutOrder(params: {
 
   const gatewayConfig = paymentGateway.getConfig();
 
+  // No changes needed here yet, I will update the frontend.
   return {
     success: true,
     order: {

@@ -352,13 +352,11 @@ export const CustomerDashboard: React.FC = () => {
         return;
       }
 
-      setCheckoutData({
-        order: res.order,
-        gatewayOrder: res.gatewayOrder,
-        gatewayConfig: res.gatewayConfig,
-        productImage: product.image,
-      });
-      setIsCheckoutModalOpen(true);
+      if (res.checkoutUrl) {
+        window.location.href = res.checkoutUrl;
+      } else {
+        addToast('error', 'Failed to retrieve secure checkout URL.');
+      }
     } catch (err: any) {
       if (err.message?.includes('temporarily unavailable')) {
         addToast('info', 'Payment service temporarily unavailable. Please try again later.');
