@@ -624,21 +624,41 @@ export const CustomerDashboard: React.FC = () => {
                   <div 
                     key={p.id} 
                     onClick={() => handleBuyNow(p)}
-                    className="bg-slate-900 border border-slate-800 rounded-2xl p-0 flex flex-col items-center text-center cursor-pointer hover:border-emerald-500 transition-all overflow-hidden"
+                    className="bg-slate-950/90 border border-cyan-500/40 rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 hover:shadow-[0_0_25px_rgba(6,182,212,0.25)] transition-all duration-300 relative overflow-hidden backdrop-blur-xl"
                   >
-                    <div className="w-full aspect-square bg-slate-950 overflow-hidden">
-                      <img src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} alt={p.name} className="w-full h-full object-cover" />
+                    {/* Top Decorative Neon Frame & Title */}
+                    <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 font-black text-[11px] tracking-wider mb-3 shadow-[inset_0_1px_3px_rgba(6,182,212,0.3)]">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                      <span>DIAMONDS</span>
                     </div>
-                    <button
+
+                    {/* Middle Image Section */}
+                    <div className="w-full aspect-square bg-slate-900/60 rounded-2xl overflow-hidden flex items-center justify-center p-2 border border-cyan-500/20 group-hover:border-cyan-500/50 transition-all">
+                      <img 
+                        src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
+                        alt={p.name || 'Free Fire Diamonds'} 
+                        className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300" 
+                      />
+                    </div>
+
+                    {/* Bottom Futuristic Price Button */}
+                    <div 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleBuyNow(p);
                       }}
-                      className="w-full py-3 flex items-center justify-center gap-1.5 font-black text-white text-sm bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-[0.98]"
+                      className="mt-3 w-full bg-slate-900/90 border border-cyan-500/60 rounded-2xl p-1.5 flex items-center justify-between text-white group-hover:bg-cyan-950/80 group-hover:border-cyan-400 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)] active:scale-[0.98]"
                     >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      <span>₹{p.priceRupees}</span>
-                    </button>
+                      <div className="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-black text-white text-sm sm:text-base tracking-wide px-1">
+                        ₹{p.priceRupees}
+                      </span>
+                      <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 group-hover:bg-cyan-400 group-hover:text-slate-950 transition-all shrink-0">
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
                   </div>
               ))}
             </div>
