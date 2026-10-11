@@ -84,6 +84,7 @@ export const AdminDiamondsTab: React.FC = () => {
             <input name="quantity" type="number" defaultValue={editingProduct?.rewardValueRupees} placeholder="Diamond Quantity" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="price" type="number" defaultValue={editingProduct?.priceRupees} placeholder="Price (INR)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="image" defaultValue={editingProduct?.image} placeholder="Image URL" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
+            <input name="sortOrder" type="number" defaultValue={editingProduct?.sortOrder || 0} placeholder="Sort Order" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
             <select name="status" defaultValue={editingProduct?.enabled ? 'enabled' : 'disabled'} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white">
               <option value="enabled">Enabled</option>
               <option value="disabled">Disabled</option>

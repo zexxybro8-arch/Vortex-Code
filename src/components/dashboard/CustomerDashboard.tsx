@@ -252,10 +252,11 @@ export const CustomerDashboard: React.FC = () => {
 
   const targetProducts =
     selectedDenomination === 'ALL VALUES'
-      ? products.filter((p) => p.enabled)
+      ? products.filter((p) => p.enabled && p.category !== 'DIAMONDS')
       : products.filter(
           (p) =>
             p.enabled &&
+            p.category !== 'DIAMONDS' &&
             (p.denomination === selectedDenomination ||
               p.denomination === `₹${selectedDenomination.replace(/\D/g, '')}`)
         );
@@ -620,18 +621,17 @@ export const CustomerDashboard: React.FC = () => {
               {products
                 .filter(p => p.enabled && p.category === 'DIAMONDS')
                 .map((p) => (
-                  <div key={p.id} className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-4 flex flex-col items-center text-center space-y-3">
-                    <div className="w-16 h-16 bg-slate-950 rounded-full flex items-center justify-center">
-                      <Sparkles className="w-8 h-8 text-emerald-400" />
+                  <div 
+                    key={p.id} 
+                    onClick={() => handleBuyNow(p)}
+                    className="bg-slate-900 border border-slate-800 rounded-2xl p-0 flex flex-col items-center text-center cursor-pointer hover:border-emerald-500 transition-all overflow-hidden"
+                  >
+                    <div className="w-full aspect-square bg-slate-950 overflow-hidden">
+                      <img src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} alt={p.name} className="w-full h-full object-cover" />
                     </div>
-                    <div className="font-black text-white">{p.name}</div>
-                    <div className="text-emerald-400 font-mono font-bold">₹{p.priceRupees}</div>
-                    <button 
-                      onClick={() => handleBuyNow(p)}
-                      className="w-full py-2 bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs cursor-pointer"
-                    >
-                      BUY NOW
-                    </button>
+                    <div className="w-full bg-slate-800/50 py-3 font-black text-white text-sm">
+                      ₹{p.priceRupees}
+                    </div>
                   </div>
               ))}
             </div>
