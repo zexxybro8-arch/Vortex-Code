@@ -5,8 +5,7 @@ import { api, type ApiRedeemCode } from '../../services/api';
 import type { DashboardTab, StoreProduct } from '../../types';
 import { HowToRedeem } from './HowToRedeem';
 import { SupportTab } from './SupportTab';
-import { NoticeRenderer } from './NoticeRenderer';
-import { DiamondsNoticeModal } from './DiamondsNoticeModal';
+import { AnnouncementModal } from './AnnouncementModal';
 import { formatMaskedCode, formatFullCode } from '../../utils/codeFormat';
 import { PaymentCheckoutModal, type CheckoutData } from '../checkout/PaymentCheckoutModal';
 import {
@@ -57,9 +56,14 @@ export const CustomerDashboard: React.FC = () => {
   const [isUidModalOpen, setIsUidModalOpen] = useState(false);
   const [isVerifyingUid, setIsVerifyingUid] = useState(false);
   const [productToVerify, setProductToVerify] = useState<StoreProduct | null>(null);
-  
-  // Diamonds Notice Modal
+
+  // Announcement Modals
+  const [isRedeemNoticeOpen, setIsRedeemNoticeOpen] = useState(false);
   const [isDiamondsNoticeOpen, setIsDiamondsNoticeOpen] = useState(false);
+
+  useEffect(() => {
+    setIsRedeemNoticeOpen(true);
+  }, []);
 
 
 
@@ -388,7 +392,6 @@ export const CustomerDashboard: React.FC = () => {
         
         {activeTab === 'redeem-code' && (
           <div className="space-y-6">
-            <NoticeRenderer type="redeem-code" />
             
             {/* SELECT RECHARGE AMOUNT / DENOMINATION FILTER BAR */}
             <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
@@ -835,10 +838,8 @@ export const CustomerDashboard: React.FC = () => {
 
 
 
-      <DiamondsNoticeModal
-        isOpen={isDiamondsNoticeOpen}
-        onClose={() => setIsDiamondsNoticeOpen(false)}
-      />
+      <AnnouncementModal isOpen={isRedeemNoticeOpen} onClose={() => setIsRedeemNoticeOpen(false)} type="redeem-code" />
+      <AnnouncementModal isOpen={isDiamondsNoticeOpen} onClose={() => setIsDiamondsNoticeOpen(false)} type="diamonds" />
 
     </div>
   );
