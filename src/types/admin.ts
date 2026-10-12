@@ -5,6 +5,7 @@ export type AdminTab =
   | 'redeem-codes'
   | 'products'
   | 'diamonds'
+  | 'diamonds-sales'
   | 'denominations'
   | 'orders'
   | 'customers'

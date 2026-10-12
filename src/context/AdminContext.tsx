@@ -295,6 +295,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     appUrl: 'https://vortexcode.shop',
     diamondCategoryLabel: 'DIAMONDS',
     diamondProductLabel: 'DIAMONDS',
+    salesVolumeBaseline: 0,
   });
 
   const [categories, setCategories] = useState<AdminCategory[]>([]);
@@ -728,7 +729,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const usedRedeemCodesCount = redeemCodes.filter((c) => c.status === 'USED').length;
 
   const stats: AdminDashboardStats = {
-    totalSalesRupees,
+    totalSalesRupees: Math.max(0, totalSalesRupees - (storeSettings.salesVolumeBaseline || 0)),
     todaysSalesRupees,
     totalOrders: orders.length,
     pendingOrders: orders.filter((o) => o.paymentStatus === 'PENDING').length,

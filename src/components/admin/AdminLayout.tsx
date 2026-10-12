@@ -9,6 +9,7 @@ import { AdminBrandingTab } from './AdminBrandingTab';
 import { AdminDenominationsTab } from './AdminDenominationsTab';
 import { AdminRedeemCodesTab } from './AdminRedeemCodesTab';
 import { AdminDiamondsTab } from './AdminDiamondsTab';
+import { AdminDiamondsSalesTab } from './AdminDiamondsSalesTab';
 import { AdminOrdersTab } from './AdminOrdersTab';
 import { AdminCustomersTab } from './AdminCustomersTab';
 import { AdminContactTab } from './AdminContactTab';
@@ -44,6 +45,7 @@ export const AdminLayout: React.FC = () => {
     { id: 'categories', label: 'Recharge Categories', icon: <Layers className="w-4 h-4" /> },
     { id: 'redeem-codes', label: 'Redeem Codes (Stock)', icon: <Key className="w-4 h-4" /> },
     { id: 'diamonds', label: 'Diamonds Management', icon: <Sparkles className="w-4 h-4" /> },
+    { id: 'diamonds-sales', label: 'Diamonds Sales', icon: <Receipt className="w-4 h-4" /> },
     { id: 'products', label: 'Products & Pricing', icon: <ShoppingBag className="w-4 h-4" /> },
     { id: 'orders', label: 'Orders & Sales', icon: <Receipt className="w-4 h-4" /> },
     { id: 'customers', label: 'Registered Users', icon: <Users className="w-4 h-4" /> },
@@ -211,6 +213,7 @@ export const AdminLayout: React.FC = () => {
           {adminTab === 'categories' && <AdminCategoriesTab />}
           {adminTab === 'redeem-codes' && <AdminRedeemCodesTab />}
           {adminTab === 'diamonds' && <AdminDiamondsTab />}
+          {adminTab === 'diamonds-sales' && <AdminDiamondsSalesTab />}
           {adminTab === 'products' && <AdminProductsTab />}
           {adminTab === 'orders' && <AdminOrdersTab />}
           {adminTab === 'customers' && <AdminCustomersTab />}

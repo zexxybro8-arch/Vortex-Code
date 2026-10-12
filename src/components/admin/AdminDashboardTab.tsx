@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 
 export const AdminDashboardTab: React.FC = () => {
-  const { stats, orders, setAdminTab } = useAdmin();
+  const { stats, orders, setAdminTab, updateStoreSettings } = useAdmin();
+  const rawTotalSales = orders.reduce((sum, o) => sum + (o.paymentStatus === 'PAID' ? o.amountRupees : 0), 0);
 
   return (
     <div className="space-y-8">
@@ -24,6 +25,16 @@ export const AdminDashboardTab: React.FC = () => {
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2 shadow-lg hover:border-emerald-500/40 transition-colors">
           <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
             <span>Total Sales Volume</span>
+            <button 
+                onClick={() => {
+                    if (confirm('Are you sure you want to reset the displayed sales statistics? This will reset the volume counter to 0.')) {
+                        updateStoreSettings({ salesVolumeBaseline: rawTotalSales });
+                    }
+                }}
+                className="text-rose-400 hover:text-rose-300 font-bold text-[10px] uppercase cursor-pointer"
+            >
+                Reset
+            </button>
             <DollarSign className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-extrabold text-white font-mono">
