@@ -228,7 +228,10 @@ export async function getDb(): Promise<Database> {
 
   try {
     dbInstance.run(`ALTER TABLE products ADD COLUMN card_badge_text TEXT;`);
-  } catch (e) {}
+    console.log('ALTER TABLE products ADD COLUMN card_badge_text success');
+  } catch (e) {
+    console.log('ALTER TABLE products ADD COLUMN card_badge_text failed or column exists');
+  }
 
 
   // Ensure redeem_codes table allows 'DISABLED' status
@@ -643,6 +646,7 @@ export async function createProduct(data: {
   rewardValue: number;
   denomination: string;
   image?: string;
+  cardBadgeText?: string;
 }) {
   const db = await getDb();
   const id = `prod_${Math.round(data.price)}_${Math.random().toString(36).substring(2, 6)}`;
@@ -652,7 +656,7 @@ export async function createProduct(data: {
   db.run(
     `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, (data as any).cardBadgeText || 'DIAMONDS', now, now]
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, data.cardBadgeText || 'DIAMONDS', now, now]
   );
   saveDb();
   return getProductById(id);
@@ -669,6 +673,7 @@ export async function updateProduct(
     denomination: string;
     enabled: boolean | number;
     image: string;
+    cardBadgeText?: string;
   }>
 ) {
   const db = await getDb();
@@ -686,12 +691,13 @@ export async function updateProduct(
   const denomination = data.denomination !== undefined ? data.denomination : existing.denomination;
   const enabled = data.enabled !== undefined ? (data.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
   const image = data.image !== undefined ? data.image : existing.image;
+  const cardBadgeText = data.cardBadgeText !== undefined ? data.cardBadgeText : existing.cardBadgeText;
 
   db.run(
     `UPDATE products 
      SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, data.cardBadgeText || existing.cardBadgeText, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, now, id]
   );
   saveDb();
   return getProductById(id);

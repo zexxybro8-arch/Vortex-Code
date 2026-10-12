@@ -148,6 +148,7 @@ export const api = {
     rewardValue?: number;
     denomination?: string;
     image?: string;
+    cardBadgeText?: string;
   }): Promise<ApiProduct> {
     const data = await safeFetchJson('/api/products', {
       method: 'POST',

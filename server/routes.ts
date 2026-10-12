@@ -138,7 +138,7 @@ router.get('/products/:id', async (req, res) => {
 // POST /api/products - Create a product
 router.post('/products', isAdminMiddleware, async (req, res) => {
   try {
-    const { name, category, description, price, rewardValue, denomination, image } = req.body;
+    const { name, category, description, price, rewardValue, denomination, image, cardBadgeText } = req.body;
     let finalName = name;
     if (!finalName && category === 'DIAMONDS') {
         finalName = `${rewardValue} Diamonds`;
@@ -154,6 +154,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
       rewardValue: Number(rewardValue || price * 15),
       denomination: denomination || `₹${price}`,
       image,
+      cardBadgeText: req.body.cardBadgeText,
     });
     res.status(201).json({ success: true, product: created, message: 'Product created successfully' });
   } catch (err: any) {
@@ -164,6 +165,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
 // PUT /api/products/:id - Update product (price, status, details)
 router.put('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
+    console.log('DEBUG: Updating product', req.params.id, 'with body:', req.body);
     const updated = await updateProduct(req.params.id, req.body);
     res.json({ success: true, product: updated, message: 'Product updated successfully in database' });
   } catch (err: any) {

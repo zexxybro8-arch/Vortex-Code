@@ -33,6 +33,7 @@ function mapApiProductToStore(p: any): StoreProduct {
     image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
     description: p.description || '',
     displayName: p.displayName,
+    cardBadgeText: p.cardBadgeText,
     stock,
     soldCount: Number(p.soldCount ?? 0),
     totalCodes: Number(p.totalCodes ?? 0),
@@ -428,6 +429,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         description: prodData.description,
         image: prodData.image,
         displayName: prodData.displayName,
+        cardBadgeText: prodData.cardBadgeText,
       });
       await refreshData();
     } catch (err) {
@@ -447,6 +449,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (updated.description !== undefined) payload.description = updated.description;
       if (updated.image !== undefined) payload.image = updated.image;
       if (updated.displayName !== undefined) payload.displayName = updated.displayName;
+      if (updated.cardBadgeText !== undefined) payload.cardBadgeText = updated.cardBadgeText;
       if (updated.enabled !== undefined) payload.enabled = updated.enabled ? 1 : 0;
       if (updated.stockStatus !== undefined) {
         if (updated.stockStatus === 'OUT OF STOCK') {
