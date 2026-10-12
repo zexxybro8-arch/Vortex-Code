@@ -121,6 +121,7 @@ export const CustomerDashboard: React.FC = () => {
             deliveryInfo: '⚡ Instant Automated Vault Key Delivery',
             badge: !isEnabled ? 'DISABLED' : stock > 0 ? `${stock} Available` : 'OUT OF STOCK',
             cardBadgeText: (p as any).cardBadgeText || 'DIAMONDS',
+            glowSettings: typeof (p as any).glowSettings === 'string' ? JSON.parse((p as any).glowSettings) : (p as any).glowSettings || {},
             image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
             description: p.description || '',
             stock,
