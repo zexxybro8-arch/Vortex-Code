@@ -16,6 +16,7 @@ export const AdminDiamondsTab: React.FC = () => {
         rewardValueRupees: 100,
         priceRupees: 80,
         cardBadgeText: 'DIAMONDS',
+        enabled: true,
         glowSettings: {
           glowColor: '#10B981',
           borderColor: '#10B981',
@@ -56,7 +57,7 @@ export const AdminDiamondsTab: React.FC = () => {
       category: 'DIAMONDS' as any,
       description: formData.get('description') as string,
       image: formData.get('image') as string,
-      enabled: previewData.enabled ?? false,
+      enabled: formData.get('status') === 'enabled',
       sortOrder: Number(formData.get('sortOrder') || 0),
       glowSettings: {
         glowColor: formData.get('glowColor'),
@@ -104,6 +105,7 @@ export const AdminDiamondsTab: React.FC = () => {
       priceRupees: Number(formData.get('price')),
       image: formData.get('image'),
       cardBadgeText: formData.get('cardBadgeText'),
+      enabled: formData.get('status') === 'enabled',
       glowSettings: {
         glowColor: formData.get('glowColor'),
         borderColor: formData.get('borderColor'),
