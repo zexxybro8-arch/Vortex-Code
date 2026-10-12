@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import https from 'node:https';
 import {
   getAllProducts,
   getProductById,
@@ -1511,9 +1512,94 @@ async function handleSaveContact(req: any, res: any) {
 router.post('/admin/contact', isAdminMiddleware, handleSaveContact);
 router.put('/admin/contact', isAdminMiddleware, handleSaveContact);
 
+// ===================== FREE FIRE API =====================
+
+router.post('/freefire/verify', async (req, res) => {
+  try {
+    const { uid, region } = req.body;
+    
+    // 5. Validate UID and Region
+    if (!uid || !/^\d{5,15}$/.test(String(uid))) {
+      return res.status(400).json({ success: false, error: 'Invalid Game UID. Must be 5-15 digits.' });
+    }
+    const validRegions = ['ind', 'sg', 'br'];
+    let regionToUse = region ? String(region).trim().toLowerCase() : 'ind';
+    
+    if (!validRegions.includes(regionToUse)) {
+      return res.status(400).json({ success: false, error: 'Invalid region.' });
+    }
+    const actualRegion = regionToUse;
+
+    const apiKey = process.env.FREEFIRE_API_KEY;
+    if (!apiKey) {
+      console.error('FREEFIRE_API_KEY is not set');
+      return res.status(500).json({ success: false, error: 'Internal server configuration error.' });
+    }
+
+    // 6. Call upstream API
+    const url = `https://developers.freefirecommunity.com/api/v1/info?region=${actualRegion}&uid=${uid}`;
+    
+    const requestOptions = {
+        hostname: 'developers.freefirecommunity.com',
+        path: `/api/v1/info?region=${actualRegion}&uid=${uid}`,
+        method: 'GET',
+        headers: {
+            'x-api-key': apiKey.trim(),
+            'User-Agent': 'VortexCode/1.0 (+https://vortexcode.app)',
+        },
+    };
+
+
+    const responseData = await new Promise((resolve, reject) => {
+        const req = https.request(requestOptions, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));
+        });
+        req.on('error', (e) => reject(e));
+        req.end();
+    });
+
+    const response = {
+        ok: responseData.statusCode === 200,
+        status: responseData.statusCode,
+        json: async () => JSON.parse(responseData.body),
+        text: async () => responseData.body
+    };
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Free Fire API Error: ${response.status}`, errorText);
+      return res.status(response.status).json({ success: false, error: `API error: ${response.status} - ${errorText}` });
+    }
+
+    const data = await response.json();
+    console.log('DEBUG: API Response Data:', JSON.stringify(data));
+
+    // 9. Validate response structure
+    if (data && data.basicInfo && data.basicInfo.nickname) {
+      return res.json({ 
+        success: true, 
+        nickname: data.basicInfo.nickname,
+        level: data.basicInfo.level || 'Not Available',
+        guild: (data.clanBasicInfo && data.clanBasicInfo.clanName) || 'Not Available'
+      });
+    } else {
+      return res.json({ success: false, error: data.error || 'Player not found.' });
+    }
+
+    return res.status(404).json({ success: false, error: 'Player not found.' });
+
+  } catch (err: any) {
+    console.error('Free Fire API error:', err);
+    res.status(500).json({ success: false, error: 'Verification service temporarily unavailable.' });
+  }
+});
+
 // 404 handler for unhandled /api/* requests so they return JSON rather than falling through to index.html
 router.use((req, res) => {
   res.status(404).json({ success: false, error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
+
 
 export default router;

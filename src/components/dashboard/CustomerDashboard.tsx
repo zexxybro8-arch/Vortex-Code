@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { UIDVerificationModal } from './UIDVerificationModal';
 import { useAuth } from '../../context/AuthContext';
 import { api, type ApiRedeemCode } from '../../services/api';
 import type { DashboardTab, StoreProduct } from '../../types';
@@ -49,6 +50,11 @@ export const CustomerDashboard: React.FC = () => {
   // Payment Checkout Modal State
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+  // UID Verification State
+  const [isUidModalOpen, setIsUidModalOpen] = useState(false);
+  const [isVerifyingUid, setIsVerifyingUid] = useState(false);
+  const [productToVerify, setProductToVerify] = useState<StoreProduct | null>(null);
 
 
 
@@ -304,31 +310,27 @@ export const CustomerDashboard: React.FC = () => {
       return;
     }
 
-    const isCategoryDisabled =
-      activeCategories.length > 0 &&
-      !activeCategories.some(
-        (c) =>
-          c.enabled !== false &&
-          (c.denomination === product.denomination ||
-            c.denomination === `₹${product.denomination.replace(/\D/g, '')}`)
-      );
-
-    if (isCategoryDisabled) {
-      addToast('error', 'This recharge category is currently unavailable.');
+    if (product.category === 'DIAMONDS') {
+      setProductToVerify(product);
+      setIsUidModalOpen(true);
       return;
     }
 
-    // Skip stock check for Diamond products
+    // Skip stock check for Diamond products (already handled, but keep for other categories)
     if (product.category !== 'DIAMONDS' && (product.stockStatus === 'OUT OF STOCK' || (product.stock !== undefined && product.stock <= 0))) {
       addToast('error', 'OUT OF STOCK: No redeem codes available for this product.');
       return;
     }
 
     if (!user) {
-      triggerAuthRequired('Purchase Google Play Recharge Code');
+      triggerAuthRequired('Purchase');
       return;
     }
 
+    await initiatePurchase(product, codeId);
+  };
+
+  const initiatePurchase = async (product: StoreProduct, codeId?: string) => {
     setBuyingProductId(product.id);
     if (codeId) setBuyingCodeId(codeId);
 
@@ -336,9 +338,9 @@ export const CustomerDashboard: React.FC = () => {
       const res = await api.createCheckoutOrder({
         productId: product.id,
         codeId,
-        customerName: user.fullName,
-        customerEmail: user.email,
-        customerId: user.customerId || user.id,
+        customerName: user!.fullName,
+        customerEmail: user!.email,
+        customerId: user!.customerId || user!.id,
       });
 
       if (!res.success) {
@@ -366,6 +368,8 @@ export const CustomerDashboard: React.FC = () => {
       setBuyingCodeId(null);
     }
   };
+
+
 
 
 
@@ -677,7 +681,7 @@ export const CustomerDashboard: React.FC = () => {
               ))}
             </div>
             {products.filter(p => p.enabled && p.category === 'DIAMONDS').length === 0 && (
-                <div className="text-center py-12 text-slate-400">No diamond products currently available.</div>
+                <div className="text-center py-12 text-slate-400">No diamond products currently available. (Demo mode active)</div>
             )}
           </div>
         )}
@@ -746,6 +750,40 @@ export const CustomerDashboard: React.FC = () => {
         )}
 
       </main>
+
+      <UIDVerificationModal
+        isOpen={isUidModalOpen}
+        onClose={() => setIsUidModalOpen(false)}
+        onVerify={async (uid: string) => {
+          setIsVerifyingUid(true);
+          try {
+            const response = await fetch('/api/freefire/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uid }),
+            });
+            const data = await response.json();
+            if (data.success) {
+              addToast('success', `Verified: ${data.nickname}`);
+              return { nickname: data.nickname, level: data.level, guild: data.guild };
+            } else {
+              addToast('error', data.error || 'Invalid UID');
+              return null;
+            }
+          } catch (err) {
+            addToast('error', 'Verification service unavailable');
+            return null;
+          } finally {
+            setIsVerifyingUid(false);
+          }
+        }}
+        isVerifying={isVerifyingUid}
+        onContinue={async () => {
+          if (productToVerify) {
+            await initiatePurchase(productToVerify);
+          }
+        }}
+      />
 
       <PaymentCheckoutModal
         isOpen={isCheckoutModalOpen}
