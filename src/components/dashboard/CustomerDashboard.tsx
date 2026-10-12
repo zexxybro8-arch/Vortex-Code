@@ -649,11 +649,12 @@ export const CustomerDashboard: React.FC = () => {
                             : 'none'
                       }}
                     >
-                      <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-transparent border text-cyan-300 font-black text-[11px] tracking-wider mb-3"
+                      <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border text-cyan-300 font-black text-[11px] tracking-wider mb-3"
                            style={{ 
+                                backgroundColor: 'transparent',
                                 borderColor: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4',
                                 borderWidth: `${p.glowSettings?.labelBorderThickness || 1}px`,
-                                boxShadow: p.glowSettings?.labelGlowEnabled ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}` : 'none'
+                                boxShadow: p.glowSettings?.labelGlowEnabled ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}, inset 0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}` : 'none'
                            }}>
                         <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4' }} />
                         <span>{p.cardBadgeText || 'DIAMONDS'}</span>
