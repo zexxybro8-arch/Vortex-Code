@@ -163,7 +163,11 @@ export const AdminDiamondsTab: React.FC = () => {
                  <td className="py-3 px-3">{p.enabled ? 'Enabled' : 'Disabled'}</td>
                  <td className="py-3 px-3 text-right">
                     <button onClick={() => { setEditingProduct(p); setPreviewData(p); setIsModalOpen(true); }} className="text-slate-400 hover:text-white mr-2"><Edit2 size={14}/></button>
-                    <button onClick={() => deleteProduct(p.id)} className="text-red-400 hover:text-red-300"><Trash2 size={14}/></button>
+                     <button onClick={() => {
+                        if (window.confirm('Are you sure you want to delete this Diamond product?')) {
+                            deleteProduct(p.id).then(() => alert('Product deleted successfully')).catch((e) => alert('Failed to delete product: ' + (e.message || 'Unknown error')));
+                        }
+                     }} className="text-red-400 hover:text-red-300"><Trash2 size={14}/></button>
                  </td>
                </tr>
              ))}
