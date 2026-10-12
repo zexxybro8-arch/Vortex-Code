@@ -660,6 +660,7 @@ export const CustomerDashboard: React.FC = () => {
                         src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt={p.name || 'Free Fire Diamonds'} 
                         className="w-full aspect-square object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300 image-glow" 
+                        style={{ borderColor: p.glowSettings?.imageBorderColor || '#06b6d4' }}
                       />
 
 

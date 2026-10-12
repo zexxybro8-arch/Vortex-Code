@@ -52,6 +52,7 @@ export const AdminDiamondsTab: React.FC = () => {
         badgeBgColor: formData.get('badgeBgColor'),
         badgeTextColor: formData.get('badgeTextColor'),
         buttonBgColor: formData.get('buttonBgColor'),
+        imageBorderColor: formData.get('imageBorderColor'),
       },
     };
 
@@ -79,6 +80,7 @@ export const AdminDiamondsTab: React.FC = () => {
         badgeBgColor: formData.get('badgeBgColor'),
         badgeTextColor: formData.get('badgeTextColor'),
         buttonBgColor: formData.get('buttonBgColor'),
+        imageBorderColor: formData.get('imageBorderColor'),
       }
     });
   };
@@ -145,6 +147,7 @@ export const AdminDiamondsTab: React.FC = () => {
                 <input name="badgeBgColor" type="color" defaultValue={editingProduct?.glowSettings?.badgeBgColor || '#155e75'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Badge Background Color" />
                 <input name="badgeTextColor" type="color" defaultValue={editingProduct?.glowSettings?.badgeTextColor || '#bae6fd'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Badge Text Color" />
                 <input name="buttonBgColor" type="color" defaultValue={editingProduct?.glowSettings?.buttonBgColor || '#38bdf8'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Button Background Color" />
+                <input name="imageBorderColor" type="color" defaultValue={editingProduct?.glowSettings?.imageBorderColor || '#06b6d4'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Image Border Color" />
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-slate-800 text-white rounded-xl">Cancel</button>
@@ -175,7 +178,8 @@ export const AdminDiamondsTab: React.FC = () => {
                       <img 
                         src={previewData.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt="Product"
-                        className="w-32 h-32 object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)]" 
+                        className="w-32 h-32 object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] image-glow" 
+                        style={{ borderColor: previewData.glowSettings?.imageBorderColor || '#06b6d4' }}
                       />
                       <div 
                         className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between transition-all duration-300"
