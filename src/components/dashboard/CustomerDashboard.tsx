@@ -643,9 +643,10 @@ export const CustomerDashboard: React.FC = () => {
                       className="bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl float-animation"
                       style={{
                         borderColor: p.glowSettings?.borderColor || '#06b6d4',
-                        boxShadow: p.glowSettings?.glowColor 
-                            ? `0 0 5px ${p.glowSettings.glowColor}, 0 0 12px ${p.glowSettings.glowColor}80, 0 0 25px ${p.glowSettings.glowColor}55`
-                            : '0 0 5px #00F5FF, 0 0 12px rgba(0, 245, 255, 0.8), 0 0 25px rgba(0, 140, 255, 0.55), 0 0 45px rgba(0, 100, 255, 0.25)'
+                        borderWidth: `${p.glowSettings?.outerBorderThickness || 2}px`,
+                        boxShadow: p.glowSettings?.outerGlowEnabled 
+                            ? `0 0 ${p.glowSettings.outerGlowBlur || 25}px ${p.glowSettings.glowColor || '#10B981'}${(p.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                            : 'none'
                       }}
                     >
                       {/* Top Decorative Neon Frame & Title */}
@@ -659,8 +660,13 @@ export const CustomerDashboard: React.FC = () => {
                       <img 
                         src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt={p.name || 'Free Fire Diamonds'} 
-                        className="w-full aspect-square object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300 image-glow" 
-                        style={{ borderColor: p.glowSettings?.imageBorderColor || '#06b6d4' }}
+                        className="w-full aspect-square object-contain rounded-2xl group-hover:scale-105 transition-transform duration-300" 
+                        style={{ 
+                          borderColor: p.glowSettings?.imageBorderColor || '#06b6d4',
+                          borderWidth: `${p.glowSettings?.imageBorderThickness || 2}px`,
+                          borderStyle: 'solid',
+                          boxShadow: p.glowSettings?.imageGlowEnabled ? `0 0 ${p.glowSettings.imageGlowBlur || 15}px ${p.glowSettings.glowColor || '#10B981'}` : 'none'
+                        }}
                       />
 
 
