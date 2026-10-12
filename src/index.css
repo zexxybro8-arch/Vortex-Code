@@ -34,3 +34,18 @@
   animation: pulse-glow 3s infinite ease-in-out;
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); filter: brightness(1); }
+  50% { transform: translateY(-8px); filter: brightness(1.1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .float-animation {
+    animation: float 3s ease-in-out infinite;
+  }
+}
+
+.image-glow {
+  border: 2px solid #06b6d4; /* cyan-500 */
+  box-shadow: 0 0 10px #06b6d4, inset 0 0 5px #06b6d4;
+}

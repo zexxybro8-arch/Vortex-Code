@@ -640,7 +640,7 @@ export const CustomerDashboard: React.FC = () => {
                     <div 
                       key={p.id} 
                       onClick={() => handleBuyNow(p)}
-                      className="bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl"
+                      className="bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl float-animation"
                       style={{
                         borderColor: p.glowSettings?.borderColor || '#06b6d4',
                         boxShadow: p.glowSettings?.glowColor 
@@ -659,7 +659,7 @@ export const CustomerDashboard: React.FC = () => {
                       <img 
                         src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt={p.name || 'Free Fire Diamonds'} 
-                        className="w-full aspect-square object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300" 
+                        className="w-full aspect-square object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300 image-glow" 
                       />
 
 
