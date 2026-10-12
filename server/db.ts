@@ -233,6 +233,13 @@ export async function getDb(): Promise<Database> {
     console.log('ALTER TABLE products ADD COLUMN card_badge_text failed or column exists');
   }
 
+  try {
+    dbInstance.run(`ALTER TABLE products ADD COLUMN glow_settings TEXT;`);
+    console.log('ALTER TABLE products ADD COLUMN glow_settings success');
+  } catch (e) {
+    console.log('ALTER TABLE products ADD COLUMN glow_settings failed or column exists');
+  }
+
 
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
@@ -579,6 +586,7 @@ export async function getAllProducts(includeDisabled = true) {
       p.enabled, 
       p.image, 
       p.card_badge_text as cardBadgeText,
+      p.glow_settings as glowSettings,
       p.created_at as createdAt, 
       p.updated_at as updatedAt,
       COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as stock,
@@ -655,9 +663,9 @@ export async function createProduct(data: {
   const image = data.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png';
 
   db.run(
-    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, data.cardBadgeText || 'DIAMONDS', now, now]
+    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?);`,
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, data.cardBadgeText || 'DIAMONDS', data.glowSettings || '{}', now, now]
   );
   saveDb();
   return getProductById(id);
@@ -697,9 +705,9 @@ export async function updateProduct(
 
   db.run(
     `UPDATE products 
-     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, updated_at = ?
+     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, data.glowSettings || existing.glowSettings, now, id]
   );
   saveDb();
   return getProductById(id);

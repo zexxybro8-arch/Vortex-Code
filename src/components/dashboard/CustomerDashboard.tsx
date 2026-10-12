@@ -639,14 +639,18 @@ export const CustomerDashboard: React.FC = () => {
                     <div 
                       key={p.id} 
                       onClick={() => handleBuyNow(p)}
-                      className="bg-slate-950/90 border border-cyan-500 rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl"
+                      className="bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl"
                       style={{
-                        boxShadow: '0 0 5px #00F5FF, 0 0 12px rgba(0, 245, 255, 0.8), 0 0 25px rgba(0, 140, 255, 0.55), 0 0 45px rgba(0, 100, 255, 0.25)'
+                        borderColor: p.glowSettings?.borderColor || '#06b6d4',
+                        boxShadow: p.glowSettings?.glowColor 
+                            ? `0 0 5px ${p.glowSettings.glowColor}, 0 0 12px ${p.glowSettings.glowColor}80, 0 0 25px ${p.glowSettings.glowColor}55`
+                            : '0 0 5px #00F5FF, 0 0 12px rgba(0, 245, 255, 0.8), 0 0 25px rgba(0, 140, 255, 0.55), 0 0 45px rgba(0, 100, 255, 0.25)'
                       }}
                     >
                       {/* Top Decorative Neon Frame & Title */}
-                      <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 font-black text-[11px] tracking-wider mb-3 shadow-[inset_0_1px_3px_rgba(6,182,212,0.3)]">
-                        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-950/60 border text-cyan-300 font-black text-[11px] tracking-wider mb-3 shadow-[inset_0_1px_3px_rgba(6,182,212,0.3)]"
+                           style={{ borderColor: p.glowSettings?.borderColor || '#06b6d4' }}>
+                        <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.glowColor || '#06b6d4' }} />
                         <span>{p.cardBadgeText || 'DIAMONDS'}</span>
                       </div>
 
@@ -664,15 +668,18 @@ export const CustomerDashboard: React.FC = () => {
                           e.stopPropagation();
                           handleBuyNow(p);
                         }}
-                        className="mt-3 w-full bg-[#38BDF8] border border-cyan-500 rounded-2xl p-1.5 flex items-center justify-between text-[#06111F] transition-all duration-300 hover:border-cyan-300 hover:scale-[1.02] active:scale-[0.98] active:from-cyan-950"
+                        className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between text-[#06111F] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
                         style={{
-                          boxShadow: '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
+                          backgroundColor: p.glowSettings?.glowColor || '#38BDF8',
+                          borderColor: p.glowSettings?.borderColor || '#06b6d4',
+                          boxShadow: p.glowSettings?.glowColor ? `0 0 15px ${p.glowSettings.glowColor}66` : '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
                         }}
                       >
                         <div className="flex-1 text-center font-black text-[#06111F] text-base tracking-wider px-1 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
                           PAY ₹{p.priceRupees}
                         </div>
-                        <div className="w-8 h-8 rounded-xl bg-cyan-950/50 border border-cyan-500/60 flex items-center justify-center text-cyan-300 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)] shrink-0">
+                        <div className="w-8 h-8 rounded-xl bg-cyan-950/50 border flex items-center justify-center text-cyan-300 shrink-0 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)]"
+                             style={{ borderColor: p.glowSettings?.borderColor || '#06b6d4' }}>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </div>
                       </div>
@@ -768,7 +775,7 @@ export const CustomerDashboard: React.FC = () => {
                 nickname: data.nickname, 
                 level: data.level, 
                 guild: data.guild, 
-                diamondQuantity: productToVerify?.cardBadgeText === 'MONTHLY' ? 'Monthly Membership' : productToVerify?.name // Assuming product name is "100 Diamonds"
+                diamondQuantity: productToVerify?.cardBadgeText || productToVerify?.name // Use exact card name from badge
               };
             } else {
               addToast('error', data.error || 'Invalid UID');

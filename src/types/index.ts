@@ -29,6 +29,7 @@ export interface StoreProduct {
   description: string;
   displayName?: string;
   cardBadgeText?: string;
+  glowSettings?: any;
   stock?: number;
   soldCount?: number;
   totalCodes?: number;

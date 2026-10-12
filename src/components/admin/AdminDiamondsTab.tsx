@@ -26,6 +26,10 @@ export const AdminDiamondsTab: React.FC = () => {
       image: formData.get('image') as string,
       enabled: formData.get('status') === 'enabled',
       sortOrder: Number(formData.get('sortOrder') || 0),
+      glowSettings: {
+        glowColor: formData.get('glowColor'),
+        borderColor: formData.get('borderColor'),
+      },
     };
 
     if (editingProduct) {
@@ -94,6 +98,10 @@ export const AdminDiamondsTab: React.FC = () => {
               <option value="enabled">Enabled</option>
               <option value="disabled">Disabled</option>
             </select>
+            <div className="grid grid-cols-2 gap-2">
+              <input name="glowColor" type="color" defaultValue={editingProduct?.glowSettings?.glowColor || '#10B981'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Glow Color" />
+              <input name="borderColor" type="color" defaultValue={editingProduct?.glowSettings?.borderColor || '#10B981'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Border Color" />
+            </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-slate-800 text-white rounded-xl">Cancel</button>
               <button type="submit" className="flex-1 px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl">Save</button>
