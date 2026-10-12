@@ -724,6 +724,22 @@ export async function deleteOrDisableProduct(id: string) {
   return { success: true, message: `Product ${id} disabled successfully` };
 }
 
+export async function deleteProduct(id: string) {
+  const db = await getDb();
+  
+  // Check for linked orders or codes
+  const linkedOrders = db.exec(`SELECT count(*) FROM orders WHERE product_id = ?;`, [id]);
+  const linkedCodes = db.exec(`SELECT count(*) FROM redeem_codes WHERE product_id = ?;`, [id]);
+  
+  if ((linkedOrders[0].values[0][0] as number) > 0 || (linkedCodes[0].values[0][0] as number) > 0) {
+    throw new Error('Cannot delete product: It is referenced by existing orders or redeem codes.');
+  }
+  
+  db.run(`DELETE FROM products WHERE id = ?;`, [id]);
+  saveDb();
+  return { success: true, message: `Product ${id} deleted successfully` };
+}
+
 // ===================== RECHARGE CATEGORIES =====================
 
 export interface DatabaseCategory {

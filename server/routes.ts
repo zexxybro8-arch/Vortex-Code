@@ -46,6 +46,7 @@ import {
   createNotice,
   updateNotice,
   deleteNotice,
+  deleteProduct,
 } from './db';
 import { paymentGateway } from './payment/gateway';
 
@@ -174,13 +175,13 @@ router.put('/products/:id', isAdminMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/products/:id - Disable product
+// DELETE /api/products/:id - Delete product
 router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
-    const result = await deleteOrDisableProduct(req.params.id);
+    const result = await deleteProduct(req.params.id);
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to disable product' });
+    res.status(500).json({ success: false, error: err.message || 'Failed to delete product' });
   }
 });
 
