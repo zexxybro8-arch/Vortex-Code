@@ -683,6 +683,7 @@ export async function updateProduct(
     enabled: boolean | number;
     image: string;
     cardBadgeText?: string;
+    glowSettings?: any;
   }>
 ) {
   const db = await getDb();
@@ -702,12 +703,13 @@ export async function updateProduct(
   const enabled = data.enabled !== undefined ? (data.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
   const image = data.image !== undefined ? data.image : existing.image;
   const cardBadgeText = data.cardBadgeText !== undefined ? data.cardBadgeText : existing.cardBadgeText;
+  const glowSettings = data.glowSettings !== undefined ? data.glowSettings : existing.glowSettings;
 
   db.run(
     `UPDATE products 
      SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, data.glowSettings || existing.glowSettings, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === 'object' ? JSON.stringify(glowSettings) : glowSettings, now, id]
   );
   saveDb();
   return getProductById(id);
