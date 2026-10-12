@@ -670,7 +670,7 @@ export const CustomerDashboard: React.FC = () => {
                         }}
                         className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between text-[#06111F] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
                         style={{
-                          backgroundColor: p.glowSettings?.glowColor || '#38BDF8',
+                          backgroundColor: p.glowSettings?.buttonBgColor || '#38BDF8',
                           borderColor: p.glowSettings?.borderColor || '#06b6d4',
                           boxShadow: p.glowSettings?.glowColor ? `0 0 15px ${p.glowSettings.glowColor}66` : '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
                         }}
