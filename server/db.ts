@@ -656,6 +656,7 @@ export async function createProduct(data: {
   denomination: string;
   image?: string;
   cardBadgeText?: string;
+  glowSettings?: any;
 }) {
   const db = await getDb();
   const id = `prod_${Math.round(data.price)}_${Math.random().toString(36).substring(2, 6)}`;
@@ -665,7 +666,7 @@ export async function createProduct(data: {
   db.run(
     `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, data.cardBadgeText || 'DIAMONDS', data.glowSettings || '{}', now, now]
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, data.cardBadgeText || 'DIAMONDS', typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', now, now]
   );
   saveDb();
   return getProductById(id);

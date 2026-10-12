@@ -138,7 +138,7 @@ router.get('/products/:id', async (req, res) => {
 // POST /api/products - Create a product
 router.post('/products', isAdminMiddleware, async (req, res) => {
   try {
-    const { name, category, description, price, rewardValue, denomination, image, cardBadgeText } = req.body;
+    const { name, category, description, price, rewardValue, denomination, image, cardBadgeText, glowSettings } = req.body;
     let finalName = name;
     if (!finalName && category === 'DIAMONDS') {
         finalName = `${rewardValue} Diamonds`;
@@ -155,6 +155,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
       denomination: denomination || `₹${price}`,
       image,
       cardBadgeText: req.body.cardBadgeText,
+      glowSettings: req.body.glowSettings,
     });
     res.status(201).json({ success: true, product: created, message: 'Product created successfully' });
   } catch (err: any) {
