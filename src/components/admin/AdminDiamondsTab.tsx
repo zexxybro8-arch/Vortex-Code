@@ -190,33 +190,39 @@ export const AdminDiamondsTab: React.FC = () => {
               </div>
                
                <div className="text-white text-xs space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                <h3 className="font-bold border-b border-slate-800 pb-1">Border Thickness</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  <input name="outerBorderThickness" type="number" min="0" max="8" defaultValue={editingProduct?.glowSettings?.outerBorderThickness || 2} placeholder="Outer" className="p-2 rounded-xl bg-slate-900 border border-slate-800" title="Outer Border" />
-                  <input name="imageBorderThickness" type="number" min="0" max="8" defaultValue={editingProduct?.glowSettings?.imageBorderThickness || 2} placeholder="Image" className="p-2 rounded-xl bg-slate-900 border border-slate-800" title="Image Border" />
-                  <input name="labelBorderThickness" type="number" min="0" max="6" defaultValue={editingProduct?.glowSettings?.labelBorderThickness || 1} placeholder="Label" className="p-2 rounded-xl bg-slate-900 border border-slate-800" title="Label Border" />
+                <h3 className="font-bold border-b border-slate-800 pb-1">Border Thickness (px)</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  {[
+                      { name: 'outerBorderThickness', label: 'Outer', min: 0, max: 10 },
+                      { name: 'imageBorderThickness', label: 'Image', min: 0, max: 10 },
+                      { name: 'labelBorderThickness', label: 'Label', min: 0, max: 10 }
+                  ].map(item => (
+                    <div key={item.name} className="flex items-center gap-3">
+                        <span className="w-12">{item.label}:</span>
+                        <input name={item.name} type="range" min={item.min} max={item.max} defaultValue={previewData.glowSettings?.[item.name] || 2} className="accent-cyan-500 w-full" />
+                        <span className="w-8 text-right">{previewData.glowSettings?.[item.name] || 2}</span>
+                    </div>
+                  ))}
                 </div>
                 
-                <h3 className="font-bold border-b border-slate-800 pb-1 mt-2">Glow Intensities</h3>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <input name="outerGlowEnabled" type="checkbox" defaultChecked={editingProduct?.glowSettings?.outerGlowEnabled ?? true} />
-                    <span>Outer:</span>
-                    <input name="outerGlowIntensity" type="number" min="0" max="100" defaultValue={editingProduct?.glowSettings?.outerGlowIntensity || 50} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
-                    <input name="outerGlowBlur" type="number" min="0" max="40" defaultValue={editingProduct?.glowSettings?.outerGlowBlur || 25} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input name="imageGlowEnabled" type="checkbox" defaultChecked={editingProduct?.glowSettings?.imageGlowEnabled ?? true} />
-                    <span>Image:</span>
-                    <input name="imageGlowIntensity" type="number" min="0" max="100" defaultValue={editingProduct?.glowSettings?.imageGlowIntensity || 30} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
-                    <input name="imageGlowBlur" type="number" min="0" max="40" defaultValue={editingProduct?.glowSettings?.imageGlowBlur || 15} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input name="labelGlowEnabled" type="checkbox" defaultChecked={editingProduct?.glowSettings?.labelGlowEnabled ?? true} />
-                    <span>Label:</span>
-                    <input name="labelGlowIntensity" type="number" min="0" max="100" defaultValue={editingProduct?.glowSettings?.labelGlowIntensity || 20} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
-                    <input name="labelGlowBlur" type="number" min="0" max="40" defaultValue={editingProduct?.glowSettings?.labelGlowBlur || 10} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
-                  </div>
+                <h3 className="font-bold border-b border-slate-800 pb-1 mt-2">Glow Intensities & Blur</h3>
+                <div className="space-y-3">
+                  {[
+                      { name: 'outerGlow', label: 'Outer', enabled: 'outerGlowEnabled', intensity: 'outerGlowIntensity', blur: 'outerGlowBlur' },
+                      { name: 'imageGlow', label: 'Image', enabled: 'imageGlowEnabled', intensity: 'imageGlowIntensity', blur: 'imageGlowBlur' },
+                      { name: 'labelGlow', label: 'Label', enabled: 'labelGlowEnabled', intensity: 'labelGlowIntensity', blur: 'labelGlowBlur' }
+                  ].map(item => (
+                    <div key={item.name} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <input name={item.enabled} type="checkbox" defaultChecked={previewData.glowSettings?.[item.enabled] ?? true} />
+                            <span className="w-12">{item.label}:</span>
+                            <div className="flex-1 flex flex-col gap-1">
+                                <input name={item.intensity} type="range" min="0" max="150" defaultValue={previewData.glowSettings?.[item.intensity] || 50} className="accent-cyan-500 w-full" title="Intensity" />
+                                <input name={item.blur} type="range" min="0" max="40" defaultValue={previewData.glowSettings?.[item.blur] || 25} className="accent-cyan-500 w-full" title="Blur" />
+                            </div>
+                        </div>
+                    </div>
+                  ))}
                 </div>
                </div>
                
@@ -240,11 +246,11 @@ export const AdminDiamondsTab: React.FC = () => {
                     >
                       <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border font-black text-[11px] tracking-wider mb-3"
                            style={{ 
-                               borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
-                               borderWidth: `${previewData.glowSettings?.labelBorderThickness || 1}px`,
-                               backgroundColor: previewData.glowSettings?.badgeBgColor || '#155e75',
-                               color: previewData.glowSettings?.badgeTextColor || '#bae6fd',
-                               boxShadow: previewData.glowSettings?.labelGlowEnabled ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.glowColor || '#10B981'}` : 'none'
+                                borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
+                                borderWidth: `${previewData.glowSettings?.labelBorderThickness || 1}px`,
+                                backgroundColor: previewData.glowSettings?.badgeBgColor || '#155e75',
+                                color: previewData.glowSettings?.badgeTextColor || '#bae6fd',
+                                boxShadow: previewData.glowSettings?.labelGlowEnabled ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.glowColor || '#10B981'}` : 'none'
                            }}>
                         <Sparkles className="w-3.5 h-3.5" style={{ color: previewData.glowSettings?.glowColor || '#06b6d4' }} />
                         <span>{previewData.cardBadgeText || 'DIAMONDS'}</span>
