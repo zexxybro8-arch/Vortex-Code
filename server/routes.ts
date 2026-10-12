@@ -47,6 +47,8 @@ import {
   updateNotice,
   deleteNotice,
   deleteProduct,
+  getCategoricalSettings,
+  updateCategoricalSettings,
 } from './db';
 import { paymentGateway } from './payment/gateway';
 
@@ -1262,6 +1264,24 @@ router.put('/settings', isAdminMiddleware, async (req, res) => {
   }
 });
 
+router.get('/settings/categorical/:category', async (req, res) => {
+  try {
+    const settings = await getCategoricalSettings(req.params.category as any);
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch settings' });
+  }
+});
+
+router.put('/settings/categorical/:category', isAdminMiddleware, async (req, res) => {
+  try {
+    const settings = await updateCategoricalSettings(req.params.category as any, req.body);
+    res.json({ success: true, settings, message: 'Settings updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update settings' });
+  }
+});
+
 router.post('/admin/branding', isAdminMiddleware, async (req, res) => {
   try {
     const { logoUrl, websiteName, tagline } = req.body;
@@ -1517,6 +1537,47 @@ async function handleSaveContact(req: any, res: any) {
 
 router.post('/admin/contact', isAdminMiddleware, handleSaveContact);
 router.put('/admin/contact', isAdminMiddleware, handleSaveContact);
+
+// ===================== CATEGORICAL PAYMENT & TEXT SETTINGS =====================
+
+router.get('/settings/categorical/:category', async (req, res) => {
+  try {
+    const category = req.params.category;
+    if (category !== 'diamonds' && category !== 'redeem') {
+      return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+    const settings = await getCategoricalSettings(category);
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch settings' });
+  }
+});
+
+router.get('/admin/settings/categorical/:category', isAdminMiddleware, async (req, res) => {
+  try {
+    const category = req.params.category;
+    if (category !== 'diamonds' && category !== 'redeem') {
+      return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+    const settings = await getCategoricalSettings(category);
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch settings' });
+  }
+});
+
+router.post('/admin/settings/categorical/:category', isAdminMiddleware, async (req, res) => {
+  try {
+    const category = req.params.category;
+    if (category !== 'diamonds' && category !== 'redeem') {
+      return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+    const updated = await updateCategoricalSettings(category, req.body);
+    res.json({ success: true, settings: updated, message: `${category} settings saved successfully` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update settings' });
+  }
+});
 
 // ===================== FREE FIRE API =====================
 

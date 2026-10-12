@@ -59,7 +59,7 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ isOpen, on
         </div>
 
         <div className="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap text-center select-text w-full">
-            <ReactMarkdown breaks={true}>{notice.message}</ReactMarkdown>
+            <ReactMarkdown>{notice.message}</ReactMarkdown>
         </div>
 
         {notice.imageUrl && (

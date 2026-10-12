@@ -431,7 +431,6 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         description: prodData.description,
         image: prodData.image,
         enabled: prodData.enabled,
-        displayName: prodData.displayName,
         cardBadgeText: prodData.cardBadgeText,
         glowSettings: JSON.stringify(prodData.glowSettings || {}),
       });

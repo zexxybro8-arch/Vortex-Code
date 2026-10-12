@@ -15,6 +15,7 @@ import { AdminCustomersTab } from './AdminCustomersTab';
 import { AdminContactTab } from './AdminContactTab';
 import { AdminSettingsTab } from './AdminSettingsTab';
 import { AdminNoticeTab } from './AdminNoticeTab';
+import { AdminPaymentTextSettingsTab } from './AdminPaymentTextSettingsTab';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -51,6 +52,7 @@ export const AdminLayout: React.FC = () => {
     { id: 'customers', label: 'Registered Users', icon: <Users className="w-4 h-4" /> },
     { id: 'contact', label: 'Telegram & Contact', icon: <Send className="w-4 h-4" /> },
     { id: 'settings', label: 'Payment & API Settings', icon: <Settings className="w-4 h-4" /> },
+    { id: 'payment-text-settings', label: 'Payment & Text Customization', icon: <Settings className="w-4 h-4" /> },
     { id: 'redeem-code-notice', label: 'Redeem Code Notice', icon: <Megaphone className="w-4 h-4" /> },
     { id: 'diamonds-notice', label: 'Diamonds Notice', icon: <Megaphone className="w-4 h-4" /> },
   ];
@@ -220,6 +222,7 @@ export const AdminLayout: React.FC = () => {
           {adminTab === 'customers' && <AdminCustomersTab />}
           {adminTab === 'contact' && <AdminContactTab />}
           {adminTab === 'settings' && <AdminSettingsTab />}
+          {adminTab === 'payment-text-settings' && <AdminPaymentTextSettingsTab />}
           {adminTab === 'redeem-code-notice' && <AdminNoticeTab noticeType="redeem-code" />}
           {adminTab === 'diamonds-notice' && <AdminNoticeTab noticeType="diamonds" />}
         </main>

@@ -11,6 +11,8 @@ export type AdminTab =
   | 'customers'
   | 'contact'
   | 'settings'
+  | 'payment-settings'
+  | 'payment-text-settings'
   | 'redeem-code-notice'
   | 'diamonds-notice'
   | 'notice';

@@ -444,7 +444,7 @@ export const AdminNoticeTab: React.FC<{ noticeType: 'redeem-code' | 'diamonds' }
               
               {/* Notice Message with wrapping and scroll */}
               <div className="text-xs text-slate-300 font-mono leading-relaxed max-h-[120px] overflow-y-auto pr-1 whitespace-pre-wrap">
-                <ReactMarkdown breaks={true}>{message || 'Your main announcement or informative message details will appear right here dynamically from admin settings.'}</ReactMarkdown>
+                <ReactMarkdown>{message || 'Your main announcement or informative message details will appear right here dynamically from admin settings.'}</ReactMarkdown>
               </div>
             </div>
 

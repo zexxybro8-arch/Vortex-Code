@@ -2262,7 +2262,25 @@ export async function migrateToRandomCustomerIds() {
       db.run(`UPDATE users SET customer_id = ? WHERE id = ?;`, [newCid, uid]);
     }
   }
+}
+
+export async function getCategoricalSettings(category: 'diamonds' | 'redeem') {
+  const db = await getDb();
+  const res = db.exec(`SELECT value FROM store_settings WHERE key = ?;`, [`${category}_settings`]);
+  if (res.length === 0 || res[0].values.length === 0) return {};
+  try {
+    return JSON.parse(res[0].values[0][0] as string);
+  } catch {
+    return {};
+  }
+}
+
+export async function updateCategoricalSettings(category: 'diamonds' | 'redeem', settings: Record<string, any>) {
+  const db = await getDb();
+  const key = `${category}_settings`;
+  db.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES (?, ?);`, [key, JSON.stringify(settings)]);
   saveDb();
+  return settings;
 }
 
 export async function getAllUsersForAdmin() {

@@ -673,4 +673,25 @@ export const api = {
       return null;
     }
   },
+
+  async getCategoricalSettings(category: 'diamonds' | 'redeem'): Promise<any> {
+    try {
+      const data = await safeFetchJson(`/api/settings/categorical/${category}`);
+      return data?.settings || {};
+    } catch {
+      return {};
+    }
+  },
+
+  async updateCategoricalSettings(category: 'diamonds' | 'redeem', settings: any): Promise<any> {
+    const data = await safeFetchJson(`/api/admin/settings/categorical/${category}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+      body: JSON.stringify(settings),
+    });
+    return data.settings;
+  },
 };

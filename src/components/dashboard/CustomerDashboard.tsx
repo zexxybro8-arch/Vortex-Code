@@ -8,6 +8,7 @@ import { SupportTab } from './SupportTab';
 import { AnnouncementModal } from './AnnouncementModal';
 import { formatMaskedCode, formatFullCode } from '../../utils/codeFormat';
 import { PaymentCheckoutModal, type CheckoutData } from '../checkout/PaymentCheckoutModal';
+import { PurchaseSuccessModal } from './PurchaseSuccessModal';
 import {
   Search,
   Zap,
@@ -42,6 +43,10 @@ export const CustomerDashboard: React.FC = () => {
       setActiveTab(dashboardTab as DashboardTab);
     }
   }, [dashboardTab]);
+
+  useEffect(() => {
+    setIsRedeemNoticeOpen(true);
+  }, []);
   
   // Store Filters State
   const [selectedDenomination, setSelectedDenomination] = useState<string>('ALL VALUES');
@@ -51,14 +56,18 @@ export const CustomerDashboard: React.FC = () => {
   // Payment Checkout Modal State
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isRedeemNoticeOpen, setIsRedeemNoticeOpen] = useState(false);
+  const [isDiamondsNoticeOpen, setIsDiamondsNoticeOpen] = useState(false);
 
   // UID Verification State
   const [isUidModalOpen, setIsUidModalOpen] = useState(false);
   const [isVerifyingUid, setIsVerifyingUid] = useState(false);
   const [productToVerify, setProductToVerify] = useState<StoreProduct | null>(null);
+  
+  // Purchase Success State
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successOrder, setSuccessOrder] = useState<any>(null);
 
-  // Diamonds Notice Modal
-  const [isDiamondsNoticeOpen, setIsDiamondsNoticeOpen] = useState(false);
 
 
 
@@ -171,8 +180,15 @@ export const CustomerDashboard: React.FC = () => {
     // Check for payment callback params from the redirect url
     const params = new URLSearchParams(window.location.search);
     if (params.get('payment_success') === 'true') {
-      addToast('success', 'Payment verified successfully! Your recharge code has been delivered to your Vault.');
-      setActiveTab('my-orders'); // Switch to My Orders / Vault tab to view code immediately
+      const orderId = params.get('order_id');
+      if (orderId) {
+        api.getOrder(orderId).then((order) => {
+            if (order && order.paymentStatus === 'PAID') {
+                setSuccessOrder(order);
+                setIsSuccessModalOpen(true);
+            }
+        });
+      }
       refreshCustomerOrders();
       // Clean query params so they don't persist on refresh
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -632,7 +648,7 @@ export const CustomerDashboard: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              {(products.filter(p => p.enabled && p.category === 'DIAMONDS').length > 0
+              {((products.filter(p => p.enabled && p.category === 'DIAMONDS').length > 0
                 ? products.filter(p => p.enabled && p.category === 'DIAMONDS')
                 : [{
                     id: 'demo-100-diamonds',
@@ -642,8 +658,7 @@ export const CustomerDashboard: React.FC = () => {
                     image: 'https://i.ibb.co/HDkCvRrY/file-00000000e09c82119087489c4d51e78a.png',
                     enabled: true,
                     category: 'DIAMONDS'
-                  }]
-              ).map((p) => (
+                  }]) as any[]).map((p: any) => (
                     <div 
                       key={p.id} 
                       onClick={() => handleBuyNow(p)}
@@ -830,9 +845,16 @@ export const CustomerDashboard: React.FC = () => {
           await refreshCustomerOrders();
         }}
       />
+      
+      <PurchaseSuccessModal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        order={successOrder}
+      />
 
 
 
+      <AnnouncementModal isOpen={isRedeemNoticeOpen} onClose={() => setIsRedeemNoticeOpen(false)} type="redeem-code" />
       <AnnouncementModal isOpen={isDiamondsNoticeOpen} onClose={() => setIsDiamondsNoticeOpen(false)} type="diamonds" />
 
     </div>
