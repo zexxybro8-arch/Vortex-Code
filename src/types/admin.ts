@@ -11,6 +11,8 @@ export type AdminTab =
   | 'customers'
   | 'contact'
   | 'settings'
+  | 'redeem-code-notice'
+  | 'diamonds-notice'
   | 'notice';
 
 export interface AdminCategory {
@@ -107,6 +109,7 @@ export interface AdminNotice {
   startAt?: string;
   endAt?: string;
   priority: number;
+  type?: 'redeem-code' | 'diamonds';
   createdAt?: string;
   updatedAt?: string;
 }

@@ -51,7 +51,8 @@ export const AdminLayout: React.FC = () => {
     { id: 'customers', label: 'Registered Users', icon: <Users className="w-4 h-4" /> },
     { id: 'contact', label: 'Telegram & Contact', icon: <Send className="w-4 h-4" /> },
     { id: 'settings', label: 'Payment & API Settings', icon: <Settings className="w-4 h-4" /> },
-    { id: 'notice', label: 'Website Notice', icon: <Megaphone className="w-4 h-4" /> },
+    { id: 'redeem-code-notice', label: 'Redeem Code Notice', icon: <Megaphone className="w-4 h-4" /> },
+    { id: 'diamonds-notice', label: 'Diamonds Notice', icon: <Megaphone className="w-4 h-4" /> },
   ];
 
   return (
@@ -219,7 +220,8 @@ export const AdminLayout: React.FC = () => {
           {adminTab === 'customers' && <AdminCustomersTab />}
           {adminTab === 'contact' && <AdminContactTab />}
           {adminTab === 'settings' && <AdminSettingsTab />}
-          {adminTab === 'notice' && <AdminNoticeTab />}
+          {adminTab === 'redeem-code-notice' && <AdminNoticeTab noticeType="redeem-code" />}
+          {adminTab === 'diamonds-notice' && <AdminNoticeTab noticeType="diamonds" />}
         </main>
 
       </div>

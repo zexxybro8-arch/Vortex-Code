@@ -18,7 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-export const AdminNoticeTab: React.FC = () => {
+export const AdminNoticeTab: React.FC<{ noticeType: 'redeem-code' | 'diamonds' }> = ({ noticeType }) => {
   const [notices, setNotices] = useState<AdminNotice[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export const AdminNoticeTab: React.FC = () => {
     setError(null);
     try {
       const data = await api.getNotices();
-      setNotices(data);
+      setNotices(data.filter((n: any) => n.type === noticeType));
     } catch (err: any) {
       setError(err.message || 'Failed to load notices');
     } finally {
@@ -111,6 +111,7 @@ export const AdminNoticeTab: React.FC = () => {
       enabled,
       title: title.trim(),
       message: message.trim(),
+      type: noticeType,
       imageUrl: imageUrl.trim() || null,
       buttonEnabled,
       buttonText: buttonEnabled ? buttonText.trim() : null,

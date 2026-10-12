@@ -5,6 +5,7 @@ import { api, type ApiRedeemCode } from '../../services/api';
 import type { DashboardTab, StoreProduct } from '../../types';
 import { HowToRedeem } from './HowToRedeem';
 import { SupportTab } from './SupportTab';
+import { NoticeRenderer } from './NoticeRenderer';
 import { formatMaskedCode, formatFullCode } from '../../utils/codeFormat';
 import { PaymentCheckoutModal, type CheckoutData } from '../checkout/PaymentCheckoutModal';
 import {
@@ -383,6 +384,7 @@ export const CustomerDashboard: React.FC = () => {
         
         {activeTab === 'redeem-code' && (
           <div className="space-y-6">
+            <NoticeRenderer type="redeem-code" />
             
             {/* SELECT RECHARGE AMOUNT / DENOMINATION FILTER BAR */}
             <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
@@ -605,6 +607,7 @@ export const CustomerDashboard: React.FC = () => {
 
         {activeTab === 'diamonds' && (
           <div className="space-y-6">
+            <NoticeRenderer type="diamonds" />
             <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
               <div className="flex gap-2">
                 <button
