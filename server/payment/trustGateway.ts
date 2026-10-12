@@ -234,8 +234,12 @@ export class TrustGatewayProvider implements IPaymentGatewayProvider {
       };
     }
 
-    const identifier = (params.gatewayOrderId || params.orderId).trim();
-    if (!identifier) {
+    const identifiersToTry = Array.from(new Set([
+      params.gatewayOrderId,
+      params.orderId,
+    ].filter(Boolean))) as string[];
+
+    if (identifiersToTry.length === 0) {
       return {
         isValid: false,
         status: 'PENDING',
@@ -245,75 +249,74 @@ export class TrustGatewayProvider implements IPaymentGatewayProvider {
       };
     }
 
-    const endpoint = `${this.baseUrl}/api/v1/orders/status/${encodeURIComponent(identifier)}`;
-    console.log(`[TrustGateway Verify Request] Identifier: ${identifier}`);
+    let successResponse: any = null;
+    let resolvedIdentifier = params.gatewayOrderId || params.orderId;
+    let lastErrorMsg = 'Order status not found on gateway yet.';
+    let lastStatusCode = 404;
+    let lastRawData: any = null;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    for (const identifier of identifiersToTry) {
+      const endpoint = `${this.baseUrl}/api/v1/orders/status/${encodeURIComponent(identifier)}`;
+      console.log(`[TrustGateway Verify Request] Trying Identifier: ${identifier}`);
 
-    try {
-      const response = await this.fetchFn(endpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'X-API-Key': this.apiKey,
-        },
-        signal: controller.signal,
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
 
-      clearTimeout(timeout);
-
-      const rawText = await response.text();
-      let resData: any = null;
       try {
-        resData = rawText.trim() ? JSON.parse(rawText) : null;
-      } catch (parseErr) {
-        console.warn(`[TrustGateway Status Notice] Non-JSON response for ${identifier}:`, rawText.substring(0, 150));
-      }
+        const response = await this.fetchFn(endpoint, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'X-API-Key': this.apiKey,
+          },
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const statusCode = response.status;
-        const errorMsg = resData?.message || resData?.error || `Gateway returned HTTP ${statusCode}`;
+        clearTimeout(timeout);
 
-        if (statusCode === 404) {
-          return {
-            isValid: false,
-            status: 'PENDING',
-            orderId: params.orderId,
-            gatewayOrderId: identifier,
-            amount: params.expectedAmount || 0,
-            error: 'Order status not found on gateway yet. Waiting for customer payment.',
-            rawGatewayResponse: resData,
-          };
+        const rawText = await response.text();
+        let resData: any = null;
+        try {
+          resData = rawText.trim() ? JSON.parse(rawText) : null;
+        } catch (parseErr) {
+          console.warn(`[TrustGateway Status Notice] Non-JSON response for ${identifier}:`, rawText.substring(0, 150));
         }
 
-        return {
-          isValid: false,
-          status: 'PENDING',
-          orderId: params.orderId,
-          gatewayOrderId: identifier,
-          amount: params.expectedAmount || 0,
-          error: errorMsg,
-          rawGatewayResponse: resData,
-        };
+        if (response.ok && resData) {
+          successResponse = resData;
+          resolvedIdentifier = identifier;
+          break;
+        } else {
+          lastStatusCode = response.status;
+          lastErrorMsg = resData?.message || resData?.error || `Gateway returned HTTP ${response.status}`;
+          lastRawData = resData;
+        }
+      } catch (err: any) {
+        clearTimeout(timeout);
+        console.warn(`[TrustGateway Status Warning] Identifier ${identifier} failed:`, err.message);
       }
+    }
 
-      if (!resData) {
-        return {
-          isValid: false,
-          status: 'PENDING',
-          orderId: params.orderId,
-          gatewayOrderId: identifier,
-          amount: params.expectedAmount || 0,
-          error: 'Empty response received from gateway.',
-        };
-      }
+    if (!successResponse) {
+      return {
+        isValid: false,
+        status: lastStatusCode === 404 ? 'PENDING' : 'PENDING',
+        orderId: params.orderId,
+        gatewayOrderId: params.gatewayOrderId || params.orderId,
+        amount: params.expectedAmount || 0,
+        error: lastErrorMsg,
+        rawGatewayResponse: lastRawData,
+      };
+    }
 
+    const resData = successResponse;
+
+    try {
       const data = resData.data || resData;
       const rawStatus = data.status !== undefined ? data.status : resData.status;
       const statusStr = String(rawStatus || '').toUpperCase().trim();
 
-      const gatewayOrderId = String(data.order_id || resData.order_id || identifier);
+      const gatewayOrderId = String(data.order_id || resData.order_id || resolvedIdentifier);
       const utr = String(data.utr || data.bank_utr || data.transaction_id || data.txn_id || '').trim();
       const settledAmount = Number(data.payable_amount !== undefined ? data.payable_amount : (data.amount || resData.amount || 0));
 
@@ -323,7 +326,7 @@ export class TrustGatewayProvider implements IPaymentGatewayProvider {
       if (params.expectedAmount && settledAmount > 0) {
         const diff = Math.abs(settledAmount - params.expectedAmount);
         if (diff > 0.05) {
-          console.warn(`[TrustGateway Security Alert] Amount mismatch for ${identifier}: expected ₹${params.expectedAmount}, got ₹${settledAmount}`);
+          console.warn(`[TrustGateway Security Alert] Amount mismatch for ${resolvedIdentifier}: expected ₹${params.expectedAmount}, got ₹${settledAmount}`);
           return {
             isValid: false,
             status: 'FAILED',
@@ -404,15 +407,14 @@ export class TrustGatewayProvider implements IPaymentGatewayProvider {
         rawGatewayResponse: data,
       };
     } catch (err: any) {
-      clearTimeout(timeout);
-      console.error(`[TrustGateway Status Exception] ${identifier}:`, err.message);
+      console.error(`[TrustGateway Parse Exception] ${resolvedIdentifier}:`, err.message);
       return {
         isValid: false,
         status: 'PENDING',
         orderId: params.orderId,
-        gatewayOrderId: identifier,
+        gatewayOrderId: resolvedIdentifier,
         amount: params.expectedAmount || 0,
-        error: err.message || 'Status check failed due to network exception.',
+        error: err.message || 'Failed to parse gateway status response.',
       };
     }
   }

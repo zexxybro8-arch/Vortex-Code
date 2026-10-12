@@ -59,6 +59,8 @@ export const AdminDiamondsTab: React.FC = () => {
       image: formData.get('image') as string,
       enabled: formData.get('status') === 'enabled',
       sortOrder: Number(formData.get('sortOrder') || 0),
+      stockStatus: 'AVAILABLE' as const,
+      deliveryInfo: 'Instant Delivery',
       glowSettings: {
         glowColor: formData.get('glowColor'),
         borderColor: formData.get('borderColor'),

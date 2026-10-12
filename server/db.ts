@@ -710,8 +710,10 @@ export async function updateProduct(
   const price = data.price !== undefined ? Number(data.price) : existing.price;
   const reward_value = data.rewardValue !== undefined ? Number(data.rewardValue) : existing.rewardValue;
   const denomination = data.denomination !== undefined ? data.denomination : existing.denomination;
-  const enabled = data.enabled !== undefined 
-    ? (data.enabled === true || data.enabled === 1 || data.enabled === 'true' || data.enabled === '1' || data.enabled === 'enabled' ? 1 : 0) 
+  const enabledRaw = (data as any).enabled;
+  const enabledVal = typeof enabledRaw === 'string' ? enabledRaw.toLowerCase() : String(enabledRaw);
+  const enabled = enabledRaw !== undefined 
+    ? (enabledVal === 'true' || enabledVal === '1' || enabledVal === 'enabled' || enabledRaw === true || enabledRaw === 1 ? 1 : 0) 
     : (existing.enabled ? 1 : 0);
   const image = data.image !== undefined ? data.image : existing.image;
   const cardBadgeText = data.cardBadgeText !== undefined ? data.cardBadgeText : existing.cardBadgeText;

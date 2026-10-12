@@ -1,6 +1,6 @@
 export type AuthView = 'landing' | 'login' | 'register' | 'forgot-password' | 'dashboard' | 'store' | 'vault' | 'order-lookup';
 
-export type DashboardTab = 'redeem-code' | 'how-to-redeem' | 'support' | 'my-orders';
+export type DashboardTab = 'redeem-code' | 'how-to-redeem' | 'support' | 'my-orders' | 'diamonds';
 
 export interface User {
   id: string;

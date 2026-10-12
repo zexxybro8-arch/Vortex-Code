@@ -36,11 +36,11 @@ import {
 export const CustomerDashboard: React.FC = () => {
   const { user, orders, addToast, triggerAuthRequired, refreshCustomerOrders, dashboardTab } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<DashboardTab>((dashboardTab as DashboardTab) || 'redeem-code');
+  const [activeTab, setActiveTab] = useState<string>(dashboardTab || 'redeem-code');
 
   useEffect(() => {
     if (dashboardTab) {
-      setActiveTab(dashboardTab as DashboardTab);
+      setActiveTab(dashboardTab);
     }
   }, [dashboardTab]);
 
@@ -339,7 +339,7 @@ export const CustomerDashboard: React.FC = () => {
     }
 
     // Skip stock check for Diamond products (already handled, but keep for other categories)
-    if (product.category !== 'DIAMONDS' && (product.stockStatus === 'OUT OF STOCK' || (product.stock !== undefined && product.stock <= 0))) {
+    if ((product.category as string) !== 'DIAMONDS' && (product.stockStatus === 'OUT OF STOCK' || (product.stock !== undefined && product.stock <= 0))) {
       addToast('error', 'OUT OF STOCK: No redeem codes available for this product.');
       return;
     }
@@ -374,8 +374,9 @@ export const CustomerDashboard: React.FC = () => {
         return;
       }
 
-      if (res.checkoutUrl) {
-        window.location.href = res.checkoutUrl;
+      const payUrl = res.gatewayOrder?.paymentUrl || (res as any).checkoutUrl;
+      if (payUrl) {
+        window.location.href = payUrl;
       } else {
         addToast('error', 'Failed to retrieve secure checkout URL.');
       }
@@ -420,7 +421,7 @@ export const CustomerDashboard: React.FC = () => {
                     setActiveTab('diamonds');
                     setIsDiamondsNoticeOpen(true);
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs ${activeTab === 'diamonds' ? 'bg-emerald-400 text-slate-950' : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'}`}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs ${(activeTab as string) === 'diamonds' ? 'bg-emerald-400 text-slate-950' : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'}`}
                 >
                   <Sparkles className="w-4 h-4" />
                   DIAMONDS

@@ -22,7 +22,7 @@ export interface CreatePaymentOrderParams {
   customerName: string;
   customerEmail: string;
   customerId?: string;
-  orderType?: 'PURCHASE' | 'DEPOSIT';
+  orderType?: 'PURCHASE' | 'DEPOSIT' | 'DIAMOND_PURCHASE';
   callbackUrl?: string;
 }
 

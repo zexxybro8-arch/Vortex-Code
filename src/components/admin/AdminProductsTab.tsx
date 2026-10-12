@@ -17,7 +17,7 @@ export const AdminProductsTab: React.FC = () => {
   const [priceRupees, setPriceRupees] = useState(100);
   const [rewardValueRupees, setRewardValueRupees] = useState(1500);
   const [denomination, setDenomination] = useState('₹100');
-  const [category, setCategory] = useState<'GAMING' | 'DIGITAL REWARDS' | 'OTHER'>('DIGITAL REWARDS');
+  const [category, setCategory] = useState<'GAMING' | 'DIGITAL REWARDS' | 'DIAMONDS' | 'OTHER'>('DIGITAL REWARDS');
   const [stockStatus, setStockStatus] = useState<'AVAILABLE' | 'LIMITED STOCK' | 'OUT OF STOCK'>('AVAILABLE');
   const [description, setDescription] = useState('');
 

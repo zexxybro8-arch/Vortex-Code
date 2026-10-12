@@ -1627,11 +1627,12 @@ router.post('/freefire/verify', async (req, res) => {
         req.end();
     });
 
+    const resData = responseData as { statusCode: number; body: string };
     const response = {
-        ok: responseData.statusCode === 200,
-        status: responseData.statusCode,
-        json: async () => JSON.parse(responseData.body),
-        text: async () => responseData.body
+        ok: resData.statusCode === 200,
+        status: resData.statusCode,
+        json: async () => JSON.parse(resData.body),
+        text: async () => resData.body
     };
 
     if (!response.ok) {

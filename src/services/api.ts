@@ -485,6 +485,7 @@ export const api = {
     return safeFetchJson(`/api/wallet/transactions?customerId=${encodeURIComponent(identifier)}`);
   },
 
+
   async getPaymentStatus(orderId: string): Promise<{
     success: boolean;
     status?: 'PAID' | 'PENDING' | 'FAILED' | 'EXPIRED';
