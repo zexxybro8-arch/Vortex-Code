@@ -768,7 +768,7 @@ export const CustomerDashboard: React.FC = () => {
                 nickname: data.nickname, 
                 level: data.level, 
                 guild: data.guild, 
-                diamondQuantity: productToVerify?.name // Assuming product name is "100 Diamonds"
+                diamondQuantity: productToVerify?.cardBadgeText === 'MONTHLY' ? 'Monthly Membership' : productToVerify?.name // Assuming product name is "100 Diamonds"
               };
             } else {
               addToast('error', data.error || 'Invalid UID');
