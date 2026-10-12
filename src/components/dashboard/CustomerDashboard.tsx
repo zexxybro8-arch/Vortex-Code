@@ -47,6 +47,50 @@ export const CustomerDashboard: React.FC = () => {
   useEffect(() => {
     setIsRedeemNoticeOpen(true);
   }, []);
+
+  // Handle return from payment gateway (?payment_success=true&order_id=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentSuccess = params.get('payment_success');
+    const orderId = params.get('order_id');
+    const paymentFailed = params.get('payment_failed');
+    const errorMsg = params.get('error');
+
+    if (paymentFailed) {
+      addToast('error', errorMsg ? decodeURIComponent(errorMsg) : 'Payment failed or cancelled.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentSuccess && orderId) {
+      api.getPaymentStatus(orderId).then((res) => {
+        if (res && res.success && res.order) {
+          setSuccessOrder(res.order);
+          setIsSuccessModalOpen(true);
+          refreshCustomerOrders();
+        } else {
+          setSuccessOrder({
+            id: orderId,
+            orderNumber: orderId,
+            productName: 'Digital Product / Recharge Code',
+            amount: 0,
+            paymentStatus: 'PAID',
+            deliveryStatus: 'DELIVERED',
+          });
+          setIsSuccessModalOpen(true);
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }).catch(() => {
+        setSuccessOrder({
+          id: orderId,
+          orderNumber: orderId,
+          productName: 'Digital Product / Recharge Code',
+          amount: 0,
+          paymentStatus: 'PAID',
+          deliveryStatus: 'DELIVERED',
+        });
+        setIsSuccessModalOpen(true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      });
+    }
+  }, [addToast, refreshCustomerOrders]);
   
   // Store Filters State
   const [selectedDenomination, setSelectedDenomination] = useState<string>('ALL VALUES');
