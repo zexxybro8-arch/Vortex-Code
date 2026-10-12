@@ -17,6 +17,7 @@ import {
   Save,
   AlertCircle
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 export const AdminNoticeTab: React.FC<{ noticeType: 'redeem-code' | 'diamonds' }> = ({ noticeType }) => {
   const [notices, setNotices] = useState<AdminNotice[]>([]);
@@ -442,8 +443,8 @@ export const AdminNoticeTab: React.FC<{ noticeType: 'redeem-code' | 'diamonds' }
               </h3>
               
               {/* Notice Message with wrapping and scroll */}
-              <div className="text-xs text-slate-300 font-sans leading-relaxed max-h-[120px] overflow-y-auto pr-1 whitespace-pre-wrap">
-                {message || 'Your main announcement or informative message details will appear right here dynamically from admin settings.'}
+              <div className="text-xs text-slate-300 font-mono leading-relaxed max-h-[120px] overflow-y-auto pr-1 whitespace-pre-wrap">
+                <ReactMarkdown breaks={true}>{message || 'Your main announcement or informative message details will appear right here dynamically from admin settings.'}</ReactMarkdown>
               </div>
             </div>
 
