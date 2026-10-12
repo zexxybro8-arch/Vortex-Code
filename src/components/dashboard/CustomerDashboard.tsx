@@ -662,17 +662,14 @@ export const CustomerDashboard: React.FC = () => {
                           e.stopPropagation();
                           handleBuyNow(p);
                         }}
-                        className="mt-3 w-full bg-gradient-to-br from-slate-900 to-slate-950 border border-cyan-500 rounded-2xl p-1.5 flex items-center justify-between text-white transition-all duration-300 hover:border-cyan-300 hover:scale-[1.02] active:scale-[0.98] active:from-cyan-950"
+                        className="mt-3 w-full bg-[#38BDF8] border border-cyan-500 rounded-2xl p-1.5 flex items-center justify-between text-[#06111F] transition-all duration-300 hover:border-cyan-300 hover:scale-[1.02] active:scale-[0.98] active:from-cyan-950"
                         style={{
-                          boxShadow: 'inset 0 0 10px rgba(0, 245, 255, 0.2), 0 0 8px rgba(0, 245, 255, 0.4), 0 0 15px rgba(0, 140, 255, 0.3)'
+                          boxShadow: '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
                         }}
                       >
-                        <div className="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-300 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)] shrink-0">
-                          <ShoppingBag className="w-3.5 h-3.5" />
+                        <div className="flex-1 text-center font-black text-[#06111F] text-base tracking-wider px-1 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+                          PAY ₹{p.priceRupees}
                         </div>
-                        <span className="font-black text-white text-base tracking-wider px-1 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
-                          ₹{p.priceRupees}
-                        </span>
                         <div className="w-8 h-8 rounded-xl bg-cyan-950/50 border border-cyan-500/60 flex items-center justify-center text-cyan-300 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)] shrink-0">
                           <ArrowRight className="w-3.5 h-3.5" />
                         </div>
@@ -765,7 +762,12 @@ export const CustomerDashboard: React.FC = () => {
             const data = await response.json();
             if (data.success) {
               addToast('success', `Verified: ${data.nickname}`);
-              return { nickname: data.nickname, level: data.level, guild: data.guild };
+              return { 
+                nickname: data.nickname, 
+                level: data.level, 
+                guild: data.guild, 
+                diamondQuantity: productToVerify?.name // Assuming product name is "100 Diamonds"
+              };
             } else {
               addToast('error', data.error || 'Invalid UID');
               return null;

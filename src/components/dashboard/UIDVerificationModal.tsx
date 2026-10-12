@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, X, Crown, Star, Users, ShieldCheck } from 'lucide-react';
+import { Loader2, X, Crown, Star, Users, ShieldCheck, Mail } from 'lucide-react';
 
 interface UIDVerificationModalProps {
   isOpen: boolean;
@@ -56,6 +56,23 @@ export const UIDVerificationModal: React.FC<UIDVerificationModalProps> = ({
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span className="text-xs uppercase tracking-widest text-emerald-400 font-bold">PLAYER VERIFIED</span>
           </div>
+
+          {/* Diamond Delivery Notice */}
+          {/* Diamond Delivery Notice */}
+          <div className="p-4 rounded-lg bg-[#0a1520] border border-cyan-500/20 shadow-inner">
+            <div className="flex items-center gap-2 text-cyan-400 font-bold text-[10px] uppercase tracking-[0.05em] mb-3">
+              <Mail className="w-3.5 h-3.5" />
+              DIAMOND DELIVERY NOTICE
+            </div>
+            <div className="text-xs text-slate-100 font-semibold space-y-3 leading-relaxed">
+              <p>
+                Your selected <span className="text-emerald-400 font-bold tracking-wide">{playerData.diamondQuantity || 'Diamonds'}</span> will be delivered to your in-game mailbox within <span className="text-emerald-400 font-bold">10–15 minutes</span> after successful payment.
+              </p>
+              <p className="text-slate-400 font-semibold text-[11px]">
+                Please allow up to 15 minutes for delivery.
+              </p>
+            </div>
+          </div>
           
           {/* Continue Button */}
           <button
@@ -64,7 +81,7 @@ export const UIDVerificationModal: React.FC<UIDVerificationModalProps> = ({
               setPlayerData(null);
               onContinue();
             }}
-            className="w-full py-4 px-6 rounded-md bg-gradient-to-r from-emerald-500 to-emerald-400 text-slate-950 font-black tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(52,211,153,0.4)] hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full py-4 px-6 rounded-md bg-[#38BDF8] text-[#06111F] font-black tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(56,189,248,0.4)] hover:scale-[1.02] active:scale-[0.98]"
           >
             CONTINUE TO PAYMENT →
           </button>

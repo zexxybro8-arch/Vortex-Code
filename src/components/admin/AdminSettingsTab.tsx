@@ -7,6 +7,8 @@ export const AdminSettingsTab: React.FC = () => {
 
   const [storeName, setStoreName] = useState(storeSettings.storeName || 'VORTEX CODE');
   const [subtitle, setSubtitle] = useState(storeSettings.subtitle || 'SECURE DIGITAL STORE');
+  const [diamondCategoryLabel, setDiamondCategoryLabel] = useState(storeSettings.diamondCategoryLabel || 'DIAMONDS');
+  const [diamondProductLabel, setDiamondProductLabel] = useState(storeSettings.diamondProductLabel || 'DIAMONDS');
   const [supportEmail, setSupportEmail] = useState(storeSettings.supportEmail || 'support@vortexcode.com');
   const [currencySymbol, setCurrencySymbol] = useState(storeSettings.currencySymbol || '₹');
   const [enableAutoFulfillment, setEnableAutoFulfillment] = useState(storeSettings.enableAutoFulfillment ?? true);
@@ -34,6 +36,8 @@ export const AdminSettingsTab: React.FC = () => {
     if (storeSettings && !isInitializedRef.current) {
       if (storeSettings.storeName) setStoreName(storeSettings.storeName);
       if (storeSettings.subtitle) setSubtitle(storeSettings.subtitle);
+      if (storeSettings.diamondCategoryLabel) setDiamondCategoryLabel(storeSettings.diamondCategoryLabel);
+      if (storeSettings.diamondProductLabel) setDiamondProductLabel(storeSettings.diamondProductLabel);
       if (storeSettings.supportEmail) setSupportEmail(storeSettings.supportEmail);
       if (storeSettings.currencySymbol) setCurrencySymbol(storeSettings.currencySymbol);
       if (storeSettings.enableAutoFulfillment !== undefined) setEnableAutoFulfillment(storeSettings.enableAutoFulfillment);
@@ -73,6 +77,8 @@ export const AdminSettingsTab: React.FC = () => {
     updateStoreSettings({
       storeName,
       subtitle,
+      diamondCategoryLabel,
+      diamondProductLabel,
       supportEmail,
       currencySymbol,
       enableAutoFulfillment,
@@ -252,6 +258,27 @@ export const AdminSettingsTab: React.FC = () => {
                 type="text"
                 value={subtitle}
                 onChange={(e) => setSubtitle(e.target.value)}
+                className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Diamond Category Label</label>
+              <input
+                type="text"
+                value={diamondCategoryLabel}
+                onChange={(e) => setDiamondCategoryLabel(e.target.value)}
+                className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Diamond Product Label</label>
+              <input
+                type="text"
+                value={diamondProductLabel}
+                onChange={(e) => setDiamondProductLabel(e.target.value)}
                 className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-400"
                 required
               />

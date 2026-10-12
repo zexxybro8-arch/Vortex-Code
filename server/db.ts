@@ -281,6 +281,8 @@ export async function getDb(): Promise<Database> {
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('contactMobileIconSize', '42');`);
 
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('diamondCategoryLabel', 'DIAMONDS');`);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('diamondProductLabel', 'DIAMONDS');`);
 
   // Seed default categories if empty
   try {

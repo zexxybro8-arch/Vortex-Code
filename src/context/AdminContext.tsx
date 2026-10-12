@@ -154,6 +154,8 @@ interface AdminContextType {
     contactWidgetMobileBottom?: number;
     contactIconSize?: number;
     appUrl: string;
+    diamondCategoryLabel: string;
+    diamondProductLabel: string;
     [key: string]: any;
   };
   updateStoreSettings: (newSettings: any) => void;
@@ -288,6 +290,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     contactIconSize: 42,
     contactMobileIconSize: 42,
     appUrl: 'https://vortexcode.shop',
+    diamondCategoryLabel: 'DIAMONDS',
+    diamondProductLabel: 'DIAMONDS',
   });
 
   const [categories, setCategories] = useState<AdminCategory[]>([]);
