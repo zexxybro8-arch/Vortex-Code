@@ -27,6 +27,8 @@ export interface StoreProduct {
   badge?: string;
   image: string;
   description: string;
+  displayName?: string;
+  cardBadgeText?: string;
   stock?: number;
   soldCount?: number;
   totalCodes?: number;

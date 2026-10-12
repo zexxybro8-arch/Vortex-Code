@@ -226,6 +226,10 @@ export async function getDb(): Promise<Database> {
     dbInstance.run(`ALTER TABLE users ADD COLUMN photo_url TEXT;`);
   } catch (e) {}
 
+  try {
+    dbInstance.run(`ALTER TABLE products ADD COLUMN card_badge_text TEXT;`);
+  } catch (e) {}
+
 
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
@@ -571,6 +575,7 @@ export async function getAllProducts(includeDisabled = true) {
       p.denomination, 
       p.enabled, 
       p.image, 
+      p.card_badge_text as cardBadgeText,
       p.created_at as createdAt, 
       p.updated_at as updatedAt,
       COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as stock,
@@ -645,9 +650,9 @@ export async function createProduct(data: {
   const image = data.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png';
 
   db.run(
-    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, now, now]
+    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);`,
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, (data as any).cardBadgeText || 'DIAMONDS', now, now]
   );
   saveDb();
   return getProductById(id);
@@ -684,9 +689,9 @@ export async function updateProduct(
 
   db.run(
     `UPDATE products 
-     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, updated_at = ?
+     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, data.cardBadgeText || existing.cardBadgeText, now, id]
   );
   saveDb();
   return getProductById(id);

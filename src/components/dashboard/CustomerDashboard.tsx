@@ -120,6 +120,7 @@ export const CustomerDashboard: React.FC = () => {
             stockStatus: !isEnabled ? 'OUT OF STOCK' : stock > 0 ? 'AVAILABLE' : 'OUT OF STOCK',
             deliveryInfo: '⚡ Instant Automated Vault Key Delivery',
             badge: !isEnabled ? 'DISABLED' : stock > 0 ? `${stock} Available` : 'OUT OF STOCK',
+            cardBadgeText: (p as any).cardBadgeText || 'DIAMONDS',
             image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
             description: p.description || '',
             stock,
@@ -646,7 +647,7 @@ export const CustomerDashboard: React.FC = () => {
                       {/* Top Decorative Neon Frame & Title */}
                       <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 font-black text-[11px] tracking-wider mb-3 shadow-[inset_0_1px_3px_rgba(6,182,212,0.3)]">
                         <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>DIAMONDS</span>
+                        <span>{p.cardBadgeText || 'DIAMONDS'}</span>
                       </div>
 
                       {/* Middle Image Section */}
@@ -655,6 +656,7 @@ export const CustomerDashboard: React.FC = () => {
                         alt={p.name || 'Free Fire Diamonds'} 
                         className="w-full aspect-square object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform duration-300" 
                       />
+
 
                       {/* Bottom Futuristic Price Button */}
                       <div 

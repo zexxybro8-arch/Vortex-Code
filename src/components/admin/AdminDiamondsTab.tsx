@@ -16,6 +16,8 @@ export const AdminDiamondsTab: React.FC = () => {
     const quantity = formData.get('quantity') as string;
     const prodData = {
       name: `${quantity} Diamonds`,
+      displayName: formData.get('displayName') as string,
+      cardBadgeText: formData.get('cardBadgeText') as string,
       priceRupees: Number(formData.get('price')),
       rewardValueRupees: Number(quantity),
       denomination: `${quantity} Diamonds`,
@@ -83,6 +85,8 @@ export const AdminDiamondsTab: React.FC = () => {
           <form onSubmit={handleSave} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-4">
             <h2 className="text-lg font-bold text-white">{editingProduct ? 'Edit' : 'Add'} Diamond Product</h2>
             <input name="quantity" type="number" defaultValue={editingProduct?.rewardValueRupees} placeholder="Diamond Quantity" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
+            <input name="displayName" type="text" defaultValue={editingProduct?.displayName} placeholder="Diamond Product Name (e.g. Weekly Membership)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
+            <input name="cardBadgeText" type="text" defaultValue={editingProduct?.cardBadgeText || 'DIAMONDS'} placeholder="Diamond Card Badge Text (e.g. SPECIAL OFFER)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
             <input name="price" type="number" defaultValue={editingProduct?.priceRupees} placeholder="Price (INR)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="image" defaultValue={editingProduct?.image} placeholder="Image URL" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
             <input name="sortOrder" type="number" defaultValue={editingProduct?.sortOrder || 0} placeholder="Sort Order" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
