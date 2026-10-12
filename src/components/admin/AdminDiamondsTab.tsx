@@ -65,6 +65,7 @@ export const AdminDiamondsTab: React.FC = () => {
         badgeTextColor: formData.get('badgeTextColor'),
         buttonBgColor: formData.get('buttonBgColor'),
         imageBorderColor: formData.get('imageBorderColor'),
+        labelBorderColor: formData.get('labelBorderColor'),
         outerBorderThickness: formData.get('outerBorderThickness'),
         imageBorderThickness: formData.get('imageBorderThickness'),
         labelBorderThickness: formData.get('labelBorderThickness'),
@@ -108,6 +109,7 @@ export const AdminDiamondsTab: React.FC = () => {
         badgeTextColor: formData.get('badgeTextColor'),
         buttonBgColor: formData.get('buttonBgColor'),
         imageBorderColor: formData.get('imageBorderColor'),
+        labelBorderColor: formData.get('labelBorderColor'),
         outerBorderThickness: formData.get('outerBorderThickness'),
         imageBorderThickness: formData.get('imageBorderThickness'),
         labelBorderThickness: formData.get('labelBorderThickness'),
@@ -187,6 +189,7 @@ export const AdminDiamondsTab: React.FC = () => {
                 <input name="badgeTextColor" type="color" defaultValue={editingProduct?.glowSettings?.badgeTextColor || '#bae6fd'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Badge Text Color" />
                 <input name="buttonBgColor" type="color" defaultValue={editingProduct?.glowSettings?.buttonBgColor || '#38bdf8'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Button Background Color" />
                 <input name="imageBorderColor" type="color" defaultValue={editingProduct?.glowSettings?.imageBorderColor || '#06b6d4'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Image Border Color" />
+                <input name="labelBorderColor" type="color" defaultValue={editingProduct?.glowSettings?.labelBorderColor || '#06b6d4'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Label Border Color" />
               </div>
                
                <div className="text-white text-xs space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
@@ -240,19 +243,19 @@ export const AdminDiamondsTab: React.FC = () => {
                         borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
                         borderWidth: `${previewData.glowSettings?.outerBorderThickness || 2}px`,
                         boxShadow: previewData.glowSettings?.outerGlowEnabled 
-                            ? `0 0 ${previewData.glowSettings.outerGlowBlur || 25}px ${previewData.glowSettings.glowColor || '#10B981'}${(previewData.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                            ? `0 0 ${previewData.glowSettings.outerGlowBlur || 25}px ${previewData.glowSettings.borderColor || '#06b6d4'}${(previewData.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
                             : 'none'
                       }}
                     >
                       <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border font-black text-[11px] tracking-wider mb-3"
                            style={{ 
-                                borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
+                                borderColor: previewData.glowSettings?.labelBorderColor || '#06b6d4',
                                 borderWidth: `${previewData.glowSettings?.labelBorderThickness || 1}px`,
                                 backgroundColor: previewData.glowSettings?.badgeBgColor || '#155e75',
                                 color: previewData.glowSettings?.badgeTextColor || '#bae6fd',
-                                boxShadow: previewData.glowSettings?.labelGlowEnabled ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.glowColor || '#10B981'}` : 'none'
+                                boxShadow: previewData.glowSettings?.labelGlowEnabled ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.labelBorderColor || '#06b6d4'}` : 'none'
                            }}>
-                        <Sparkles className="w-3.5 h-3.5" style={{ color: previewData.glowSettings?.glowColor || '#06b6d4' }} />
+                        <Sparkles className="w-3.5 h-3.5" style={{ color: previewData.glowSettings?.labelBorderColor || '#06b6d4' }} />
                         <span>{previewData.cardBadgeText || 'DIAMONDS'}</span>
                       </div>
                       <img 
@@ -263,7 +266,7 @@ export const AdminDiamondsTab: React.FC = () => {
                           borderColor: previewData.glowSettings?.imageBorderColor || '#06b6d4',
                           borderWidth: `${previewData.glowSettings?.imageBorderThickness || 2}px`,
                           borderStyle: 'solid',
-                          boxShadow: previewData.glowSettings?.imageGlowEnabled ? `0 0 ${previewData.glowSettings.imageGlowBlur || 15}px ${previewData.glowSettings.glowColor || '#10B981'}` : 'none'
+                          boxShadow: previewData.glowSettings?.imageGlowEnabled ? `0 0 ${previewData.glowSettings.imageGlowBlur || 15}px ${previewData.glowSettings.imageBorderColor || '#06b6d4'}` : 'none'
                         }}
                       />
                       <div 

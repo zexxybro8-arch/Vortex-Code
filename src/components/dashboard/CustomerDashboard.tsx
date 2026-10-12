@@ -645,14 +645,17 @@ export const CustomerDashboard: React.FC = () => {
                         borderColor: p.glowSettings?.borderColor || '#06b6d4',
                         borderWidth: `${p.glowSettings?.outerBorderThickness || 2}px`,
                         boxShadow: p.glowSettings?.outerGlowEnabled 
-                            ? `0 0 ${p.glowSettings.outerGlowBlur || 25}px ${p.glowSettings.glowColor || '#10B981'}${(p.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                            ? `0 0 ${p.glowSettings.outerGlowBlur || 25}px ${p.glowSettings.borderColor || '#06b6d4'}${(p.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
                             : 'none'
                       }}
                     >
-                      {/* Top Decorative Neon Frame & Title */}
                       <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl bg-transparent border text-cyan-300 font-black text-[11px] tracking-wider mb-3"
-                           style={{ borderColor: p.glowSettings?.borderColor || '#06b6d4' }}>
-                        <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.borderColor || '#06b6d4' }} />
+                           style={{ 
+                                borderColor: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4',
+                                borderWidth: `${p.glowSettings?.labelBorderThickness || 1}px`,
+                                boxShadow: p.glowSettings?.labelGlowEnabled ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}` : 'none'
+                           }}>
+                        <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4' }} />
                         <span>{p.cardBadgeText || 'DIAMONDS'}</span>
                       </div>
 
