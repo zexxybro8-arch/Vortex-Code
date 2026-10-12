@@ -239,6 +239,13 @@ export async function getDb(): Promise<Database> {
   } catch (e) {
     console.log('ALTER TABLE products ADD COLUMN glow_settings failed or column exists');
   }
+  
+  try {
+    dbInstance.run(`ALTER TABLE notices ADD COLUMN type TEXT NOT NULL DEFAULT 'redeem-code';`);
+    console.log('ALTER TABLE notices ADD COLUMN type success');
+  } catch (e) {
+    console.log('ALTER TABLE notices ADD COLUMN type failed or column exists');
+  }
 
 
   // Ensure redeem_codes table allows 'DISABLED' status
@@ -701,7 +708,9 @@ export async function updateProduct(
   const price = data.price !== undefined ? Number(data.price) : existing.price;
   const reward_value = data.rewardValue !== undefined ? Number(data.rewardValue) : existing.rewardValue;
   const denomination = data.denomination !== undefined ? data.denomination : existing.denomination;
-  const enabled = data.enabled !== undefined ? (data.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
+  const enabled = data.enabled !== undefined 
+    ? (data.enabled === true || data.enabled === 1 || data.enabled === 'true' || data.enabled === '1' || data.enabled === 'enabled' ? 1 : 0) 
+    : (existing.enabled ? 1 : 0);
   const image = data.image !== undefined ? data.image : existing.image;
   const cardBadgeText = data.cardBadgeText !== undefined ? data.cardBadgeText : existing.cardBadgeText;
   const glowSettings = data.glowSettings !== undefined ? data.glowSettings : existing.glowSettings;
@@ -2533,7 +2542,7 @@ export async function getAllNotices() {
       id, enabled, title, message, image_url as imageUrl, 
       button_enabled as buttonEnabled, button_text as buttonText, button_url as buttonUrl, 
       display_frequency as displayFrequency, start_at as startAt, end_at as endAt, 
-      priority, created_at as createdAt, updated_at as updatedAt
+      priority, type, created_at as createdAt, updated_at as updatedAt
     FROM notices
     ORDER BY priority DESC, created_at DESC;
   `);
@@ -2558,7 +2567,7 @@ export async function getNoticeById(id: string) {
       id, enabled, title, message, image_url as imageUrl, 
       button_enabled as buttonEnabled, button_text as buttonText, button_url as buttonUrl, 
       display_frequency as displayFrequency, start_at as startAt, end_at as endAt, 
-      priority, created_at as createdAt, updated_at as updatedAt
+      priority, type, created_at as createdAt, updated_at as updatedAt
     FROM notices
     WHERE id = ?;
   `, [id]);
@@ -2575,11 +2584,12 @@ export async function getNoticeById(id: string) {
   return obj;
 }
 
-export async function getPublishedNotice() {
+export async function getPublishedNotice(type: string = 'redeem-code') {
   const notices = await getAllNotices();
   const now = new Date().toISOString();
   const active = notices.filter(n => {
     if (!n.enabled) return false;
+    if (n.type !== type) return false;
     if (n.startAt && n.startAt > now) return false;
     if (n.endAt && n.endAt < now) return false;
     return true;
@@ -2608,8 +2618,8 @@ export async function createNotice(data: {
   db.run(`
     INSERT INTO notices (
       id, enabled, title, message, image_url, button_enabled, button_text, button_url, 
-      display_frequency, start_at, end_at, priority, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      display_frequency, start_at, end_at, priority, type, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
   `, [
     id,
     data.enabled ? 1 : 0,
@@ -2623,6 +2633,7 @@ export async function createNotice(data: {
     data.startAt || null,
     data.endAt || null,
     Number(data.priority || 0),
+    (data as any).type || 'redeem-code',
     now,
     now
   ]);

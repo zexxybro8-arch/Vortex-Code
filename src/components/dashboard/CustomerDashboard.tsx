@@ -6,6 +6,7 @@ import type { DashboardTab, StoreProduct } from '../../types';
 import { HowToRedeem } from './HowToRedeem';
 import { SupportTab } from './SupportTab';
 import { NoticeRenderer } from './NoticeRenderer';
+import { DiamondsNoticeModal } from './DiamondsNoticeModal';
 import { formatMaskedCode, formatFullCode } from '../../utils/codeFormat';
 import { PaymentCheckoutModal, type CheckoutData } from '../checkout/PaymentCheckoutModal';
 import {
@@ -56,6 +57,9 @@ export const CustomerDashboard: React.FC = () => {
   const [isUidModalOpen, setIsUidModalOpen] = useState(false);
   const [isVerifyingUid, setIsVerifyingUid] = useState(false);
   const [productToVerify, setProductToVerify] = useState<StoreProduct | null>(null);
+  
+  // Diamonds Notice Modal
+  const [isDiamondsNoticeOpen, setIsDiamondsNoticeOpen] = useState(false);
 
 
 
@@ -398,7 +402,10 @@ export const CustomerDashboard: React.FC = () => {
                   REDEEM CODE
                 </button>
                 <button
-                  onClick={() => setActiveTab('diamonds')}
+                  onClick={() => {
+                    setActiveTab('diamonds');
+                    setIsDiamondsNoticeOpen(true);
+                  }}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs ${activeTab === 'diamonds' ? 'bg-emerald-400 text-slate-950' : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'}`}
                 >
                   <Sparkles className="w-4 h-4" />
@@ -607,7 +614,6 @@ export const CustomerDashboard: React.FC = () => {
 
         {activeTab === 'diamonds' && (
           <div className="space-y-6">
-            <NoticeRenderer type="diamonds" />
             <div className="sticky top-14 sm:top-16 z-20 p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-800/90 space-y-3 shadow-xl backdrop-blur-md">
               <div className="flex gap-2">
                 <button
@@ -828,6 +834,11 @@ export const CustomerDashboard: React.FC = () => {
       />
 
 
+
+      <DiamondsNoticeModal
+        isOpen={isDiamondsNoticeOpen}
+        onClose={() => setIsDiamondsNoticeOpen(false)}
+      />
 
     </div>
   );

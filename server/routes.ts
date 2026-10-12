@@ -1183,7 +1183,8 @@ router.post('/auth/login', async (req, res) => {
 
 router.get('/notices/active', async (req, res) => {
   try {
-    const notice = await getPublishedNotice();
+    const type = (req.query.type as string) || 'redeem-code';
+    const notice = await getPublishedNotice(type);
     res.json({ success: true, notice });
   } catch (err: any) {
     res.json({ success: true, notice: null, error: err.message }); // Fail silently on error as required
