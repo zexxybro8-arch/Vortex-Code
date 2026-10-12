@@ -78,6 +78,8 @@ export const AdminDiamondsTab: React.FC = () => {
         labelGlowEnabled: formData.get('labelGlowEnabled') === 'on',
         labelGlowIntensity: formData.get('labelGlowIntensity'),
         labelGlowBlur: formData.get('labelGlowBlur'),
+        labelInnerGlowIntensity: formData.get('labelInnerGlowIntensity'),
+        labelInnerGlowBlur: formData.get('labelInnerGlowBlur'),
       },
     };
 
@@ -122,6 +124,8 @@ export const AdminDiamondsTab: React.FC = () => {
         labelGlowEnabled: formData.get('labelGlowEnabled') === 'on',
         labelGlowIntensity: formData.get('labelGlowIntensity'),
         labelGlowBlur: formData.get('labelGlowBlur'),
+        labelInnerGlowIntensity: formData.get('labelInnerGlowIntensity'),
+        labelInnerGlowBlur: formData.get('labelInnerGlowBlur'),
       }
     });
   };
@@ -213,12 +217,13 @@ export const AdminDiamondsTab: React.FC = () => {
                   {[
                       { name: 'outerGlow', label: 'Outer', enabled: 'outerGlowEnabled', intensity: 'outerGlowIntensity', blur: 'outerGlowBlur' },
                       { name: 'imageGlow', label: 'Image', enabled: 'imageGlowEnabled', intensity: 'imageGlowIntensity', blur: 'imageGlowBlur' },
-                      { name: 'labelGlow', label: 'Label', enabled: 'labelGlowEnabled', intensity: 'labelGlowIntensity', blur: 'labelGlowBlur' }
+                      { name: 'labelGlow', label: 'Label Outer', enabled: 'labelGlowEnabled', intensity: 'labelGlowIntensity', blur: 'labelGlowBlur' },
+                      { name: 'labelInnerGlow', label: 'Label Inner', enabled: 'labelGlowEnabled', intensity: 'labelInnerGlowIntensity', blur: 'labelInnerGlowBlur' }
                   ].map(item => (
                     <div key={item.name} className="space-y-1">
                         <div className="flex items-center gap-2">
-                            <input name={item.enabled} type="checkbox" defaultChecked={previewData.glowSettings?.[item.enabled] ?? true} />
-                            <span className="w-12">{item.label}:</span>
+                            {item.name !== 'labelInnerGlow' && <input name={item.enabled} type="checkbox" defaultChecked={previewData.glowSettings?.[item.enabled] ?? true} />}
+                            <span className="w-20 text-[10px]">{item.label}:</span>
                             <div className="flex-1 flex flex-col gap-1">
                                 <input name={item.intensity} type="range" min="0" max="150" defaultValue={previewData.glowSettings?.[item.intensity] || 50} className="accent-cyan-500 w-full" title="Intensity" />
                                 <input name={item.blur} type="range" min="0" max="40" defaultValue={previewData.glowSettings?.[item.blur] || 25} className="accent-cyan-500 w-full" title="Blur" />
@@ -253,7 +258,10 @@ export const AdminDiamondsTab: React.FC = () => {
                                 borderWidth: `${previewData.glowSettings?.labelBorderThickness || 1}px`,
                                 backgroundColor: previewData.glowSettings?.badgeBgColor || '#155e75',
                                 color: previewData.glowSettings?.badgeTextColor || '#bae6fd',
-                                boxShadow: previewData.glowSettings?.labelGlowEnabled ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.labelBorderColor || '#06b6d4'}` : 'none'
+                                boxShadow: previewData.glowSettings?.labelGlowEnabled 
+                                    ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.labelBorderColor || '#06b6d4'}${(previewData.glowSettings.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}, 
+                                       inset 0 0 ${previewData.glowSettings.labelInnerGlowBlur || 10}px ${previewData.glowSettings.labelBorderColor || '#06b6d4'}${(previewData.glowSettings.labelInnerGlowIntensity || 50) > 50 ? 'FF' : '80'}` 
+                                    : 'none'
                            }}>
                         <Sparkles className="w-3.5 h-3.5" style={{ color: previewData.glowSettings?.labelBorderColor || '#06b6d4' }} />
                         <span>{previewData.cardBadgeText || 'DIAMONDS'}</span>

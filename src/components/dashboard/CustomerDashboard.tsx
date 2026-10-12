@@ -654,7 +654,10 @@ export const CustomerDashboard: React.FC = () => {
                                 backgroundColor: 'transparent',
                                 borderColor: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4',
                                 borderWidth: `${p.glowSettings?.labelBorderThickness || 1}px`,
-                                boxShadow: p.glowSettings?.labelGlowEnabled ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}, inset 0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}` : 'none'
+                                boxShadow: p.glowSettings?.labelGlowEnabled 
+                                    ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}, 
+                                       inset 0 0 ${p.glowSettings.labelInnerGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings.labelInnerGlowIntensity || 50) > 50 ? 'FF' : '80'}` 
+                                    : 'none'
                            }}>
                         <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4' }} />
                         <span>{p.cardBadgeText || 'DIAMONDS'}</span>
