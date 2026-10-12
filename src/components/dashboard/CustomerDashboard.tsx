@@ -57,13 +57,8 @@ export const CustomerDashboard: React.FC = () => {
   const [isVerifyingUid, setIsVerifyingUid] = useState(false);
   const [productToVerify, setProductToVerify] = useState<StoreProduct | null>(null);
 
-  // Announcement Modals
-  const [isRedeemNoticeOpen, setIsRedeemNoticeOpen] = useState(false);
+  // Diamonds Notice Modal
   const [isDiamondsNoticeOpen, setIsDiamondsNoticeOpen] = useState(false);
-
-  useEffect(() => {
-    setIsRedeemNoticeOpen(true);
-  }, []);
 
 
 
@@ -838,7 +833,6 @@ export const CustomerDashboard: React.FC = () => {
 
 
 
-      <AnnouncementModal isOpen={isRedeemNoticeOpen} onClose={() => setIsRedeemNoticeOpen(false)} type="redeem-code" />
       <AnnouncementModal isOpen={isDiamondsNoticeOpen} onClose={() => setIsDiamondsNoticeOpen(false)} type="diamonds" />
 
     </div>
