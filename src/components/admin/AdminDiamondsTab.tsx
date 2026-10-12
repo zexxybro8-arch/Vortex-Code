@@ -8,7 +8,6 @@ export const AdminDiamondsTab: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [previewData, setPreviewData] = useState<any>({});
   
-  // Initialize preview state when editing
   React.useEffect(() => {
     if (editingProduct) {
       setPreviewData(editingProduct);
@@ -23,6 +22,19 @@ export const AdminDiamondsTab: React.FC = () => {
           badgeBgColor: '#155e75',
           badgeTextColor: '#bae6fd',
           buttonBgColor: '#38bdf8',
+          imageBorderColor: '#06b6d4',
+          outerBorderThickness: 2,
+          imageBorderThickness: 2,
+          labelBorderThickness: 1,
+          outerGlowEnabled: true,
+          outerGlowIntensity: 50,
+          outerGlowBlur: 25,
+          imageGlowEnabled: true,
+          imageGlowIntensity: 30,
+          imageGlowBlur: 15,
+          labelGlowEnabled: true,
+          labelGlowIntensity: 20,
+          labelGlowBlur: 10,
         }
       });
     }
@@ -53,6 +65,18 @@ export const AdminDiamondsTab: React.FC = () => {
         badgeTextColor: formData.get('badgeTextColor'),
         buttonBgColor: formData.get('buttonBgColor'),
         imageBorderColor: formData.get('imageBorderColor'),
+        outerBorderThickness: formData.get('outerBorderThickness'),
+        imageBorderThickness: formData.get('imageBorderThickness'),
+        labelBorderThickness: formData.get('labelBorderThickness'),
+        outerGlowEnabled: formData.get('outerGlowEnabled') === 'on',
+        outerGlowIntensity: formData.get('outerGlowIntensity'),
+        outerGlowBlur: formData.get('outerGlowBlur'),
+        imageGlowEnabled: formData.get('imageGlowEnabled') === 'on',
+        imageGlowIntensity: formData.get('imageGlowIntensity'),
+        imageGlowBlur: formData.get('imageGlowBlur'),
+        labelGlowEnabled: formData.get('labelGlowEnabled') === 'on',
+        labelGlowIntensity: formData.get('labelGlowIntensity'),
+        labelGlowBlur: formData.get('labelGlowBlur'),
       },
     };
 
@@ -84,6 +108,18 @@ export const AdminDiamondsTab: React.FC = () => {
         badgeTextColor: formData.get('badgeTextColor'),
         buttonBgColor: formData.get('buttonBgColor'),
         imageBorderColor: formData.get('imageBorderColor'),
+        outerBorderThickness: formData.get('outerBorderThickness'),
+        imageBorderThickness: formData.get('imageBorderThickness'),
+        labelBorderThickness: formData.get('labelBorderThickness'),
+        outerGlowEnabled: formData.get('outerGlowEnabled') === 'on',
+        outerGlowIntensity: formData.get('outerGlowIntensity'),
+        outerGlowBlur: formData.get('outerGlowBlur'),
+        imageGlowEnabled: formData.get('imageGlowEnabled') === 'on',
+        imageGlowIntensity: formData.get('imageGlowIntensity'),
+        imageGlowBlur: formData.get('imageGlowBlur'),
+        labelGlowEnabled: formData.get('labelGlowEnabled') === 'on',
+        labelGlowIntensity: formData.get('labelGlowIntensity'),
+        labelGlowBlur: formData.get('labelGlowBlur'),
       }
     });
   };
@@ -135,8 +171,8 @@ export const AdminDiamondsTab: React.FC = () => {
             <form onChange={updatePreview} onSubmit={handleSave} className="flex-1 space-y-4">
               <h2 className="text-lg font-bold text-white">{editingProduct ? 'Edit' : 'Add'} Diamond Product</h2>
               <input name="quantity" type="number" defaultValue={editingProduct?.rewardValueRupees} placeholder="Diamond Quantity" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
-              <input name="displayName" type="text" defaultValue={editingProduct?.displayName} placeholder="Diamond Product Name (e.g. Weekly Membership)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
-              <input name="cardBadgeText" type="text" defaultValue={editingProduct?.cardBadgeText || 'DIAMONDS'} placeholder="Diamond Card Badge Text (e.g. SPECIAL OFFER)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
+              <input name="displayName" type="text" defaultValue={editingProduct?.displayName} placeholder="Diamond Product Name" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
+              <input name="cardBadgeText" type="text" defaultValue={editingProduct?.cardBadgeText || 'DIAMONDS'} placeholder="Card Badge Text" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
               <input name="price" type="number" defaultValue={editingProduct?.priceRupees} placeholder="Price (INR)" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
               <input name="image" defaultValue={editingProduct?.image} placeholder="Image URL" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" required />
               <input name="sortOrder" type="number" defaultValue={editingProduct?.sortOrder || 0} placeholder="Sort Order" className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-white" />
@@ -152,6 +188,38 @@ export const AdminDiamondsTab: React.FC = () => {
                 <input name="buttonBgColor" type="color" defaultValue={editingProduct?.glowSettings?.buttonBgColor || '#38bdf8'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Button Background Color" />
                 <input name="imageBorderColor" type="color" defaultValue={editingProduct?.glowSettings?.imageBorderColor || '#06b6d4'} className="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" title="Image Border Color" />
               </div>
+               
+               <div className="text-white text-xs space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <h3 className="font-bold border-b border-slate-800 pb-1">Border Thickness</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  <input name="outerBorderThickness" type="number" min="0" max="8" defaultValue={editingProduct?.glowSettings?.outerBorderThickness || 2} placeholder="Outer" className="p-2 rounded-xl bg-slate-900 border border-slate-800" title="Outer Border" />
+                  <input name="imageBorderThickness" type="number" min="0" max="8" defaultValue={editingProduct?.glowSettings?.imageBorderThickness || 2} placeholder="Image" className="p-2 rounded-xl bg-slate-900 border border-slate-800" title="Image Border" />
+                  <input name="labelBorderThickness" type="number" min="0" max="6" defaultValue={editingProduct?.glowSettings?.labelBorderThickness || 1} placeholder="Label" className="p-2 rounded-xl bg-slate-900 border border-slate-800" title="Label Border" />
+                </div>
+                
+                <h3 className="font-bold border-b border-slate-800 pb-1 mt-2">Glow Intensities</h3>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <input name="outerGlowEnabled" type="checkbox" defaultChecked={editingProduct?.glowSettings?.outerGlowEnabled ?? true} />
+                    <span>Outer:</span>
+                    <input name="outerGlowIntensity" type="number" min="0" max="100" defaultValue={editingProduct?.glowSettings?.outerGlowIntensity || 50} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
+                    <input name="outerGlowBlur" type="number" min="0" max="40" defaultValue={editingProduct?.glowSettings?.outerGlowBlur || 25} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input name="imageGlowEnabled" type="checkbox" defaultChecked={editingProduct?.glowSettings?.imageGlowEnabled ?? true} />
+                    <span>Image:</span>
+                    <input name="imageGlowIntensity" type="number" min="0" max="100" defaultValue={editingProduct?.glowSettings?.imageGlowIntensity || 30} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
+                    <input name="imageGlowBlur" type="number" min="0" max="40" defaultValue={editingProduct?.glowSettings?.imageGlowBlur || 15} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input name="labelGlowEnabled" type="checkbox" defaultChecked={editingProduct?.glowSettings?.labelGlowEnabled ?? true} />
+                    <span>Label:</span>
+                    <input name="labelGlowIntensity" type="number" min="0" max="100" defaultValue={editingProduct?.glowSettings?.labelGlowIntensity || 20} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
+                    <input name="labelGlowBlur" type="number" min="0" max="40" defaultValue={editingProduct?.glowSettings?.labelGlowBlur || 10} className="w-16 p-1 rounded bg-slate-900 border border-slate-800" />
+                  </div>
+                </div>
+               </div>
+               
               <div className="flex gap-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-slate-800 text-white rounded-xl">Cancel</button>
                 <button type="submit" className="flex-1 px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl">Save</button>
@@ -164,16 +232,19 @@ export const AdminDiamondsTab: React.FC = () => {
                       className="bg-slate-950/90 border rounded-3xl p-4 flex flex-col items-center text-center relative overflow-hidden backdrop-blur-xl w-64"
                       style={{
                         borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
-                        boxShadow: previewData.glowSettings?.glowColor 
-                            ? `0 0 5px ${previewData.glowSettings.glowColor}, 0 0 12px ${previewData.glowSettings.glowColor}80, 0 0 25px ${previewData.glowSettings.glowColor}55`
-                            : '0 0 5px #00F5FF, 0 0 12px rgba(0, 245, 255, 0.8), 0 0 25px rgba(0, 140, 255, 0.55), 0 0 45px rgba(0, 100, 255, 0.25)'
+                        borderWidth: `${previewData.glowSettings?.outerBorderThickness || 2}px`,
+                        boxShadow: previewData.glowSettings?.outerGlowEnabled 
+                            ? `0 0 ${previewData.glowSettings.outerGlowBlur || 25}px ${previewData.glowSettings.glowColor || '#10B981'}${(previewData.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                            : 'none'
                       }}
                     >
                       <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border font-black text-[11px] tracking-wider mb-3"
                            style={{ 
-                              borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
-                              backgroundColor: previewData.glowSettings?.badgeBgColor || '#155e75',
-                              color: previewData.glowSettings?.badgeTextColor || '#bae6fd'
+                               borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
+                               borderWidth: `${previewData.glowSettings?.labelBorderThickness || 1}px`,
+                               backgroundColor: previewData.glowSettings?.badgeBgColor || '#155e75',
+                               color: previewData.glowSettings?.badgeTextColor || '#bae6fd',
+                               boxShadow: previewData.glowSettings?.labelGlowEnabled ? `0 0 ${previewData.glowSettings.labelGlowBlur || 10}px ${previewData.glowSettings.glowColor || '#10B981'}` : 'none'
                            }}>
                         <Sparkles className="w-3.5 h-3.5" style={{ color: previewData.glowSettings?.glowColor || '#06b6d4' }} />
                         <span>{previewData.cardBadgeText || 'DIAMONDS'}</span>
@@ -181,15 +252,19 @@ export const AdminDiamondsTab: React.FC = () => {
                       <img 
                         src={previewData.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt="Product"
-                        className="w-32 h-32 object-contain rounded-2xl filter drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] image-glow" 
-                        style={{ borderColor: previewData.glowSettings?.imageBorderColor || '#06b6d4' }}
+                        className="w-32 h-32 object-contain rounded-2xl" 
+                        style={{ 
+                          borderColor: previewData.glowSettings?.imageBorderColor || '#06b6d4',
+                          borderWidth: `${previewData.glowSettings?.imageBorderThickness || 2}px`,
+                          borderStyle: 'solid',
+                          boxShadow: previewData.glowSettings?.imageGlowEnabled ? `0 0 ${previewData.glowSettings.imageGlowBlur || 15}px ${previewData.glowSettings.glowColor || '#10B981'}` : 'none'
+                        }}
                       />
                       <div 
                         className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between transition-all duration-300"
                         style={{
                           backgroundColor: previewData.glowSettings?.buttonBgColor || '#38BDF8',
                           borderColor: previewData.glowSettings?.borderColor || '#06b6d4',
-                          boxShadow: previewData.glowSettings?.glowColor ? `0 0 15px ${previewData.glowSettings.glowColor}66` : '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
                         }}
                       >
                         <div className="flex-1 text-center font-black text-[#06111F] text-sm tracking-wider px-1">
