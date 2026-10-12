@@ -165,7 +165,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
 // PUT /api/products/:id - Update product (price, status, details)
 router.put('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
-    console.log('DEBUG: Updating product', req.params.id, 'with body:', req.body);
+    console.log('DEBUG: Updating product', req.params.id, 'with body:', JSON.stringify(req.body));
     const updated = await updateProduct(req.params.id, req.body);
     res.json({ success: true, product: updated, message: 'Product updated successfully in database' });
   } catch (err: any) {

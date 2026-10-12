@@ -594,6 +594,7 @@ export async function getAllProducts(includeDisabled = true) {
   if (res.length === 0) return [];
 
   const columns = res[0].columns;
+  console.log('DEBUG: Columns:', columns);
   let items = res[0].values.map((row) => {
     const obj: any = {};
     columns.forEach((col, idx) => {
@@ -678,6 +679,7 @@ export async function updateProduct(
 ) {
   const db = await getDb();
   const existing = await getProductById(id);
+  console.log('DEBUG: Updating product:', id, 'data:', data);
   if (!existing) {
     throw new Error(`Product with ID ${id} not found`);
   }
