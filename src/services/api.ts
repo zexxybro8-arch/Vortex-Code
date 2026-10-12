@@ -147,6 +147,7 @@ export const api = {
     price: number;
     rewardValue?: number;
     denomination?: string;
+    enabled?: boolean;
     image?: string;
     cardBadgeText?: string;
     glowSettings?: any;

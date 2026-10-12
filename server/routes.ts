@@ -154,6 +154,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
       price: Number(price),
       rewardValue: Number(rewardValue || price * 15),
       denomination: denomination || `₹${price}`,
+      enabled: req.body.enabled !== undefined ? Boolean(req.body.enabled) : true,
       image,
       cardBadgeText: req.body.cardBadgeText,
       glowSettings: req.body.glowSettings,

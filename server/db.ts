@@ -661,6 +661,7 @@ export async function createProduct(data: {
   price: number;
   rewardValue: number;
   denomination: string;
+  enabled?: boolean;
   image?: string;
   cardBadgeText?: string;
   glowSettings?: any;
@@ -669,11 +670,12 @@ export async function createProduct(data: {
   const id = `prod_${Math.round(data.price)}_${Math.random().toString(36).substring(2, 6)}`;
   const now = new Date().toISOString();
   const image = data.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png';
+  const enabled = data.enabled !== undefined ? (data.enabled ? 1 : 0) : 1;
 
   db.run(
     `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, image, data.cardBadgeText || 'DIAMONDS', typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', now, now]
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || 'DIAMONDS', typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', now, now]
   );
   saveDb();
   return getProductById(id);
