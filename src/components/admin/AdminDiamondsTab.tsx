@@ -57,7 +57,10 @@ export const AdminDiamondsTab: React.FC = () => {
     };
 
     if (editingProduct) {
-      await updateProduct(editingProduct.id, prodData);
+      await updateProduct(editingProduct.id, {
+        ...prodData,
+        glowSettings: prodData.glowSettings
+      });
     } else {
       await addProduct(prodData);
     }

@@ -453,8 +453,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (updated.displayName !== undefined) payload.displayName = updated.displayName;
       if (updated.cardBadgeText !== undefined) payload.cardBadgeText = updated.cardBadgeText;
       if (updated.glowSettings !== undefined) {
-        const settings = typeof updated.glowSettings === 'string' ? JSON.parse(updated.glowSettings) : updated.glowSettings;
-        payload.glowSettings = JSON.stringify(settings);
+        payload.glowSettings = typeof updated.glowSettings === 'string' ? updated.glowSettings : JSON.stringify(updated.glowSettings);
       }
       if (updated.enabled !== undefined) payload.enabled = updated.enabled ? 1 : 0;
       if (updated.stockStatus !== undefined) {
