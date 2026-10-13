@@ -57,8 +57,8 @@ export const AdminPaymentTextSettingsTab: React.FC = () => {
     paymentVerificationFailedMessage: 'Payment verification failed. Unverified signature.',
 
     deliveryNoticeHeading: 'DIAMONDS DELIVERY INSTRUCTIONS',
-    englishDeliveryMessage: 'Diamonds will be credited directly to your Free Fire UID within 5-15 minutes after payment verification.',
-    hindiHinglishDeliveryMessage: 'Payment hone ke baad Diamonds aapke Free Fire UID me 5-15 minute me bhej diye jayenge.',
+    englishDeliveryMessage: 'Diamonds will be credited directly to your Free Fire UID Mail Box within 5-15 minutes after payment verification.',
+    hindiHinglishDeliveryMessage: 'Payment hone ke baad Diamonds aapke Free Fire Uid Mail Box me 5-15 minute me bhej diye jayenge.',
     deliveryTimeMessage: 'Estimated Delivery Time: 5 - 15 Minutes',
     deliveryProcessingMessage: 'Processing Diamond Transfer to UID...',
     deliverySuccessfulMessage: 'Diamonds Transferred Successfully to UID!',
@@ -66,7 +66,7 @@ export const AdminPaymentTextSettingsTab: React.FC = () => {
     contactSupportMessage: 'If you face any issues, contact support with your Order ID.',
 
     successHeading: 'PURCHASE SUCCESSFUL!',
-    successDescription: 'Your diamond top-up order has been completed and verified.',
+    successDescription: 'Your diamond top-up or order has been completed',
     deliveryDetailsHeading: 'ACCOUNT TRANSFER DETAILS',
     additionalInformation: 'Thank you for purchasing with Vortex Code!',
     copyButtonText: 'COPY DETAILS',

@@ -717,6 +717,93 @@ async function getDb() {
   dbInstance.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('appUrl', 'https://vortexcode.shop');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('diamondCategoryLabel', 'DIAMONDS');`);
   dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('diamondProductLabel', 'DIAMONDS');`);
+  const initialDiamondsSettings = {
+    categoryHeading: "DIAMONDS RECHARGE",
+    productSelectionHeading: "SELECT DIAMOND PACK",
+    productNameLabel: "Diamond Pack",
+    diamondQuantityLabel: "Diamonds",
+    priceLabel: "Price",
+    selectedProductMessage: "Selected Diamond Package for Free Fire",
+    outOfStockMessage: "OUT OF STOCK",
+    disabledProductMessage: "CURRENTLY UNAVAILABLE",
+    verificationHeading: "PLAYER VERIFICATION",
+    playerIdLabel: "Free Fire Player UID",
+    playerNameLabel: "Player Nickname",
+    verificationButtonText: "VERIFY PLAYER UID",
+    verificationLoadingMessage: "Verifying Player UID with Game Server...",
+    verificationSuccessfulMessage: "Player Verified Successfully!",
+    verificationFailedMessage: "Player verification failed. Please check your UID.",
+    invalidPlayerIdMessage: "Invalid Game UID. Must be 5-15 digits.",
+    verificationRequiredMessage: "Please verify your Player UID before proceeding.",
+    paymentSectionHeading: "SECURE PAYMENT",
+    paymentInstructions: "Scan QR Code or pay via UPI. Payments are verified securely on backend.",
+    selectedDiamondsSummaryLabel: "Selected Package Summary",
+    orderSummaryHeading: "ORDER SUMMARY",
+    productPriceLabel: "Product Price",
+    processingFeeLabel: "Processing Fee",
+    discountLabel: "Discount",
+    totalPayableLabel: "TOTAL PAYABLE",
+    payNowButtonText: "PROCEED TO PAY",
+    paymentProcessingMessage: "Initializing Secure Payment Gateway...",
+    paymentRedirectMessage: "Redirecting to Payment Gateway...",
+    paymentPendingHeading: "PAYMENT PENDING",
+    paymentPendingMessage: "Waiting for payment confirmation from gateway...",
+    paymentSuccessfulHeading: "PAYMENT SUCCESSFUL!",
+    paymentSuccessfulMessage: "Your payment has been verified successfully.",
+    paymentFailedHeading: "PAYMENT FAILED",
+    paymentFailedMessage: "Payment transaction failed or was declined.",
+    deliveryNoticeHeading: "DIAMONDS DELIVERY INSTRUCTIONS",
+    englishDeliveryMessage: "Diamonds will be credited directly to your Free Fire UID Mail Box within 5-15 minutes after payment verification.",
+    hindiHinglishDeliveryMessage: "Payment hone ke baad Diamonds aapke Free Fire Uid Mail Box me 5-15 minute me bhej diye jayenge.",
+    deliveryTimeMessage: "Estimated Delivery Time: 5 - 15 Minutes",
+    successHeading: "PURCHASE SUCCESSFUL!",
+    successDescription: "Your diamond top-up or order has been completed",
+    copyButtonText: "COPY DETAILS",
+    closeButtonText: "CLOSE",
+    doneButtonText: "DONE",
+    greenTickEnabled: true
+  };
+  const initialRedeemSettings = {
+    categoryHeading: "GOOGLE PLAY REDEEM CODE",
+    productSelectionHeading: "SELECT RECHARGE AMOUNT",
+    productNameLabel: "Google Play Gift Code",
+    productDescription: "Instant digital delivery with secure PIN",
+    priceLabel: "Price",
+    redeemValueLabel: "Redeem Value",
+    availableStockLabel: "Available Stock",
+    outOfStockMessage: "OUT OF STOCK",
+    disabledProductMessage: "PRODUCT DISABLED",
+    orderSummaryHeading: "ORDER SUMMARY",
+    selectedProductLabel: "Selected Product",
+    productPriceLabel: "Product Price",
+    processingFeeLabel: "Processing Fee",
+    discountLabel: "Discount",
+    totalPayableLabel: "TOTAL PAYABLE",
+    continueToPaymentButtonText: "PROCEED TO PAYMENT",
+    payNowButtonText: "PAY NOW",
+    paymentProcessingMessage: "Processing payment request...",
+    paymentPendingHeading: "PAYMENT PENDING",
+    paymentPendingMessage: "Waiting for payment authorization...",
+    paymentSuccessfulHeading: "PAYMENT SUCCESSFUL!",
+    paymentSuccessfulMessage: "Payment verified successfully by backend.",
+    paymentFailedHeading: "PAYMENT FAILED",
+    paymentFailedMessage: "Payment failed or was canceled.",
+    deliveryHeading: "REDEEM CODE DELIVERY",
+    deliverySuccessfulMessage: "Redeem code assigned securely!",
+    codeAssignedMessage: "Your unique code has been unlocked.",
+    successHeading: "PURCHASE SUCCESSFUL!",
+    successDescription: "Your payment has been verified successfully.",
+    greenTickEnabled: true,
+    codeSectionHeading: "YOUR REDEEM CODE",
+    codeLabel: "Redeem Code",
+    copyCodeButtonText: "COPY CODE",
+    codeCopiedConfirmationMessage: "Redeem code copied to clipboard!",
+    additionalSuccessMessage: "Enjoy your Google Play credits!",
+    doneButtonText: "DONE",
+    closeButtonText: "CLOSE"
+  };
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('diamonds_settings', ?);`, [JSON.stringify(initialDiamondsSettings)]);
+  dbInstance.run(`INSERT OR IGNORE INTO store_settings (key, value) VALUES ('redeem_settings', ?);`, [JSON.stringify(initialRedeemSettings)]);
   try {
     const catCheck = dbInstance.exec(`SELECT count(*) as count FROM categories;`);
     const catCount = catCheck.length > 0 && catCheck[0].values.length > 0 ? catCheck[0].values[0][0] : 0;
@@ -1508,6 +1595,8 @@ async function getCustomerPaidOrders(customerEmail, customerId) {
       o.customer_email as customerEmail, 
       o.customer_id as customerId,
       o.amount, 
+      o.payable_amount as payableAmount,
+      o.order_type as orderType,
       o.payment_status as paymentStatus, 
       o.delivery_status as deliveryStatus, 
       o.delivered_code_id as deliveredCodeId, 
@@ -1518,6 +1607,7 @@ async function getCustomerPaidOrders(customerEmail, customerId) {
       o.gateway_payment_id as gatewayPaymentId,
       o.created_at as createdAt, 
       o.updated_at as updatedAt,
+      p.category as productCategory,
       p.denomination as denomination,
       p.reward_value as rewardValue
     FROM orders o
@@ -1547,30 +1637,32 @@ async function getOrderByIdOrNumber(identifier) {
   const db = await getDb();
   const res = db.exec(
     `SELECT 
-      id, 
-      order_number as orderNumber, 
-      product_id as productId, 
-      product_name as productName, 
-      customer_name as customerName, 
-      customer_email as customerEmail, 
-      customer_id as customerId,
-      amount, 
-      payable_amount as payableAmount,
-      order_type as orderType,
-      checkout_url as checkoutUrl,
-      payment_status as paymentStatus, 
-      delivery_status as deliveryStatus, 
-      delivered_code_id as deliveredCodeId, 
-      delivered_code as deliveredCode, 
-      delivered_pin as deliveredPin, 
-      payment_method as paymentMethod, 
-      gateway_order_id as gatewayOrderId,
-      gateway_payment_id as gatewayPaymentId,
-      expires_at as expiresAt,
-      created_at as createdAt, 
-      updated_at as updatedAt 
-    FROM orders 
-    WHERE id = ? OR order_number = ? OR (gateway_order_id = ? AND gateway_order_id IS NOT NULL AND gateway_order_id != '');`,
+      o.id, 
+      o.order_number as orderNumber, 
+      o.product_id as productId, 
+      o.product_name as productName, 
+      p.category as productCategory,
+      o.customer_name as customerName, 
+      o.customer_email as customerEmail, 
+      o.customer_id as customerId,
+      o.amount, 
+      o.payable_amount as payableAmount,
+      o.order_type as orderType,
+      o.checkout_url as checkoutUrl,
+      o.payment_status as paymentStatus, 
+      o.delivery_status as deliveryStatus, 
+      o.delivered_code_id as deliveredCodeId, 
+      o.delivered_code as deliveredCode, 
+      o.delivered_pin as deliveredPin, 
+      o.payment_method as paymentMethod, 
+      o.gateway_order_id as gatewayOrderId,
+      o.gateway_payment_id as gatewayPaymentId,
+      o.expires_at as expiresAt,
+      o.created_at as createdAt, 
+      o.updated_at as updatedAt 
+    FROM orders o
+    LEFT JOIN products p ON o.product_id = p.id
+    WHERE o.id = ? OR o.order_number = ? OR (o.gateway_order_id = ? AND o.gateway_order_id IS NOT NULL AND o.gateway_order_id != '');`,
     [clean, clean, clean]
   );
   if (res.length === 0 || res[0].values.length === 0) return null;
@@ -2882,6 +2974,9 @@ router.get("/my-orders", async (req, res) => {
         balanceRupees: balanceNum,
         pricePaid: Number(ord.amount),
         amount: Number(ord.amount),
+        payableAmount: Number(ord.payableAmount || ord.amount),
+        orderType: ord.orderType,
+        productCategory: ord.productCategory,
         paymentStatus: "PAID",
         deliveryStatus: "DELIVERED",
         status: "COMPLETED",
@@ -3880,6 +3975,7 @@ var PORT = isSocket ? rawPort : Number(rawPort) || 3e3;
 async function bootstrap() {
   const app = express();
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
   app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });

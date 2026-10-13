@@ -15,6 +15,7 @@ const PORT = isSocket ? rawPort : (Number(rawPort) || 3000);
 async function bootstrap() {
   const app = express();
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   // Health check routes for Cloud Run / hosting container probes
   app.get('/health', (req, res) => {

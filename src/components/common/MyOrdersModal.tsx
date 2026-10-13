@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   Lock,
+  Sparkles,
 } from 'lucide-react';
 import { formatFullCode, formatMaskedCode } from '../../utils/codeFormat';
 
@@ -221,6 +222,12 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
                   ? ord.purchaseDate.replace('T', ' ').substring(0, 16)
                   : 'Recently';
 
+                const isDiamonds = Boolean(
+                  ord.orderType === 'DIAMOND_PURCHASE' ||
+                  ord.productCategory === 'DIAMONDS' ||
+                  (typeof ord.productName === 'string' && ord.productName.toLowerCase().includes('diamond'))
+                );
+
                 return (
                   <div
                     key={ord.id}
@@ -234,7 +241,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
                         <span className="text-slate-400 font-mono text-[11px]">{formattedDate}</span>
                       </div>
                       <span className="text-[10px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                        ✓ REDEEMED / COMPLETED
+                        {isDiamonds ? '✓ TOP-UP COMPLETED' : '✓ REDEEMED / COMPLETED'}
                       </span>
                     </div>
 
@@ -245,56 +252,71 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
                           {ord.productName}
                         </h4>
                         <div className="flex items-center gap-3 mt-1 text-xs font-mono">
-
-                          <span className="text-slate-400">Price Paid: <strong className="text-white">₹{ord.pricePaid}</strong></span>
+                          <span className="text-slate-400">Price Paid: <strong className="text-white">₹{ord.pricePaid || ord.amount}</strong></span>
                           <span className="text-slate-400">Payment: <strong className="text-emerald-400">PAID</strong></span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Secure Code Reveal Box */}
-                    <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="text-slate-400">Recharge Code Reference:</span>
-                        {ord.deliveredPin && (
-                          <span className="text-slate-300">
-                            PIN: <strong className="text-emerald-400 font-mono">{revealed ? revealed.pin : '••••'}</strong>
+                    {/* Product-Specific Fulfillment Card */}
+                    {isDiamonds ? (
+                      <div className="p-3.5 bg-slate-900 rounded-xl border border-emerald-500/30 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between font-mono">
+                          <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Direct UID Delivery
                           </span>
-                        )}
+                          <span className="text-slate-400 font-mono text-[11px]">Free Fire Mail Box</span>
+                        </div>
+                        <p className="text-slate-300 text-[11px] leading-relaxed">
+                          Diamonds credited directly to in-game UID Mail Box within 5-15 minutes after payment verification.
+                        </p>
                       </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-mono text-sm sm:text-base font-black tracking-widest text-emerald-300 truncate">
-                          {revealed ? revealed.code : formatMaskedCode(ord.deliveredCode)}
+                    ) : (
+                      /* Secure Code Reveal Box for Redeem Codes */
+                      <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-slate-400">Recharge Code Reference:</span>
+                          {ord.deliveredPin && (
+                            <span className="text-slate-300">
+                              PIN: <strong className="text-emerald-400 font-mono">{revealed ? revealed.pin : '••••'}</strong>
+                            </span>
+                          )}
                         </div>
 
-                        {revealed ? (
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(revealed.code);
-                              addToast('success', 'Secret code copied to clipboard!');
-                            }}
-                            className="py-1.5 px-3 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copy</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleRevealCode(ord.id)}
-                            disabled={isRevealing}
-                            className="py-1.5 px-3.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-                          >
-                            {isRevealing ? (
-                              <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-                            ) : (
-                              <Eye className="w-3.5 h-3.5" />
-                            )}
-                            <span>VIEW CODE</span>
-                          </button>
-                        )}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-mono text-sm sm:text-base font-black tracking-widest text-emerald-300 truncate">
+                            {revealed ? revealed.code : formatMaskedCode(ord.deliveredCode)}
+                          </div>
+
+                          {revealed ? (
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(revealed.code);
+                                addToast('success', 'Secret code copied to clipboard!');
+                              }}
+                              className="py-1.5 px-3 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Copy</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRevealCode(ord.id)}
+                              disabled={isRevealing}
+                              className="py-1.5 px-3.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                            >
+                              {isRevealing ? (
+                                <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                              <span>VIEW CODE</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                   </div>
                 );
