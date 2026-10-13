@@ -687,9 +687,42 @@ router.post('/payment', handleCreateCheckoutOrder);
  */
 router.get('/payment/status/:order_id', async (req, res) => {
   try {
-    const orderId = req.params.order_id;
-    if (!orderId) {
+    const rawOrderId = req.params.order_id;
+    if (!rawOrderId) {
       return res.status(400).json({ success: false, error: 'order_id parameter is required' });
+    }
+
+    const order = await getOrderByIdOrNumber(rawOrderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found in database' });
+    }
+
+    // Optional user validation if customer ID / email header provided
+    const customerIdHeader = (req.headers['x-customer-id'] as string) || (req.query.customerId as string) || undefined;
+    const customerEmailHeader = (req.headers['x-customer-email'] as string) || (req.query.email as string) || undefined;
+
+    // Fast-path: If order is ALREADY marked PAID in database, return fulfilled record immediately!
+    if (order.paymentStatus === 'PAID') {
+      const orderEmail = (order.customerEmail || '').trim().toLowerCase();
+      const orderCustomerId = (order.customerId || '').trim();
+
+      const isAuthorized =
+        (!customerEmailHeader && !customerIdHeader) ||
+        (customerEmailHeader && orderEmail && customerEmailHeader.toLowerCase() === orderEmail) ||
+        (customerIdHeader && orderCustomerId && customerIdHeader === orderCustomerId) ||
+        softAdminCheck(req);
+
+      if (!isAuthorized) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: You do not own this order.' });
+      }
+
+      return res.json({
+        success: true,
+        status: 'PAID',
+        order,
+        alreadyFulfilled: true,
+        message: 'Order was already verified and delivered.',
+      });
     }
 
     if (!paymentGateway.isConfigured()) {
@@ -698,15 +731,6 @@ router.get('/payment/status/:order_id', async (req, res) => {
         error: 'Payment service temporarily unavailable. Please try again later.',
       });
     }
-
-    const order = await getOrderByIdOrNumber(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Order not found in database' });
-    }
-
-    // Optional user validation if customer ID / email header provided
-    const customerIdHeader = (req.headers['x-customer-id'] as string) || undefined;
-    const customerEmailHeader = (req.headers['x-customer-email'] as string) || undefined;
 
     const verificationResult = await verifyAndFulfillPaymentOrder({
       orderId: order.id,
@@ -793,45 +817,93 @@ router.get('/checkout/order-status/:id', async (req, res) => {
 });
 
 /**
- * GET /payment/return
+ * GET/POST /payment/return
  * Handles browser redirect from payment gateway, forwarding to callback logic
  */
-router.get('/payment/return', (req, res) => {
-  const query = new URLSearchParams(req.query as any).toString();
-  return res.redirect(`/api/payment/callback?${query}`);
+router.all('/payment/return', (req, res) => {
+  const combinedParams = new URLSearchParams();
+  if (req.query) {
+    Object.entries(req.query).forEach(([k, v]) => {
+      if (v !== undefined) combinedParams.set(k, String(v));
+    });
+  }
+  if (req.body && typeof req.body === 'object') {
+    Object.entries(req.body).forEach(([k, v]) => {
+      if (v !== undefined && !combinedParams.has(k)) combinedParams.set(k, String(v));
+    });
+  }
+  const queryString = combinedParams.toString();
+  return res.redirect(`/api/payment/callback${queryString ? `?${queryString}` : ''}`);
 });
 
 /**
- * GET /api/payment/callback
- * Handles browser redirect from payment gateway callback
+ * GET/POST /api/payment/callback
+ * Handles browser redirect and direct callback from payment gateway
  */
-router.get('/payment/callback', async (req, res) => {
+router.all('/payment/callback', async (req, res) => {
   try {
-    const orderId = (req.query.order_id as string) || (req.query.orderId as string) || '';
+    const rawOrderId = (
+      req.query.order_id ||
+      req.query.orderId ||
+      req.query.gateway_order_id ||
+      req.query.gatewayOrderId ||
+      req.query.client_order_id ||
+      req.query.order_number ||
+      req.query.orderNumber ||
+      req.query.id ||
+      req.body?.order_id ||
+      req.body?.orderId ||
+      req.body?.gateway_order_id ||
+      req.body?.gatewayOrderId ||
+      req.body?.client_order_id ||
+      req.body?.order_number ||
+      req.body?.orderNumber ||
+      req.body?.id
+    ) as string || '';
+
+    const orderId = rawOrderId.trim();
+
     if (!orderId) {
+      console.warn('[Payment Callback Warning] Callback received without order identifier:', { query: req.query, body: req.body });
       return res.redirect('/?payment_failed=true&error=Missing+order_id');
     }
 
+    console.log(`[Payment Callback] Received return for order identifier: ${orderId}`);
+
+    // Lookup order in database first
+    const existingOrder = await getOrderByIdOrNumber(orderId);
+    if (existingOrder && existingOrder.paymentStatus === 'PAID') {
+      const targetOrderId = existingOrder.orderNumber || existingOrder.id;
+      console.log(`[Payment Callback Notice] Order ${targetOrderId} is already fulfilled`);
+      return res.redirect(`/?payment_success=true&order_id=${encodeURIComponent(targetOrderId)}`);
+    }
+
     if (!paymentGateway.isConfigured()) {
-      return res.redirect('/?payment_failed=true&error=Payment+service+temporarily+unavailable.+Please+try+again+later.');
+      console.warn(`[Payment Callback Notice] Payment credentials unconfigured while processing ${orderId}`);
+      return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
     }
 
     const result = await verifyAndFulfillPaymentOrder({
-      orderId,
+      orderId: existingOrder ? existingOrder.id : orderId,
+      gatewayOrderId: existingOrder?.gatewayOrderId || undefined,
     });
 
+    const targetOrderId = result.order?.orderNumber || result.order?.id || orderId;
+
     if (result.status === 'PAID' || result.success) {
-      return res.redirect(`/?payment_success=true&order_id=${encodeURIComponent(orderId)}`);
+      console.log(`[Payment Callback Success] Order ${targetOrderId} fulfilled with status PAID`);
+      return res.redirect(`/?payment_success=true&order_id=${encodeURIComponent(targetOrderId)}`);
     } else if (result.status === 'PENDING') {
-      return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(orderId)}`);
+      console.log(`[Payment Callback Notice] Order ${targetOrderId} is pending gateway confirmation`);
+      return res.redirect(`/?payment_pending=true&order_id=${encodeURIComponent(targetOrderId)}`);
     } else if (result.status === 'EXPIRED') {
-      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=Payment+session+expired`);
+      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(targetOrderId)}&error=Payment+session+expired`);
     } else {
-      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(orderId)}&error=${encodeURIComponent(result.message || 'Payment+failed')}`);
+      return res.redirect(`/?payment_failed=true&order_id=${encodeURIComponent(targetOrderId)}&error=${encodeURIComponent(result.message || 'Payment+verification+declined')}`);
     }
   } catch (err: any) {
-    console.error('Payment callback exception:', err);
-    return res.redirect('/?payment_failed=true&error=Payment+callback+failed');
+    console.error('[Payment Callback Error] Processing exception:', err.message);
+    return res.redirect(`/?payment_failed=true&error=${encodeURIComponent(err.message || 'Payment+callback+failed')}`);
   }
 });
 

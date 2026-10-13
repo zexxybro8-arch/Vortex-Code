@@ -1323,10 +1323,11 @@ export async function getCustomerPaidOrders(customerEmail: string, customerId?: 
     WHERE (
       (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = ?)
       OR (o.customer_id IS NOT NULL AND o.customer_id = ? AND ? != '')
+      OR (o.customer_id IS NOT NULL AND ? != '' AND o.customer_id IN (SELECT customer_id FROM users WHERE id = ? OR LOWER(email) = ?))
     )
     AND o.payment_status = 'PAID'
     ORDER BY o.created_at DESC;
-  `, [cleanEmail, cleanId, cleanId]);
+  `, [cleanEmail, cleanId, cleanId, cleanId, cleanId, cleanEmail]);
 
   if (res.length === 0) return [];
   const columns = res[0].columns;
@@ -1340,8 +1341,11 @@ export async function getCustomerPaidOrders(customerEmail: string, customerId?: 
 }
 
 export async function getOrderByIdOrNumber(identifier: string) {
-  const db = await getDb();
+  if (!identifier || typeof identifier !== 'string') return null;
   const clean = identifier.trim();
+  if (!clean) return null;
+
+  const db = await getDb();
   const res = db.exec(
     `SELECT 
       id, 
@@ -1367,7 +1371,7 @@ export async function getOrderByIdOrNumber(identifier: string) {
       created_at as createdAt, 
       updated_at as updatedAt 
     FROM orders 
-    WHERE id = ? OR order_number = ? OR gateway_order_id = ?;`,
+    WHERE id = ? OR order_number = ? OR (gateway_order_id = ? AND gateway_order_id IS NOT NULL AND gateway_order_id != '');`,
     [clean, clean, clean]
   );
 
@@ -1580,8 +1584,8 @@ export async function createPendingCheckoutOrder(params: {
   }
 
   const now = new Date().toISOString();
-  const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const orderId = `ord_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+  const randomSuffix = `${Date.now().toString().slice(-4)}${Math.floor(1000 + Math.random() * 9000)}`;
   const orderNumber = `VRX-2026-${randomSuffix}`;
 
   // Amount MUST come strictly from product.price in DB
@@ -1712,8 +1716,8 @@ export async function createPendingDepositOrder(params: {
 
   const db = await getDb();
   const now = new Date().toISOString();
-  const orderId = `dep_${Math.random().toString(36).substring(2, 9)}`;
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const orderId = `dep_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+  const randomSuffix = `${Date.now().toString().slice(-4)}${Math.floor(1000 + Math.random() * 9000)}`;
   const orderNumber = `DEP-2026-${randomSuffix}`;
 
   // Insert PENDING deposit order
@@ -1950,8 +1954,19 @@ async function executeVerifyAndFulfillPaymentOrder(params: {
   }
 
   // Security Check 1: Gateway Order ID must match saved order
-  if (order.gatewayOrderId && verifyResult.gatewayOrderId && order.gatewayOrderId !== verifyResult.gatewayOrderId) {
+  if (
+    order.gatewayOrderId &&
+    verifyResult.gatewayOrderId &&
+    order.gatewayOrderId !== order.id &&
+    order.gatewayOrderId !== verifyResult.gatewayOrderId
+  ) {
     throw new Error(`Gateway order ID mismatch: expected ${order.gatewayOrderId} but gateway recorded ${verifyResult.gatewayOrderId}.`);
+  }
+
+  // Save confirmed gateway order ID to local order if initially unset or set to local ID
+  if (verifyResult.gatewayOrderId && (!order.gatewayOrderId || order.gatewayOrderId === order.id)) {
+    db.run(`UPDATE orders SET gateway_order_id = ? WHERE id = ?;`, [verifyResult.gatewayOrderId, order.id]);
+    saveDb();
   }
 
   // Security Check 2: Actual payable amount must match saved payable amount

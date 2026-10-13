@@ -8,7 +8,6 @@ import { SupportTab } from './SupportTab';
 import { AnnouncementModal } from './AnnouncementModal';
 import { formatMaskedCode, formatFullCode } from '../../utils/codeFormat';
 import { PaymentCheckoutModal, type CheckoutData } from '../checkout/PaymentCheckoutModal';
-import { PurchaseSuccessModal } from './PurchaseSuccessModal';
 import {
   Search,
   Zap,
@@ -48,49 +47,6 @@ export const CustomerDashboard: React.FC = () => {
     setIsRedeemNoticeOpen(true);
   }, []);
 
-  // Handle return from payment gateway (?payment_success=true&order_id=...)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const paymentSuccess = params.get('payment_success');
-    const orderId = params.get('order_id');
-    const paymentFailed = params.get('payment_failed');
-    const errorMsg = params.get('error');
-
-    if (paymentFailed) {
-      addToast('error', errorMsg ? decodeURIComponent(errorMsg) : 'Payment failed or cancelled.');
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (paymentSuccess && orderId) {
-      api.getPaymentStatus(orderId).then((res) => {
-        if (res && res.success && res.order) {
-          setSuccessOrder(res.order);
-          setIsSuccessModalOpen(true);
-          refreshCustomerOrders();
-        } else {
-          setSuccessOrder({
-            id: orderId,
-            orderNumber: orderId,
-            productName: 'Digital Product / Recharge Code',
-            amount: 0,
-            paymentStatus: 'PAID',
-            deliveryStatus: 'DELIVERED',
-          });
-          setIsSuccessModalOpen(true);
-        }
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }).catch(() => {
-        setSuccessOrder({
-          id: orderId,
-          orderNumber: orderId,
-          productName: 'Digital Product / Recharge Code',
-          amount: 0,
-          paymentStatus: 'PAID',
-          deliveryStatus: 'DELIVERED',
-        });
-        setIsSuccessModalOpen(true);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      });
-    }
-  }, [addToast, refreshCustomerOrders]);
   
   // Store Filters State
   const [selectedDenomination, setSelectedDenomination] = useState<string>('ALL VALUES');
@@ -108,9 +64,6 @@ export const CustomerDashboard: React.FC = () => {
   const [isVerifyingUid, setIsVerifyingUid] = useState(false);
   const [productToVerify, setProductToVerify] = useState<StoreProduct | null>(null);
   
-  // Purchase Success State
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [successOrder, setSuccessOrder] = useState<any>(null);
 
 
 
@@ -220,52 +173,6 @@ export const CustomerDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchLiveDatabaseData]);
 
-  useEffect(() => {
-    // Check for payment callback params from the redirect url
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_success') === 'true') {
-      const orderId = params.get('order_id');
-      if (orderId) {
-        api.getOrder(orderId).then((order) => {
-            if (order && order.paymentStatus === 'PAID') {
-                setSuccessOrder(order);
-                setIsSuccessModalOpen(true);
-            }
-        });
-      }
-      refreshCustomerOrders();
-      // Clean query params so they don't persist on refresh
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (params.get('payment_pending') === 'true') {
-      const orderId = params.get('order_id');
-      if (orderId) {
-        addToast('info', 'Payment received! Finalizing bank verification...');
-        api.getCheckoutOrderStatus(orderId).then((res) => {
-          if (res?.success && res.order) {
-            setCheckoutData({
-              order: res.order,
-              gatewayOrder: { gatewayOrderId: res.order.gatewayOrderId || orderId },
-              gatewayConfig: {
-                isConfigured: false,
-                currency: 'INR',
-                merchantName: 'Vortex Digital Store',
-                webhookConfigured: false,
-                provider: 'none',
-              },
-              productImage: 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
-              isPendingVerification: true,
-            });
-            setIsCheckoutModalOpen(true);
-          }
-        }).catch(() => {});
-      }
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (params.get('payment_failed') === 'true') {
-      const err = params.get('error') || 'Payment failed or cancelled';
-      addToast('error', `Checkout notice: ${err}`);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, [addToast, refreshCustomerOrders]);
 
   // Dynamically compute active denominations strictly from enabled categories and enabled products
   const categoryDenominations = activeCategories
@@ -420,6 +327,12 @@ export const CustomerDashboard: React.FC = () => {
 
       const payUrl = res.gatewayOrder?.paymentUrl || (res as any).checkoutUrl;
       if (payUrl) {
+        if (res.order?.id) {
+          sessionStorage.setItem('vortex_pending_order_id', res.order.id);
+        }
+        if (res.order?.orderNumber) {
+          sessionStorage.setItem('vortex_pending_order_number', res.order.orderNumber);
+        }
         window.location.href = payUrl;
       } else {
         addToast('error', 'Failed to retrieve secure checkout URL.');
@@ -891,11 +804,6 @@ export const CustomerDashboard: React.FC = () => {
         }}
       />
       
-      <PurchaseSuccessModal
-        isOpen={isSuccessModalOpen}
-        onClose={() => setIsSuccessModalOpen(false)}
-        order={successOrder}
-      />
 
 
 

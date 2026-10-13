@@ -486,13 +486,17 @@ export const api = {
   },
 
 
-  async getPaymentStatus(orderId: string): Promise<{
+  async getPaymentStatus(orderId: string, email?: string, customerId?: string): Promise<{
     success: boolean;
     status?: 'PAID' | 'PENDING' | 'FAILED' | 'EXPIRED';
     order: any;
     message?: string;
   }> {
-    return safeFetchJson(`/api/payment/status/${encodeURIComponent(orderId)}`);
+    const params = new URLSearchParams();
+    if (email) params.set('email', email);
+    if (customerId) params.set('customerId', customerId);
+    const qs = params.toString();
+    return safeFetchJson(`/api/payment/status/${encodeURIComponent(orderId)}${qs ? `?${qs}` : ''}`);
   },
 
   // Store Settings & Branding

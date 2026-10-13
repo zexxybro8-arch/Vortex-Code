@@ -101,10 +101,13 @@ export class TrustGatewayProvider implements IPaymentGatewayProvider {
     const formattedAmount = Number(params.amount).toFixed(2);
     const orderNote = params.orderNumber || params.orderId || 'Order';
 
-    const requestPayload = {
+    const defaultHost = (process.env.APP_URL || 'https://vortexcode.shop').replace(/\/+$/, '');
+    const redirectUrl = params.callbackUrl || `${defaultHost}/payment/return?order_id=${encodeURIComponent(params.orderId)}&order_number=${encodeURIComponent(orderNote)}`;
+
+    const requestPayload: any = {
       amount: formattedAmount,
       note: orderNote,
-      redirect_url: 'https://vortexcode.shop/payment/return',
+      redirect_url: redirectUrl,
     };
 
     const endpoint = `${this.baseUrl}/api/v1/orders/create`;

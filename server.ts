@@ -27,6 +27,31 @@ async function bootstrap() {
   // Mount API endpoints
   app.use('/api', apiRouter);
 
+  // Root-level payment gateway return & callback routes
+  // Directs payment gateway redirects (e.g. from TrustGateway at https://vortexcode.shop/payment/return)
+  // to the server-side payment callback handler BEFORE static SPA routing (supports both GET and POST)
+  app.all(['/payment/return', '/payment/callback'], (req, res) => {
+    const combinedParams = new URLSearchParams();
+    if (req.query) {
+      Object.entries(req.query).forEach(([k, v]) => {
+        if (v !== undefined) combinedParams.set(k, String(v));
+      });
+    }
+    if (req.body && typeof req.body === 'object') {
+      Object.entries(req.body).forEach(([k, v]) => {
+        if (v !== undefined && !combinedParams.has(k)) combinedParams.set(k, String(v));
+      });
+    }
+    const queryString = combinedParams.toString();
+    res.redirect(`/api/payment/callback${queryString ? `?${queryString}` : ''}`);
+  });
+
+  // Support webhook at root level /payment/webhook as well as /api/payment/webhook
+  app.post('/payment/webhook', (req, res, next) => {
+    req.url = '/payment/webhook';
+    apiRouter(req, res, next);
+  });
+
   const distPath = path.resolve(__dirname, 'dist');
   const hasDist = fs.existsSync(path.resolve(distPath, 'index.html'));
   const isBundledServer = __filename.endsWith('server.js');

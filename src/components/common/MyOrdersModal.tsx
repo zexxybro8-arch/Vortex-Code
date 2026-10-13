@@ -43,7 +43,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
     setIsLoading(true);
     setError(null);
     try {
-      const res = await api.getMyOrders(user.email, user.id);
+      const res = await api.getMyOrders(user.email, user.customerId || user.id);
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
@@ -69,7 +69,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
     if (!user) return;
     setRevealingId(orderId);
     try {
-      const res = await api.revealOrderCode(orderId, user.email, user.id);
+      const res = await api.revealOrderCode(orderId, user.email, user.customerId || user.id);
       if (res && res.success) {
         setRevealedCodes((prev) => ({
           ...prev,
