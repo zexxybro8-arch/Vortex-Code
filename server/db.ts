@@ -1738,7 +1738,7 @@ export async function updateRedeemCode(
 export async function deleteRedeemCode(id: string, force?: boolean) {
   const db = await getDb();
   const cleanId = id.trim();
-  const check = db.exec(`SELECT id, status, product_id, code FROM redeem_codes WHERE id = ?;`, [cleanId]);
+  const check = db.exec(`SELECT id, status, product_id, code, order_id FROM redeem_codes WHERE id = ?;`, [cleanId]);
   if (check.length === 0 || check[0].values.length === 0) {
     throw new Error(`Redeem code with ID "${cleanId}" not found in database.`);
   }
@@ -1746,9 +1746,18 @@ export async function deleteRedeemCode(id: string, force?: boolean) {
   const status = row[1] as string;
   const productId = row[2] as string;
   const code = row[3] as string;
+  const orderId = row[4] as string;
 
-  if (status === 'SOLD' && !force) {
-    throw new Error('This code is already SOLD and linked to a completed customer order. Explicit confirmation is required to delete.');
+  const orderCheck = db.exec(`
+    SELECT o.id FROM orders o 
+    WHERE o.delivered_code_id = ? 
+       OR o.id = ? 
+       OR o.id = (SELECT r.order_id FROM redeem_codes r WHERE r.id = ?);
+  `, [cleanId, orderId || '', cleanId]);
+  const isLinkedToOrder = orderCheck.length > 0 && orderCheck[0].values.length > 0;
+
+  if (isLinkedToOrder && !force) {
+    throw new Error('This code is linked to a completed customer order. Explicit confirmation is required to delete.');
   }
 
   db.run(`DELETE FROM redeem_codes WHERE id = ?;`, [cleanId]);
@@ -1779,18 +1788,24 @@ export async function deleteBulkRedeemCodes(ids: string[]) {
       const cleanId = typeof rawId === 'string' ? rawId.trim() : '';
       if (!cleanId) continue;
 
-      const check = db.exec(`SELECT id, status, code FROM redeem_codes WHERE id = ?;`, [cleanId]);
+      const check = db.exec(`SELECT id, status, code, order_id FROM redeem_codes WHERE id = ?;`, [cleanId]);
       if (check.length === 0 || check[0].values.length === 0) {
         continue;
       }
       const row = check[0].values[0];
       const status = row[1] as string;
       const code = row[2] as string;
+      const orderId = row[3] as string;
 
-      const orderCheck = db.exec(`SELECT id FROM orders WHERE delivered_code_id = ?;`, [cleanId]);
+      const orderCheck = db.exec(`
+        SELECT o.id FROM orders o 
+        WHERE o.delivered_code_id = ? 
+           OR o.id = ? 
+           OR o.id = (SELECT r.order_id FROM redeem_codes r WHERE r.id = ?);
+      `, [cleanId, orderId || '', cleanId]);
       const isLinkedToOrder = orderCheck.length > 0 && orderCheck[0].values.length > 0;
 
-      if (status === 'SOLD' || isLinkedToOrder) {
+      if (isLinkedToOrder) {
         preservedCount++;
         preservedDetails.push(`Code ${code} (ID: ${cleanId}) preserved because it is linked to a customer order / transaction history.`);
         continue;
