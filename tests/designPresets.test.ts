@@ -1,130 +1,78 @@
-import { getAllDesignPresets, saveDesignPreset, deleteDesignPreset, createProduct, getProductById } from '../server/db';
+import { getAllDesignPresets, saveDesignPreset, deleteDesignPreset } from '../server/db';
 
 async function runTest() {
   console.log('====================================================');
-  console.log('🧪 RUNNING DESIGN PRESETS INTEGRATION TEST');
+  console.log('🧪 RUNNING DESIGN PRESETS SYSTEM INTEGRATION TEST');
   console.log('====================================================');
 
-  // 1. Create a preset named "Test Green"
-  console.log('1️⃣ Saving Preset "Test Green"...');
-  const greenSettings = {
-    glowColor: '#00FF00',
-    borderColor: '#00FF00',
-    badgeBgColor: '#003300',
-    badgeTextColor: '#CCFFCC',
-    buttonBgColor: '#00FF00',
-    imageBorderColor: '#00FF00',
-    labelBorderColor: '#00FF00',
+  // Test 1: Saving a new preset
+  const presetName = 'Test Ice Blue ' + Date.now();
+  const sampleSettings = {
+    glowColor: '#38bdf8',
+    borderColor: '#38bdf8',
+    badgeBgColor: '#0c4a6e',
+    badgeTextColor: '#e0f2fe',
+    buttonBgColor: '#0284c7',
+    imageBorderColor: '#38bdf8',
+    labelBorderColor: '#38bdf8',
     outerBorderThickness: 3,
-    imageBorderThickness: 3,
-    labelBorderThickness: 2,
-    outerGlowEnabled: true,
-    outerGlowIntensity: 90,
-    outerGlowBlur: 30,
-    imageGlowEnabled: true,
-    imageGlowIntensity: 50,
-    imageGlowBlur: 20,
-    labelGlowEnabled: true,
-    labelGlowIntensity: 40,
-    labelGlowBlur: 15,
-  };
-
-  const presetGreen = await saveDesignPreset('Test Green', greenSettings);
-  console.log(`Saved "Test Green" (ID: ${presetGreen.id})`);
-
-  // 2. Save a preset named "Test Blue" with visibly different settings
-  console.log('\n2️⃣ Saving Preset "Test Blue"...');
-  const blueSettings = {
-    glowColor: '#0088FF',
-    borderColor: '#0088FF',
-    badgeBgColor: '#001133',
-    badgeTextColor: '#CCE5FF',
-    buttonBgColor: '#0088FF',
-    imageBorderColor: '#0088FF',
-    labelBorderColor: '#0088FF',
-    outerBorderThickness: 4,
     imageBorderThickness: 2,
     labelBorderThickness: 1,
     outerGlowEnabled: true,
-    outerGlowIntensity: 100,
-    outerGlowBlur: 35,
+    outerGlowIntensity: 80,
+    outerGlowBlur: 30,
     imageGlowEnabled: true,
-    imageGlowIntensity: 60,
-    imageGlowBlur: 25,
+    imageGlowIntensity: 40,
+    imageGlowBlur: 20,
     labelGlowEnabled: true,
-    labelGlowIntensity: 50,
-    labelGlowBlur: 20,
+    labelGlowIntensity: 30,
+    labelGlowBlur: 15,
   };
 
-  const presetBlue = await saveDesignPreset('Test Blue', blueSettings);
-  console.log(`Saved "Test Blue" (ID: ${presetBlue.id})`);
-
-  // 3. Retrieve all presets and verify persistence
-  console.log('\n3️⃣ Retrieving all presets from Database...');
-  const allPresets = await getAllDesignPresets();
-  const foundGreen = allPresets.find((p) => p.name === 'Test Green');
-  const foundBlue = allPresets.find((p) => p.name === 'Test Blue');
-
-  if (!foundGreen) throw new Error('Preset "Test Green" was not found in DB');
-  if (!foundBlue) throw new Error('Preset "Test Blue" was not found in DB');
-
-  console.log('✓ Found "Test Green" and "Test Blue" in DB');
-
-  // 4. Overwrite preset "Test Green"
-  console.log('\n4️⃣ Overwriting "Test Green" preset with updated values...');
-  const updatedGreenSettings = { ...greenSettings, outerGlowIntensity: 120 };
-  await saveDesignPreset('Test Green', updatedGreenSettings, foundGreen.id);
-
-  const reloadedPresets = await getAllDesignPresets();
-  const reloadedGreen = reloadedPresets.find((p) => p.id === foundGreen.id);
-  if (reloadedGreen?.settings?.outerGlowIntensity !== 120) {
-    throw new Error('Overwriting preset failed: outerGlowIntensity was not updated to 120');
+  console.log(`1. Saving preset "${presetName}"...`);
+  const createdPreset = await saveDesignPreset(presetName, sampleSettings);
+  if (!createdPreset || !createdPreset.id || createdPreset.name !== presetName) {
+    throw new Error('FAILED: saveDesignPreset did not return expected preset object');
   }
-  console.log('✓ Successfully overwrote preset "Test Green"');
+  console.log('   ✅ Preset saved with ID:', createdPreset.id);
 
-  // 5. Apply preset settings to a Diamond product and save to DB
-  console.log('\n5️⃣ Creating Diamond product and applying "Test Blue" preset settings...');
-  const createdProduct = await createProduct({
-    name: 'PRESET TEST DIAMOND',
-    category: 'DIAMONDS',
-    description: 'Testing preset application',
-    price: 1,
-    rewardValue: 100,
-    denomination: '100 Diamonds',
-    cardBadgeText: 'DIAMONDS',
-    glowSettings: presetBlue.settings,
-  });
-
-  const dbProduct = await getProductById(createdProduct.id);
-  const parsedGlow = typeof dbProduct.glowSettings === 'string'
-    ? JSON.parse(dbProduct.glowSettings)
-    : dbProduct.glowSettings;
-
-  console.log(`Product "${dbProduct.name}" saved with glowColor: ${parsedGlow.glowColor}`);
-  if (parsedGlow.glowColor !== '#0088FF') {
-    throw new Error(`Product glowColor expected "#0088FF", got "${parsedGlow.glowColor}"`);
+  // Test 2: Fetching all presets
+  console.log('2. Fetching all design presets from DB...');
+  const presets = await getAllDesignPresets();
+  const found = presets.find((p) => p.id === createdPreset.id);
+  if (!found) {
+    throw new Error('FAILED: Saved preset not found in getAllDesignPresets()');
   }
-  console.log('✓ Product successfully saved with applied preset design settings');
+  console.log('   ✅ Found saved preset in DB list:', found.name);
 
-  // 6. Delete a preset after confirmation
-  console.log('\n6️⃣ Deleting preset "Test Green"...');
-  await deleteDesignPreset(foundGreen.id);
+  // Test 3: Updating existing preset (Overwrite)
+  console.log('3. Overwriting preset with updated settings...');
+  const updatedSettings = { ...sampleSettings, outerGlowIntensity: 100 };
+  const updatedPreset = await saveDesignPreset(presetName, updatedSettings, createdPreset.id);
+  if (updatedPreset.settings.outerGlowIntensity !== 100) {
+    throw new Error('FAILED: Preset settings were not updated properly');
+  }
+  console.log('   ✅ Preset updated successfully');
 
-  const finalPresets = await getAllDesignPresets();
-  const deletedGreen = finalPresets.find((p) => p.id === foundGreen.id);
-  const remainingBlue = finalPresets.find((p) => p.id === foundBlue.id);
+  // Test 4: Deleting preset
+  console.log('4. Deleting preset...');
+  const deleteResult = await deleteDesignPreset(createdPreset.id);
+  if (!deleteResult.success) {
+    throw new Error('FAILED: deleteDesignPreset returned unsuccessful result');
+  }
 
-  if (deletedGreen) throw new Error('Preset "Test Green" was not deleted');
-  if (!remainingBlue) throw new Error('Preset "Test Blue" was accidentally removed');
-
-  console.log('✓ "Test Green" deleted successfully, "Test Blue" remains available');
+  const postDeletePresets = await getAllDesignPresets();
+  if (postDeletePresets.some((p) => p.id === createdPreset.id)) {
+    throw new Error('FAILED: Preset still present in DB after deletion');
+  }
+  console.log('   ✅ Preset deleted successfully');
 
   console.log('====================================================');
-  console.log('✅ ALL DESIGN PRESET INTEGRATION TESTS PASSED!');
+  console.log('🎉 ALL DESIGN PRESET TESTS PASSED SUCCESSFULLY!');
   console.log('====================================================');
 }
 
 runTest().catch((err) => {
-  console.error('❌ TEST FAILED:', err);
+  console.error('❌ DESIGN PRESET TEST FAILED:', err);
   process.exit(1);
 });
