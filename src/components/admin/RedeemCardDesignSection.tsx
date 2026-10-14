@@ -176,7 +176,7 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
           {/* Color Pickers */}
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-slate-300">Card Color Palette</h4>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { key: 'glowColor', label: 'Glow Color', default: '#10B981' },
                 { key: 'borderColor', label: 'Outer Card Border', default: '#10B981' },
@@ -297,7 +297,7 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
           </div>
 
           <div
-            className="border rounded-3xl p-4 transition-all duration-300 flex flex-col justify-between space-y-3.5 relative w-full max-w-[270px] shadow-xl"
+            className="border rounded-3xl p-4 transition-all duration-300 flex flex-col justify-between space-y-3.5 relative w-full max-w-[240px] sm:max-w-[270px] shadow-xl"
             style={{
               backgroundColor: currentGlow.cardBgColor || '#090d16',
               borderColor: currentGlow.borderColor || '#10B981',
@@ -396,8 +396,8 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
 
       {/* Save Preset Name Sub-Modal */}
       {isSavePresetModalOpen && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[70] p-4">
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl w-full max-w-sm space-y-3.5 shadow-2xl">
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[70] p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl w-full max-w-sm space-y-3.5 shadow-2xl my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Palette className="w-4 h-4 text-emerald-400" />
