@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../../context/AdminContext';
 import {
   Key,
@@ -30,6 +30,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
     addBulkRedeemCodes,
     updateRedeemCode,
     deleteRedeemCode,
+    deleteBulkRedeemCodes,
     refreshData,
     designPresets = [],
     saveDesignPreset,
@@ -37,12 +38,77 @@ export const AdminRedeemCodesTab: React.FC = () => {
     updateProduct,
   } = useAdmin();
 
-  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '');
-
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
+
+  const filteredCodes = redeemCodes.filter((c) => {
+    const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
+    const matchesCategory =
+      categoryFilter === 'ALL' ||
+      c.denomination === categoryFilter ||
+      `₹${c.denominationRupees}` === categoryFilter;
+
+    const matchesSearch =
+      c.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.codeMasked.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.fullCodeSecret.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.pin && c.pin.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return matchesStatus && matchesCategory && matchesSearch;
+  });
+
+  const [selectedCodeIds, setSelectedCodeIds] = useState<string[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  useEffect(() => {
+    const validIds = redeemCodes.map(c => c.id);
+    setSelectedCodeIds(prev => prev.filter(id => validIds.includes(id)));
+  }, [redeemCodes]);
+
+  const allFilteredSelected = filteredCodes.length > 0 && filteredCodes.every(c => selectedCodeIds.includes(c.id));
+  const someFilteredSelected = filteredCodes.some(c => selectedCodeIds.includes(c.id)) && !allFilteredSelected;
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const filteredIds = filteredCodes.map(c => c.id);
+      setSelectedCodeIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+    } else {
+      const filteredIds = filteredCodes.map(c => c.id);
+      setSelectedCodeIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    }
+  };
+
+  const handleToggleSelectCode = (id: string) => {
+    setSelectedCodeIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedCodeIds.length === 0) return;
+    setAlertError(null);
+    setAlertSuccess(null);
+    setIsDeleting(true);
+
+    try {
+      const result = await deleteBulkRedeemCodes(selectedCodeIds);
+      setAlertSuccess(
+        `✅ Bulk deletion complete: ${result.deletedCount} code(s) deleted permanently. ${result.preservedCount} code(s) preserved due to historical order links.`
+      );
+      setSelectedCodeIds([]);
+      setIsBulkDeleteModalOpen(false);
+      await refreshData();
+      setTimeout(() => setAlertSuccess(null), 6000);
+    } catch (err: any) {
+      setAlertError(err.message || 'Bulk database deletion failed.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '');
 
   // Modals & form state
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -82,21 +148,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
     ])
   ).filter(Boolean);
 
-  const filteredCodes = redeemCodes.filter((c) => {
-    const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
-    const matchesCategory =
-      categoryFilter === 'ALL' ||
-      c.denomination === categoryFilter ||
-      `₹${c.denominationRupees}` === categoryFilter;
 
-    const matchesSearch =
-      c.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.codeMasked.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.fullCodeSecret.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.pin && c.pin.includes(searchQuery));
-
-    return matchesStatus && matchesCategory && matchesSearch;
-  });
 
   const toggleCodeReveal = (id: string) => {
     setRevealedIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -425,8 +477,19 @@ export const AdminRedeemCodesTab: React.FC = () => {
 
       {/* Codes Inventory Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span>Showing {filteredCodes.length} code(s)</span>
+        <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span>Showing {filteredCodes.length} code(s)</span>
+            {selectedCodeIds.length > 0 && (
+              <button
+                onClick={() => setIsBulkDeleteModalOpen(true)}
+                className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Selected ({selectedCodeIds.length})</span>
+              </button>
+            )}
+          </div>
           <button
             onClick={() => refreshData()}
             className="flex items-center gap-1.5 text-slate-400 hover:text-white cursor-pointer font-mono"
@@ -440,6 +503,17 @@ export const AdminRedeemCodesTab: React.FC = () => {
           <table className="w-full text-left text-xs font-sans">
             <thead>
               <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
+                <th className="py-3 px-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    ref={el => {
+                      if (el) el.indeterminate = someFilteredSelected;
+                    }}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                  />
+                </th>
                 <th className="py-3 px-4">Product Name</th>
                 <th className="py-3 px-4">Code Key</th>
                 <th className="py-3 px-4">Denomination</th>
@@ -451,7 +525,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
             <tbody className="divide-y divide-slate-800/80">
               {filteredCodes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500 font-mono">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-mono">
                     No recharge codes match the selected filters.
                   </td>
                 </tr>
@@ -461,6 +535,14 @@ export const AdminRedeemCodesTab: React.FC = () => {
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-950/50 transition-colors font-mono">
+                      <td className="py-3.5 px-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedCodeIds.includes(item.id)}
+                          onChange={() => handleToggleSelectCode(item.id)}
+                          className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3.5 px-4 font-sans font-bold text-white">
                         {item.productName}
                       </td>
@@ -956,6 +1038,54 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <span>Delete from Database</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+                <span>Delete {selectedCodeIds.length} selected redeem codes?</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed font-mono">
+              This action cannot be undone. Codes linked to historical orders will be preserved automatically to protect customer purchase history and audit records.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDeleteConfirm}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-400 disabled:opacity-50 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-rose-950/50"
+              >
+                {isDeleting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span>Confirm Delete</span>
                 )}
               </button>
             </div>

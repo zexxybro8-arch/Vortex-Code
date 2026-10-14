@@ -1759,6 +1759,51 @@ export async function deleteRedeemCode(id: string, force?: boolean) {
   };
 }
 
+export async function deleteBulkRedeemCodes(ids: string[]) {
+  const db = await getDb();
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new Error('No redeem code IDs provided for bulk deletion.');
+  }
+
+  let deletedCount = 0;
+  let preservedCount = 0;
+  const preservedDetails: string[] = [];
+
+  for (const rawId of ids) {
+    const cleanId = typeof rawId === 'string' ? rawId.trim() : '';
+    if (!cleanId) continue;
+
+    const check = db.exec(`SELECT id, status, code FROM redeem_codes WHERE id = ?;`, [cleanId]);
+    if (check.length === 0 || check[0].values.length === 0) {
+      continue;
+    }
+    const row = check[0].values[0];
+    const status = row[1] as string;
+    const code = row[2] as string;
+
+    const orderCheck = db.exec(`SELECT id FROM orders WHERE delivered_code_id = ? OR reserved_code_id = ?;`, [cleanId, cleanId]);
+    const isLinkedToOrder = orderCheck.length > 0 && orderCheck[0].values.length > 0;
+
+    if (status === 'SOLD' || isLinkedToOrder) {
+      preservedCount++;
+      preservedDetails.push(`Code ${code} (ID: ${cleanId}) preserved because it is linked to a customer order / transaction history.`);
+      continue;
+    }
+
+    db.run(`DELETE FROM redeem_codes WHERE id = ?;`, [cleanId]);
+    deletedCount++;
+  }
+
+  saveDb();
+  return {
+    success: true,
+    deletedCount,
+    preservedCount,
+    preservedDetails,
+    message: `Successfully deleted ${deletedCount} redeem code(s). ${preservedCount} code(s) preserved due to historical order links.`
+  };
+}
+
 export async function getAllOrders() {
   const db = await getDb();
   const res = db.exec(`

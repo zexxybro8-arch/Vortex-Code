@@ -335,6 +335,17 @@ export const api = {
     });
   },
 
+  async deleteBulkRedeemCodes(ids: string[]): Promise<{ success: boolean; deletedCount: number; preservedCount: number; preservedDetails: string[]; message: string }> {
+    return safeFetchJson('/api/redeem-codes/bulk-delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
+      body: JSON.stringify({ ids })
+    });
+  },
+
   // Orders
   async getOrders(email?: string): Promise<ApiOrder[]> {
     try {

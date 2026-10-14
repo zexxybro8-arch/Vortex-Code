@@ -22,6 +22,7 @@ import {
   updateRedeemCodeStatus,
   updateRedeemCode,
   deleteRedeemCode,
+  deleteBulkRedeemCodes,
   getAllOrders,
   getCustomerPaidOrders,
   getOrderByIdOrNumber,
@@ -406,6 +407,17 @@ router.delete('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
   } catch (err: any) {
     const isNotFound = err.message && err.message.includes('not found');
     res.status(isNotFound ? 404 : 400).json({ success: false, error: err.message || 'Failed to delete code' });
+  }
+});
+
+// POST /api/redeem-codes/bulk-delete - Bulk delete codes with history protection
+router.post('/redeem-codes/bulk-delete', isAdminMiddleware, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    const result = await deleteBulkRedeemCodes(ids);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to perform bulk deletion' });
   }
 });
 

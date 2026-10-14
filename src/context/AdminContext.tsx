@@ -132,6 +132,7 @@ interface AdminContextType {
   addBulkRedeemCodes: (productId: string, codesText: string) => Promise<any>;
   updateRedeemCode: (id: string, updates: any) => Promise<any>;
   deleteRedeemCode: (id: string, force?: boolean) => Promise<any>;
+  deleteBulkRedeemCodes: (ids: string[]) => Promise<any>;
 
   // Orders
   orders: AdminOrder[];
@@ -632,6 +633,17 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const deleteBulkRedeemCodes = async (ids: string[]) => {
+    try {
+      const result = await api.deleteBulkRedeemCodes(ids);
+      await refreshData();
+      return result;
+    } catch (err) {
+      console.error('Failed to bulk delete redeem codes:', err);
+      throw err;
+    }
+  };
+
   // Real Database Order Status Action
   const updateOrderStatus = async (
     id: string,
@@ -840,6 +852,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addBulkRedeemCodes,
         updateRedeemCode,
         deleteRedeemCode,
+        deleteBulkRedeemCodes,
         orders,
         updateOrderStatus,
         customers,
