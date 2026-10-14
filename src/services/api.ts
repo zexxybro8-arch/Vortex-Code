@@ -8,9 +8,6 @@ export interface ApiProduct {
   denomination: string;
   enabled: boolean;
   image: string;
-  cardBadgeText?: string;
-  displayName?: string;
-  glowSettings?: any;
   createdAt: string;
   updatedAt: string;
   stock: number;

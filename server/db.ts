@@ -93,8 +93,6 @@ export async function getDb(): Promise<Database> {
       denomination TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1,
       image TEXT,
-      card_badge_text TEXT,
-      glow_settings TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -725,13 +723,9 @@ export async function getAllProducts(includeDisabled = true) {
       obj.enabled = false;
     }
 
-    obj.cardBadgeText = obj.cardBadgeText && obj.cardBadgeText !== 'null' ? String(obj.cardBadgeText).trim() : '';
-
-    // Calculate stockStatus directly from database UNUSED count (DIAMONDS does not require pre-loaded codes)
+    // Calculate stockStatus directly from database UNUSED count
     obj.stockStatus = !obj.enabled
       ? 'DISABLED'
-      : obj.category === 'DIAMONDS'
-      ? 'AVAILABLE'
       : obj.stock > 0
       ? 'AVAILABLE'
       : 'OUT OF STOCK';
@@ -768,14 +762,10 @@ export async function createProduct(data: {
   const image = data.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png';
   const enabled = data.enabled !== undefined ? (data.enabled ? 1 : 0) : 1;
 
-  const cardBadgeText = data.cardBadgeText !== undefined && data.cardBadgeText !== null 
-    ? String(data.cardBadgeText).trim() 
-    : '';
-
   db.run(
     `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, cardBadgeText, typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', now, now]
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || 'DIAMONDS', typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', now, now]
   );
   saveDb();
   return getProductById(id);
@@ -816,9 +806,7 @@ export async function updateProduct(
     ? (enabledVal === 'true' || enabledVal === '1' || enabledVal === 'enabled' || enabledRaw === true || enabledRaw === 1 ? 1 : 0) 
     : (existing.enabled ? 1 : 0);
   const image = data.image !== undefined ? data.image : existing.image;
-  const cardBadgeText = data.cardBadgeText !== undefined 
-    ? (data.cardBadgeText === null ? '' : String(data.cardBadgeText).trim()) 
-    : (existing.cardBadgeText && existing.cardBadgeText !== 'null' ? existing.cardBadgeText : '');
+  const cardBadgeText = data.cardBadgeText !== undefined ? data.cardBadgeText : existing.cardBadgeText;
   const glowSettings = data.glowSettings !== undefined ? data.glowSettings : existing.glowSettings;
 
   db.run(
