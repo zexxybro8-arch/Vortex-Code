@@ -37,8 +37,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
     updateProduct,
   } = useAdmin();
 
-  const redeemEligibleProducts = products.filter(p => p.category !== 'DIAMONDS');
-  const targetProd = redeemEligibleProducts.find(p => p.id === selectedProductId) || redeemEligibleProducts[0];
+  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '');
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -50,7 +49,9 @@ export const AdminRedeemCodesTab: React.FC = () => {
   const [isSingleModalOpen, setIsSingleModalOpen] = useState(false);
   const [codeToDelete, setCodeToDelete] = useState<AdminRedeemCode | null>(null);
   const [codeToEdit, setCodeToEdit] = useState<AdminRedeemCode | null>(null);
-  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '');
+
+  const redeemEligibleProducts = products.filter(p => p.category !== 'DIAMONDS');
+  const targetProd = redeemEligibleProducts.find(p => p.id === selectedProductId) || redeemEligibleProducts[0];
 
   // Edit Code State
   const [editCodeValue, setEditCodeValue] = useState('');
