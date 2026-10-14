@@ -56,7 +56,9 @@ export interface AdminOrder {
   customerName: string;
   customerEmail: string;
   productName: string;
+  productId?: string;
   amountRupees: number;
+  amount?: number;
   paymentStatus: 'PAID' | 'PENDING' | 'REFUNDED';
   deliveryStatus: 'DELIVERED' | 'PROCESSING' | 'FAILED';
   createdAt: string;

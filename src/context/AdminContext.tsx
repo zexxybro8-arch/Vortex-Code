@@ -196,6 +196,7 @@ interface AdminContextType {
 
   stats: AdminDashboardStats;
   resetTodaysSales: () => Promise<void>;
+  resetDiamondAnalytics: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -552,6 +553,19 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const resetDiamondAnalytics = async () => {
+    try {
+      const res = await api.resetDiamondAnalytics();
+      if ((res as any)?.resetAt) {
+        setStoreSettings((prev) => ({ ...prev, diamond_analytics_reset_at: (res as any).resetAt }));
+      }
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to reset diamond analytics:", err);
+      throw err;
+    }
+  };
+
   // Real Database Redeem Codes Actions
   const addSingleRedeemCode = async (
     productId: string,
@@ -864,6 +878,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateContactSettings,
         stats,
         resetTodaysSales,
+        resetDiamondAnalytics,
         refreshData,
       }}
     >

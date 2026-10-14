@@ -55,6 +55,7 @@ import {
   getCategoricalSettings,
   updateCategoricalSettings,
   resetTodaysSales,
+  resetDiamondAnalytics,
 } from './db';
 import { paymentGateway } from './payment/gateway';
 
@@ -1389,6 +1390,16 @@ router.post('/admin/reset-todays-sales', isAdminMiddleware, async (req, res) => 
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || "Failed to reset today's sales counter" });
+  }
+});
+
+// POST /api/admin/reset-diamond-analytics - Reset diamond analytics reporting baseline
+router.post('/admin/reset-diamond-analytics', isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await resetDiamondAnalytics();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Failed to reset diamond analytics" });
   }
 });
 

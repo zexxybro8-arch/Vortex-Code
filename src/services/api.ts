@@ -251,6 +251,16 @@ export const api = {
     });
   },
 
+  async resetDiamondAnalytics(): Promise<{ success: boolean; message: string; resetAt: string }> {
+    return safeFetchJson('/api/admin/reset-diamond-analytics', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+    });
+  },
+
   // Redeem Codes
   async getRedeemCodes(productId?: string, status?: string, denomination?: string, isAdmin: boolean = false): Promise<ApiRedeemCode[]> {
     try {

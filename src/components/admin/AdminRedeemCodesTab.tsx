@@ -43,7 +43,11 @@ export const AdminRedeemCodesTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
 
-  const filteredCodes = redeemCodes.filter((c) => {
+  const nonDiamondProducts = products.filter(p => p.category !== 'DIAMONDS');
+  const nonDiamondProductIds = new Set(nonDiamondProducts.map(p => p.id));
+  const eligibleRedeemCodes = redeemCodes.filter(c => nonDiamondProductIds.has(c.productId || ''));
+
+  const filteredCodes = eligibleRedeemCodes.filter((c) => {
     const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
     const matchesCategory =
       categoryFilter === 'ALL' ||
@@ -60,6 +64,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
   });
 
   const [selectedCodeIds, setSelectedCodeIds] = useState<string[]>([]);
+  const [isBulkDeleteMode, setIsBulkDeleteMode] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
 
   useEffect(() => {
@@ -140,11 +145,11 @@ export const AdminRedeemCodesTab: React.FC = () => {
   const [alertError, setAlertError] = useState<string | null>(null);
   const [alertSuccess, setAlertSuccess] = useState<string | null>(null);
 
-  // Available denomination filters derived from categories and products
+  // Available denomination filters derived from non-diamond categories and products
   const uniqueDenominations = Array.from(
     new Set([
-      ...categories.map((c) => c.denomination),
-      ...products.map((p) => p.denomination),
+      ...categories.filter(c => !nonDiamondProducts.some(p => p.category === 'DIAMONDS')).map((c) => c.denomination),
+      ...nonDiamondProducts.map((p) => p.denomination),
     ])
   ).filter(Boolean);
 

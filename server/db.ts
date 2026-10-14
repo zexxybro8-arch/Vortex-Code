@@ -1769,39 +1769,46 @@ export async function deleteBulkRedeemCodes(ids: string[]) {
   let preservedCount = 0;
   const preservedDetails: string[] = [];
 
-  for (const rawId of ids) {
-    const cleanId = typeof rawId === 'string' ? rawId.trim() : '';
-    if (!cleanId) continue;
+  db.run('BEGIN TRANSACTION;');
+  try {
+    for (const rawId of ids) {
+      const cleanId = typeof rawId === 'string' ? rawId.trim() : '';
+      if (!cleanId) continue;
 
-    const check = db.exec(`SELECT id, status, code FROM redeem_codes WHERE id = ?;`, [cleanId]);
-    if (check.length === 0 || check[0].values.length === 0) {
-      continue;
+      const check = db.exec(`SELECT id, status, code FROM redeem_codes WHERE id = ?;`, [cleanId]);
+      if (check.length === 0 || check[0].values.length === 0) {
+        continue;
+      }
+      const row = check[0].values[0];
+      const status = row[1] as string;
+      const code = row[2] as string;
+
+      const orderCheck = db.exec(`SELECT id FROM orders WHERE delivered_code_id = ?;`, [cleanId]);
+      const isLinkedToOrder = orderCheck.length > 0 && orderCheck[0].values.length > 0;
+
+      if (status === 'SOLD' || isLinkedToOrder) {
+        preservedCount++;
+        preservedDetails.push(`Code ${code} (ID: ${cleanId}) preserved because it is linked to a customer order / transaction history.`);
+        continue;
+      }
+
+      db.run(`DELETE FROM redeem_codes WHERE id = ?;`, [cleanId]);
+      deletedCount++;
     }
-    const row = check[0].values[0];
-    const status = row[1] as string;
-    const code = row[2] as string;
 
-    const orderCheck = db.exec(`SELECT id FROM orders WHERE delivered_code_id = ? OR reserved_code_id = ?;`, [cleanId, cleanId]);
-    const isLinkedToOrder = orderCheck.length > 0 && orderCheck[0].values.length > 0;
-
-    if (status === 'SOLD' || isLinkedToOrder) {
-      preservedCount++;
-      preservedDetails.push(`Code ${code} (ID: ${cleanId}) preserved because it is linked to a customer order / transaction history.`);
-      continue;
-    }
-
-    db.run(`DELETE FROM redeem_codes WHERE id = ?;`, [cleanId]);
-    deletedCount++;
+    db.run('COMMIT;');
+    saveDb();
+    return {
+      success: true,
+      deletedCount,
+      preservedCount,
+      preservedDetails,
+      message: `Successfully deleted ${deletedCount} redeem code(s). ${preservedCount} code(s) preserved due to historical order links.`
+    };
+  } catch (err) {
+    db.run('ROLLBACK;');
+    throw err;
   }
-
-  saveDb();
-  return {
-    success: true,
-    deletedCount,
-    preservedCount,
-    preservedDetails,
-    message: `Successfully deleted ${deletedCount} redeem code(s). ${preservedCount} code(s) preserved due to historical order links.`
-  };
 }
 
 export async function getAllOrders() {
@@ -3004,6 +3011,14 @@ export async function resetTodaysSales() {
   db.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('todays_sales_reset_at', ?);`, [now]);
   saveDb();
   return { success: true, message: "Today's sales counter reset successfully", resetAt: now };
+}
+
+export async function resetDiamondAnalytics() {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  db.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('diamond_analytics_reset_at', ?);`, [now]);
+  saveDb();
+  return { success: true, message: "Diamond analytics reset successfully", resetAt: now };
 }
 
 export async function getAdminAnalyticsSummary() {
