@@ -100,7 +100,7 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({ isOp
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Product:</span>
-                <span className="text-white font-bold truncate max-w-[200px]">{order.productName || (isDiamondsOrder ? 'Diamonds Top-Up' : 'Google Play Code')}</span>
+                <span className="text-white font-bold truncate max-w-[200px]">{order.productName || (isDiamondsOrder ? 'DIAMOND' : 'Google Play Code')}</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Amount:</span>
@@ -150,7 +150,7 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({ isOp
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Product:</span>
-                <span className="text-white font-bold truncate max-w-[200px]">{order.productName || (isDiamondsOrder ? 'Diamonds Top-Up' : 'Google Play Code')}</span>
+                <span className="text-white font-bold truncate max-w-[200px]">{order.productName || (isDiamondsOrder ? 'DIAMOND' : 'Google Play Code')}</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Amount:</span>
@@ -197,7 +197,7 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({ isOp
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Product:</span>
-                <span className="text-white font-bold truncate max-w-[200px]">{order.productName || (isDiamondsOrder ? 'Diamonds Top-Up' : 'Google Play Code')}</span>
+                <span className="text-white font-bold truncate max-w-[200px]">{order.productName || (isDiamondsOrder ? 'DIAMOND' : 'Google Play Code')}</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Amount Paid:</span>

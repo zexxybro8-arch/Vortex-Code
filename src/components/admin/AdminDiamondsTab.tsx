@@ -47,9 +47,11 @@ export const AdminDiamondsTab: React.FC = () => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const quantity = formData.get('quantity') as string;
+    const nameInput = (formData.get('displayName') as string || formData.get('name') as string)?.trim();
+    const productName = nameInput || `${quantity} Diamonds`;
     const prodData = {
-      name: `${quantity} Diamonds`,
-      displayName: formData.get('displayName') as string,
+      name: productName,
+      displayName: productName,
       cardBadgeText: formData.get('cardBadgeText') as string,
       priceRupees: Number(formData.get('price')),
       rewardValueRupees: Number(quantity),

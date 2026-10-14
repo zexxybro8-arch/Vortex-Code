@@ -130,7 +130,7 @@ export const CustomerDashboard: React.FC = () => {
             stockStatus: !isEnabled ? 'OUT OF STOCK' : stock > 0 ? 'AVAILABLE' : 'OUT OF STOCK',
             deliveryInfo: '⚡ Instant Automated Vault Key Delivery',
             badge: !isEnabled ? 'DISABLED' : stock > 0 ? `${stock} Available` : 'OUT OF STOCK',
-            cardBadgeText: (p as any).cardBadgeText || 'DIAMONDS',
+            cardBadgeText: (p as any).cardBadgeText !== undefined ? String((p as any).cardBadgeText) : '',
             glowSettings: typeof (p as any).glowSettings === 'string' ? JSON.parse((p as any).glowSettings) : (p as any).glowSettings || {},
             image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
             description: p.description || '',
@@ -629,21 +629,27 @@ export const CustomerDashboard: React.FC = () => {
                             : 'none'
                       }}
                     >
-                      <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border text-cyan-300 font-black text-[11px] tracking-wider mb-3"
-                           style={{ 
-                                backgroundColor: 'transparent',
-                                borderColor: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4',
-                                borderWidth: `${p.glowSettings?.labelBorderThickness || 1}px`,
-                                boxShadow: p.glowSettings?.labelGlowEnabled 
-                                    ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}, 
-                                       inset 0 0 ${p.glowSettings.labelInnerGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings.labelInnerGlowIntensity || 50) > 50 ? 'FF' : '80'}` 
-                                    : 'none'
-                           }}>
-                        <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4' }} />
-                        <span>{p.cardBadgeText || 'DIAMONDS'}</span>
-                      </div>
+                      {/* 1. Card Badge Text */}
+                      {p.cardBadgeText && p.cardBadgeText.trim() ? (
+                        <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border text-cyan-300 font-black text-[11px] tracking-wider mb-2.5"
+                             style={{ 
+                                  backgroundColor: p.glowSettings?.badgeBgColor || 'transparent',
+                                  color: p.glowSettings?.badgeTextColor || '#bae6fd',
+                                  borderColor: p.glowSettings?.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4',
+                                  borderWidth: `${p.glowSettings?.labelBorderThickness || 1}px`,
+                                  boxShadow: p.glowSettings?.labelGlowEnabled 
+                                      ? `0 0 ${p.glowSettings.labelGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}, 
+                                         inset 0 0 ${p.glowSettings.labelInnerGlowBlur || 10}px ${p.glowSettings.labelBorderColor || p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings.labelInnerGlowIntensity || 50) > 50 ? 'FF' : '80'}` 
+                                      : 'none'
+                             }}>
+                          <Sparkles className="w-3.5 h-3.5" style={{ color: p.glowSettings?.badgeTextColor || p.glowSettings?.labelBorderColor || '#06b6d4' }} />
+                          <span>{p.cardBadgeText}</span>
+                        </div>
+                      ) : (
+                        <div className="h-2" />
+                      )}
 
-                      {/* Middle Image Section */}
+                      {/* 2. Middle Image Section */}
                       <img 
                         src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt={p.name || 'Free Fire Diamonds'} 
@@ -656,8 +662,18 @@ export const CustomerDashboard: React.FC = () => {
                         }}
                       />
 
+                      {/* 3. Product Name & 4. Diamond Quantity */}
+                      <div className="mt-2.5 space-y-0.5 w-full text-center">
+                        <div className="font-extrabold text-white text-sm sm:text-base tracking-wide truncate">
+                          {p.name}
+                        </div>
+                        <div className="text-[11px] font-mono text-cyan-300 font-bold flex items-center justify-center gap-1">
+                          <Sparkles className="w-3 h-3 text-cyan-400" />
+                          <span>{p.rewardValueRupees || (p as any).rewardValue || 0} Diamonds</span>
+                        </div>
+                      </div>
 
-                      {/* Bottom Futuristic Price Button */}
+                      {/* 5. Bottom Futuristic Price Button */}
                       <div 
                         onClick={(e) => {
                           e.stopPropagation();

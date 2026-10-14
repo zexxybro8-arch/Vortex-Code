@@ -16,6 +16,9 @@ import { api } from '../services/api';
 function mapApiProductToStore(p: any): StoreProduct {
   const stock = Number(p.stock ?? 0);
   const isEnabled = p.enabled !== undefined ? Boolean(p.enabled) : true;
+  const rawBadge = (p as any).cardBadgeText ?? (p as any).card_badge_text;
+  const safeBadge = rawBadge && rawBadge !== 'null' && rawBadge !== 'undefined' ? String(rawBadge).trim() : '';
+
   return {
     id: p.id,
     name: p.name || 'Google Play Recharge Code',
@@ -25,15 +28,17 @@ function mapApiProductToStore(p: any): StoreProduct {
     category: (p.category as any) || 'DIGITAL REWARDS',
     stockStatus: !isEnabled
       ? 'OUT OF STOCK'
+      : (p.category as any) === 'DIAMONDS'
+      ? 'AVAILABLE'
       : stock > 0
       ? 'AVAILABLE'
       : 'OUT OF STOCK',
-    deliveryInfo: '⚡ Instant Automated Vault Key Delivery',
+    deliveryInfo: (p.category as any) === 'DIAMONDS' ? '⚡ Direct UID Mailbox Delivery' : '⚡ Instant Automated Vault Key Delivery',
     badge: stock > 0 ? `${stock} Available` : 'OUT OF STOCK',
     image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
     description: p.description || '',
-    displayName: p.displayName,
-    cardBadgeText: p.cardBadgeText,
+    displayName: p.displayName || p.name,
+    cardBadgeText: safeBadge,
     glowSettings: typeof p.glowSettings === 'string' ? JSON.parse(p.glowSettings) : p.glowSettings || {},
     stock,
     soldCount: Number(p.soldCount ?? 0),
@@ -431,7 +436,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         description: prodData.description,
         image: prodData.image,
         enabled: prodData.enabled,
-        cardBadgeText: prodData.cardBadgeText,
+        cardBadgeText: prodData.cardBadgeText !== undefined && prodData.cardBadgeText !== null ? String(prodData.cardBadgeText).trim() : '',
         glowSettings: JSON.stringify(prodData.glowSettings || {}),
       });
       await refreshData();
@@ -452,7 +457,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (updated.description !== undefined) payload.description = updated.description;
       if (updated.image !== undefined) payload.image = updated.image;
       if (updated.displayName !== undefined) payload.displayName = updated.displayName;
-      if (updated.cardBadgeText !== undefined) payload.cardBadgeText = updated.cardBadgeText;
+      if (updated.cardBadgeText !== undefined) payload.cardBadgeText = updated.cardBadgeText !== null ? String(updated.cardBadgeText).trim() : '';
       if (updated.glowSettings !== undefined) {
         payload.glowSettings = typeof updated.glowSettings === 'string' ? updated.glowSettings : JSON.stringify(updated.glowSettings);
       }

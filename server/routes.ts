@@ -158,7 +158,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
       denomination: denomination || `₹${price}`,
       enabled: req.body.enabled !== undefined ? Boolean(req.body.enabled) : true,
       image,
-      cardBadgeText: req.body.cardBadgeText,
+      cardBadgeText: req.body.cardBadgeText !== undefined && req.body.cardBadgeText !== null ? String(req.body.cardBadgeText).trim() : '',
       glowSettings: req.body.glowSettings,
     });
     res.status(201).json({ success: true, product: created, message: 'Product created successfully' });
