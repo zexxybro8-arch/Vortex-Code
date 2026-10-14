@@ -241,6 +241,16 @@ export const api = {
     });
   },
 
+  async resetTodaysSales(): Promise<{ success: boolean; message: string }> {
+    return safeFetchJson('/api/admin/reset-todays-sales', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+    });
+  },
+
   // Redeem Codes
   async getRedeemCodes(productId?: string, status?: string, denomination?: string, isAdmin: boolean = false): Promise<ApiRedeemCode[]> {
     try {

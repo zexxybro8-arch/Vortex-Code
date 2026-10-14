@@ -22,7 +22,7 @@ export interface StoreProduct {
   rewardValueRupees: number;
   denomination: string; // e.g. "₹100", "₹120", "₹150", "₹200", etc.
   category: 'GAMING' | 'DIGITAL REWARDS' | 'DIAMONDS' | 'OTHER';
-  stockStatus: 'AVAILABLE' | 'LIMITED STOCK' | 'OUT OF STOCK';
+  stockStatus: 'AVAILABLE' | 'LIMITED STOCK' | 'OUT OF STOCK' | 'SOLD OUT' | string;
   deliveryInfo: string;
   badge?: string;
   image: string;

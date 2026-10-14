@@ -29,7 +29,7 @@ function mapApiProductToStore(p: any): StoreProduct {
     stockStatus: !isEnabled
       ? 'OUT OF STOCK'
       : (p.category as any) === 'DIAMONDS'
-      ? 'AVAILABLE'
+      ? (p.stockStatus === 'OUT OF STOCK' || p.stockStatus === 'SOLD OUT' || p.stockStatus === 'SOLD_OUT' ? 'OUT OF STOCK' : 'AVAILABLE')
       : stock > 0
       ? 'AVAILABLE'
       : 'OUT OF STOCK',
@@ -194,6 +194,7 @@ interface AdminContextType {
   }) => Promise<any>;
 
   stats: AdminDashboardStats;
+  resetTodaysSales: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -308,6 +309,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     diamondCategoryLabel: 'DIAMONDS',
     diamondProductLabel: 'DIAMONDS',
     salesVolumeBaseline: 0,
+    todays_sales_reset_at: '',
   });
 
   const [categories, setCategories] = useState<AdminCategory[]>([]);
@@ -532,6 +534,19 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await refreshData();
     } catch (err) {
       console.error('Failed to delete design preset:', err);
+      throw err;
+    }
+  };
+
+  const resetTodaysSales = async () => {
+    try {
+      const res = await api.resetTodaysSales();
+      if ((res as any)?.resetAt) {
+        setStoreSettings((prev) => ({ ...prev, todays_sales_reset_at: (res as any).resetAt }));
+      }
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to reset today's sales:", err);
       throw err;
     }
   };
@@ -774,9 +789,14 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     0
   );
   const todayStr = new Date().toISOString().substring(0, 10);
-  const todaysSalesRupees = orders
-    .filter((o) => o.paymentStatus === 'PAID' && o.createdAt.startsWith(todayStr))
-    .reduce((sum, o) => sum + o.amountRupees, 0);
+  const resetAt = storeSettings.todays_sales_reset_at || '';
+  const todaysOrdersList = orders.filter((o) => {
+    if (o.paymentStatus !== 'PAID') return false;
+    if (!o.createdAt || !o.createdAt.startsWith(todayStr)) return false;
+    if (resetAt && o.createdAt <= resetAt) return false;
+    return true;
+  });
+  const todaysSalesRupees = todaysOrdersList.reduce((sum, o) => sum + o.amountRupees, 0);
 
   const availableRedeemCodesCount = redeemCodes.filter((c) => c.status === 'AVAILABLE').length;
   const usedRedeemCodesCount = redeemCodes.filter((c) => c.status === 'USED').length;
@@ -789,6 +809,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     availableRedeemCodes: availableRedeemCodesCount,
     usedRedeemCodes: usedRedeemCodesCount,
     registeredCustomers: customers.length,
+    todaysOrders: todaysOrdersList.length,
   };
 
   return (
@@ -829,6 +850,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateBranding,
         updateContactSettings,
         stats,
+        resetTodaysSales,
         refreshData,
       }}
     >

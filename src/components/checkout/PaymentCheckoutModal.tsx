@@ -265,12 +265,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                 </button>
               </div>
 
-              {fulfilledOrder.deliveredPin && (
-                <div className="text-xs font-mono text-slate-400 flex items-center gap-2 pt-1">
-                  <span>PIN / Security Key:</span>
-                  <strong className="text-white">{fulfilledOrder.deliveredPin}</strong>
-                </div>
-              )}
+
             </div>
 
             {/* Actions */}

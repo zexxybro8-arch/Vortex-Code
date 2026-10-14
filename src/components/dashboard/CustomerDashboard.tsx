@@ -77,6 +77,7 @@ export const CustomerDashboard: React.FC = () => {
 
   // Request counter ref to prevent race conditions from out-of-order async responses
   const fetchRequestIdRef = React.useRef(0);
+  const hasAppliedDefaultOpeningCategoryRef = React.useRef(false);
 
   // Helper to match unused redeem codes to a product deterministically
   const getUnusedCodesForProduct = useCallback(
@@ -102,15 +103,32 @@ export const CustomerDashboard: React.FC = () => {
   const fetchLiveDatabaseData = useCallback(async () => {
     const currentRequestId = ++fetchRequestIdRef.current;
     try {
-      // Fetch live products, unused codes, and active categories from database
-      const [apiProds, apiCodes, apiCats] = await Promise.all([
+      // Fetch live products, unused codes, active categories, and settings from database
+      const [apiProds, apiCodes, apiCats, settingsRes] = await Promise.all([
         api.getProducts(),
         api.getRedeemCodes(undefined, 'UNUSED'),
         api.getCategories(false),
+        api.getStoreSettings(),
       ]);
 
       // Ignore out-of-order stale response
       if (currentRequestId !== fetchRequestIdRef.current) return;
+
+      // Handle Default Opening Category on initial load
+      if (!hasAppliedDefaultOpeningCategoryRef.current && settingsRes) {
+        hasAppliedDefaultOpeningCategoryRef.current = true;
+        const targetOpeningCat = settingsRes.defaultOpeningCategory;
+        if (targetOpeningCat === 'DIAMONDS') {
+          const hasDiamonds = Array.isArray(apiProds) && apiProds.some((p: any) => p.enabled && p.category === 'DIAMONDS');
+          if (hasDiamonds) {
+            setActiveTab('diamonds');
+          } else {
+            setActiveTab('redeem-code');
+          }
+        } else {
+          setActiveTab('redeem-code');
+        }
+      }
 
       if (Array.isArray(apiCats)) {
         setActiveCategories(apiCats);
@@ -120,6 +138,8 @@ export const CustomerDashboard: React.FC = () => {
         const mapped: StoreProduct[] = apiProds.map((p) => {
           const isEnabled = p.enabled !== undefined ? Boolean(p.enabled) : true;
           const stock = Number(p.stock ?? 0);
+          const isDiamonds = (p.category as any) === 'DIAMONDS';
+          const diamondsStatus = (p as any).stockStatus || 'AVAILABLE';
           return {
             id: p.id,
             name: p.name || 'Google Play Recharge Code',
@@ -127,9 +147,11 @@ export const CustomerDashboard: React.FC = () => {
             rewardValueRupees: Number(p.rewardValue || p.price * 15),
             denomination: p.denomination || `₹${p.price}`,
             category: (p.category as any) || 'DIGITAL REWARDS',
-            stockStatus: !isEnabled ? 'OUT OF STOCK' : stock > 0 ? 'AVAILABLE' : 'OUT OF STOCK',
+            stockStatus: isDiamonds
+              ? (diamondsStatus === 'OUT OF STOCK' || diamondsStatus === 'SOLD OUT' ? 'OUT OF STOCK' : 'AVAILABLE')
+              : (!isEnabled ? 'OUT OF STOCK' : stock > 0 ? 'AVAILABLE' : 'OUT OF STOCK'),
             deliveryInfo: '⚡ Instant Automated Vault Key Delivery',
-            badge: !isEnabled ? 'DISABLED' : stock > 0 ? `${stock} Available` : 'OUT OF STOCK',
+            badge: !isEnabled ? 'DISABLED' : isDiamonds ? (diamondsStatus === 'OUT OF STOCK' ? 'SOLD OUT' : 'AVAILABLE') : (stock > 0 ? `${stock} Available` : 'OUT OF STOCK'),
             cardBadgeText: (p as any).cardBadgeText !== undefined ? String((p as any).cardBadgeText) : '',
             glowSettings: typeof (p as any).glowSettings === 'string' ? JSON.parse((p as any).glowSettings) : (p as any).glowSettings || {},
             image: p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
@@ -285,6 +307,10 @@ export const CustomerDashboard: React.FC = () => {
     }
 
     if (product.category === 'DIAMONDS') {
+      if (product.stockStatus === 'OUT OF STOCK' || product.stockStatus === 'SOLD OUT' || (product as any).stockStatus === 'SOLD_OUT') {
+        addToast('error', 'This diamond product is currently sold out.');
+        return;
+      }
       setProductToVerify(product);
       setIsUidModalOpen(true);
       return;
@@ -448,16 +474,37 @@ export const CustomerDashboard: React.FC = () => {
                   (buyingProductId === prod.id && (!item.codeRecord || buyingCodeId === item.codeRecord.id)) ||
                   (buyingCodeId !== null && item.codeRecord && buyingCodeId === item.codeRecord.id);
 
+                const glow = (typeof prod.glowSettings === 'string' ? JSON.parse(prod.glowSettings) : prod.glowSettings) || {};
+                const outerBorderColor = glow.borderColor || 'rgba(16, 185, 129, 0.3)';
+                const outerBorderThickness = glow.outerBorderThickness !== undefined ? glow.outerBorderThickness : 1;
+                const outerGlow = glow.outerGlowEnabled !== false
+                  ? `0 0 ${glow.outerGlowBlur || 25}px ${glow.borderColor || '#10B981'}${(glow.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                  : 'none';
+
                 return (
                   <div
                     key={item.key}
-                    className="bg-slate-900/95 border border-emerald-500/30 hover:border-emerald-400 rounded-3xl p-5 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-950/40 flex flex-col justify-between space-y-4 relative group neon-glow"
+                    className="bg-slate-900/95 border rounded-3xl p-5 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4 relative group neon-glow"
+                    style={{
+                      borderColor: outerBorderColor,
+                      borderWidth: `${outerBorderThickness}px`,
+                      boxShadow: outerGlow,
+                    }}
                   >
                     
                     {/* 1. TOP AREA: Product Icon + Large Title */}
                     <div className="flex items-center gap-3.5">
                       {/* Product Icon Box */}
-                      <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-emerald-500/40 flex items-center justify-center shrink-0 shadow-inner p-1.5 group-hover:scale-105 transition-transform overflow-hidden">
+                      <div
+                        className="w-12 h-12 rounded-2xl bg-slate-950 border flex items-center justify-center shrink-0 shadow-inner p-1.5 group-hover:scale-105 transition-transform overflow-hidden"
+                        style={{
+                          borderColor: glow.imageBorderColor || 'rgba(16, 185, 129, 0.4)',
+                          borderWidth: `${glow.imageBorderThickness !== undefined ? glow.imageBorderThickness : 1}px`,
+                          boxShadow: glow.imageGlowEnabled
+                            ? `0 0 ${glow.imageGlowBlur || 15}px ${glow.imageBorderColor || '#059669'}`
+                            : 'none',
+                        }}
+                      >
                         <img
                           src={prod.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'}
                           alt="Google Play Logo"
@@ -478,7 +525,18 @@ export const CustomerDashboard: React.FC = () => {
 
                     {/* 2. PRICE & BALANCE (Split Grid) */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
+                      <div
+                        className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border space-y-0.5 font-mono"
+                        style={{
+                          borderColor: glow.labelBorderColor || 'rgba(16, 185, 129, 0.3)',
+                          borderWidth: `${glow.labelBorderThickness !== undefined ? glow.labelBorderThickness : 1}px`,
+                          backgroundColor: glow.badgeBgColor || undefined,
+                          color: glow.badgeTextColor || undefined,
+                          boxShadow: glow.labelGlowEnabled
+                            ? `0 0 ${glow.labelGlowBlur || 10}px ${glow.labelBorderColor || '#059669'}${(glow.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                            : 'none',
+                        }}
+                      >
                         <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
                           PRICE
                         </div>
@@ -487,7 +545,18 @@ export const CustomerDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 space-y-0.5 font-mono">
+                      <div
+                        className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/90 border space-y-0.5 font-mono"
+                        style={{
+                          borderColor: glow.labelBorderColor || 'rgba(16, 185, 129, 0.3)',
+                          borderWidth: `${glow.labelBorderThickness !== undefined ? glow.labelBorderThickness : 1}px`,
+                          backgroundColor: glow.badgeBgColor || undefined,
+                          color: glow.badgeTextColor || undefined,
+                          boxShadow: glow.labelGlowEnabled
+                            ? `0 0 ${glow.labelGlowBlur || 10}px ${glow.labelBorderColor || '#059669'}${(glow.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                            : 'none',
+                        }}
+                      >
                         <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">
                           REDEEM CODE
                         </div>
@@ -541,9 +610,15 @@ export const CustomerDashboard: React.FC = () => {
                       type="button"
                       onClick={() => handleBuyNow(prod, item.codeRecord?.id)}
                       disabled={isBuying || item.isOutOfStock}
+                      style={!item.isOutOfStock && glow.buttonBgColor ? {
+                        backgroundColor: glow.buttonBgColor,
+                        borderColor: glow.borderColor || glow.buttonBgColor,
+                      } : undefined}
                       className={`w-full py-3 px-4 rounded-2xl font-extrabold text-xs sm:text-sm tracking-wider transition-all flex items-center justify-center cursor-pointer shadow-lg ${
                         item.isOutOfStock
                           ? 'bg-slate-800 text-slate-500 border border-slate-800 cursor-not-allowed'
+                          : glow.buttonBgColor
+                          ? 'text-slate-950'
                           : 'bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-emerald-500/25 hover:shadow-emerald-500/40 border border-emerald-300'
                       }`}
                     >
@@ -617,21 +692,37 @@ export const CustomerDashboard: React.FC = () => {
                     image: 'https://i.ibb.co/HDkCvRrY/file-00000000e09c82119087489c4d51e78a.png',
                     enabled: true,
                     category: 'DIAMONDS'
-                  }]) as any[]).map((p: any) => (
+                  }]) as any[]).map((p: any) => {
+                    const isSoldOut = p.stockStatus === 'OUT OF STOCK' || p.stockStatus === 'SOLD OUT' || p.stockStatus === 'SOLD_OUT';
+
+                    return (
                     <div 
                       key={p.id} 
-                      onClick={() => handleBuyNow(p)}
-                      className="bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center cursor-pointer group hover:border-cyan-400 transition-all duration-300 relative overflow-hidden backdrop-blur-xl float-animation"
+                      onClick={() => {
+                        if (!isSoldOut) handleBuyNow(p);
+                      }}
+                      className={`bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center transition-all duration-300 relative overflow-hidden backdrop-blur-xl ${
+                        isSoldOut 
+                          ? 'cursor-not-allowed opacity-90' 
+                          : 'cursor-pointer group hover:border-cyan-400 float-animation'
+                      }`}
                       style={{
-                        borderColor: p.glowSettings?.borderColor || '#06b6d4',
+                        borderColor: isSoldOut ? 'rgba(244, 63, 94, 0.4)' : (p.glowSettings?.borderColor || '#06b6d4'),
                         borderWidth: `${p.glowSettings?.outerBorderThickness || 2}px`,
-                        boxShadow: p.glowSettings?.outerGlowEnabled 
-                            ? `0 0 ${p.glowSettings.outerGlowBlur || 25}px ${p.glowSettings.borderColor || '#06b6d4'}${(p.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
-                            : 'none'
+                        boxShadow: isSoldOut 
+                          ? '0 0 15px rgba(244, 63, 94, 0.25)' 
+                          : (p.glowSettings?.outerGlowEnabled 
+                              ? `0 0 ${p.glowSettings.outerGlowBlur || 25}px ${p.glowSettings.borderColor || '#06b6d4'}${(p.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                              : 'none')
                       }}
                     >
-                      {/* 1. Card Badge Text */}
-                      {p.cardBadgeText && p.cardBadgeText.trim() ? (
+                      {/* 1. Card Badge Text / SOLD OUT Badge */}
+                      {isSoldOut ? (
+                        <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border border-rose-500/50 bg-rose-500/20 text-rose-300 font-black text-[11px] tracking-wider mb-2.5 shadow-[0_0_12px_rgba(244,63,94,0.4)]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
+                          <span>SOLD OUT</span>
+                        </div>
+                      ) : p.cardBadgeText && p.cardBadgeText.trim() ? (
                         <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border text-cyan-300 font-black text-[11px] tracking-wider mb-2.5"
                              style={{ 
                                   backgroundColor: p.glowSettings?.badgeBgColor || 'transparent',
@@ -654,7 +745,7 @@ export const CustomerDashboard: React.FC = () => {
                       <img 
                         src={p.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png'} 
                         alt={p.name || 'Free Fire Diamonds'} 
-                        className="w-full aspect-square object-contain rounded-2xl group-hover:scale-105 transition-transform duration-300" 
+                        className={`w-full aspect-square object-contain rounded-2xl transition-transform duration-300 ${isSoldOut ? 'grayscale-[30%]' : 'group-hover:scale-105'}`} 
                         style={{ 
                           borderColor: p.glowSettings?.imageBorderColor || '#06b6d4',
                           borderWidth: `${p.glowSettings?.imageBorderThickness || 2}px`,
@@ -674,29 +765,38 @@ export const CustomerDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* 5. Bottom Futuristic Price Button */}
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleBuyNow(p);
-                        }}
-                        className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between text-[#06111F] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-                        style={{
-                          backgroundColor: p.glowSettings?.buttonBgColor || '#38BDF8',
-                          borderColor: p.glowSettings?.borderColor || '#06b6d4',
-                          boxShadow: p.glowSettings?.glowColor ? `0 0 15px ${p.glowSettings.glowColor}66` : '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
-                        }}
-                      >
-                        <div className="flex-1 text-center font-black text-[#06111F] text-base tracking-wider px-1 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
-                          PAY ₹{p.priceRupees}
+                      {/* 5. Bottom Price Button / SOLD OUT Indicator */}
+                      {isSoldOut ? (
+                        <div 
+                          className="mt-3 w-full border border-slate-800 rounded-2xl p-2.5 flex items-center justify-center bg-slate-900/90 text-slate-500 font-extrabold text-xs tracking-widest uppercase cursor-not-allowed shadow-inner"
+                        >
+                          <span className="font-mono">SOLD OUT</span>
                         </div>
-                        <div className="w-8 h-8 rounded-xl bg-cyan-950/50 border flex items-center justify-center text-cyan-300 shrink-0 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)]"
-                             style={{ borderColor: p.glowSettings?.borderColor || '#06b6d4' }}>
-                          <ArrowRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBuyNow(p);
+                          }}
+                          className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between text-[#06111F] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                          style={{
+                            backgroundColor: p.glowSettings?.buttonBgColor || '#38BDF8',
+                            borderColor: p.glowSettings?.borderColor || '#06b6d4',
+                            boxShadow: p.glowSettings?.glowColor ? `0 0 15px ${p.glowSettings.glowColor}66` : '0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(255,255,255,0.2)'
+                          }}
+                        >
+                          <div className="flex-1 text-center font-black text-[#06111F] text-base tracking-wider px-1 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+                            PAY ₹{p.priceRupees}
+                          </div>
+                          <div className="w-8 h-8 rounded-xl bg-cyan-950/50 border flex items-center justify-center text-cyan-300 shrink-0 shadow-[inset_0_0_8px_rgba(0,245,255,0.4)]"
+                               style={{ borderColor: p.glowSettings?.borderColor || '#06b6d4' }}>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </div>
                         </div>
-                      </div>
-                  </div>
-              ))}
+                      )}
+                    </div>
+                  );
+                })}
             </div>
             {products.filter(p => p.enabled && p.category === 'DIAMONDS').length === 0 && (
                 <div className="text-center py-12 text-slate-400">No diamond products currently available. (Demo mode active)</div>
@@ -746,11 +846,6 @@ export const CustomerDashboard: React.FC = () => {
                 <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between font-mono text-xs">
                   <div className="space-y-0.5">
                     <span className="text-emerald-300 font-bold tracking-wider text-sm">{ord.redeemCode}</span>
-                    {ord.pin && (
-                      <div className="text-[11px] text-slate-400 font-mono">
-                        PIN: <strong className="text-emerald-400">{ord.pin}</strong>
-                      </div>
-                    )}
                   </div>
                   <button
                     onClick={() => {

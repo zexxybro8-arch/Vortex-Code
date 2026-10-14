@@ -110,9 +110,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
 
       if (bulkMode === 'generate') {
         codesToSave = Array.from({ length: quantity }).map(() => {
-          const key16 = generate16CharKey();
-          const pin = Math.floor(1000 + Math.random() * 9000).toString();
-          return `${key16}:${pin}`;
+          return generate16CharKey();
         });
       } else {
         codesToSave = pastedCodes
@@ -581,7 +579,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
                     required
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Generates cryptographic 16-character alphanumeric keys formatted with individual 4-digit PINs.
+                    Generates cryptographic 16-character alphanumeric keys.
                   </p>
                 </div>
               ) : (

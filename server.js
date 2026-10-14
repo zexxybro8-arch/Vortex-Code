@@ -674,6 +674,12 @@ async function getDb() {
     console.log("ALTER TABLE products ADD COLUMN sort_order failed or column exists");
   }
   try {
+    dbInstance.run(`ALTER TABLE products ADD COLUMN stock_status TEXT DEFAULT 'AVAILABLE';`);
+    console.log("ALTER TABLE products ADD COLUMN stock_status success");
+  } catch (e) {
+    console.log("ALTER TABLE products ADD COLUMN stock_status failed or column exists");
+  }
+  try {
     dbInstance.run(`ALTER TABLE notices ADD COLUMN type TEXT NOT NULL DEFAULT 'redeem-code';`);
     console.log("ALTER TABLE notices ADD COLUMN type success");
   } catch (e) {
@@ -1080,6 +1086,7 @@ async function getAllProducts(includeDisabled = true) {
       p.card_badge_text as cardBadgeText,
       p.glow_settings as glowSettings,
       p.sort_order as sortOrder,
+      p.stock_status as stockStatus,
       p.created_at as createdAt, 
       p.updated_at as updatedAt,
       COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as stock,
@@ -1111,7 +1118,17 @@ async function getAllProducts(includeDisabled = true) {
     if (isCatDisabled) {
       obj.enabled = false;
     }
-    obj.stockStatus = !obj.enabled ? "DISABLED" : obj.stock > 0 ? "AVAILABLE" : "OUT OF STOCK";
+    const rawCustomStatus = String(obj.stockStatus || obj.stock_status || "AVAILABLE").toUpperCase();
+    const isSoldOut = rawCustomStatus === "SOLD OUT" || rawCustomStatus === "SOLD_OUT";
+    if (!obj.enabled) {
+      obj.stockStatus = "DISABLED";
+    } else if (isSoldOut) {
+      obj.stockStatus = "SOLD OUT";
+    } else if (obj.category === "DIAMONDS") {
+      obj.stockStatus = "AVAILABLE";
+    } else {
+      obj.stockStatus = obj.stock > 0 ? "AVAILABLE" : "OUT OF STOCK";
+    }
     return obj;
   });
   if (!includeDisabled) {
@@ -1130,10 +1147,12 @@ async function createProduct(data) {
   const image = data.image || "https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png";
   const enabled = data.enabled !== void 0 ? data.enabled ? 1 : 0 : 1;
   const sortOrder = data.sortOrder !== void 0 ? Number(data.sortOrder) : 0;
+  const stockStatusRaw = data.stockStatus || data.stock_status || "AVAILABLE";
+  const stockStatus = String(stockStatusRaw).toUpperCase().includes("SOLD") ? "SOLD OUT" : "AVAILABLE";
   db.run(
-    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || "DIAMONDS", typeof data.glowSettings === "object" ? JSON.stringify(data.glowSettings) : data.glowSettings || "{}", sortOrder, now, now]
+    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, sort_order, stock_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || "DIAMONDS", typeof data.glowSettings === "object" ? JSON.stringify(data.glowSettings) : data.glowSettings || "{}", sortOrder, stockStatus, now, now]
   );
   saveDb();
   return getProductById(id);
@@ -1159,11 +1178,13 @@ async function updateProduct(id, data) {
   const cardBadgeText = data.cardBadgeText !== void 0 ? data.cardBadgeText : existing.cardBadgeText;
   const glowSettings = data.glowSettings !== void 0 ? data.glowSettings : existing.glowSettings;
   const sortOrder = data.sortOrder !== void 0 ? Number(data.sortOrder) : existing.sortOrder ?? 0;
+  const stockStatusInput = data.stockStatus !== void 0 ? data.stockStatus : data.stock_status;
+  const stockStatus = stockStatusInput !== void 0 ? String(stockStatusInput).toUpperCase().includes("SOLD") ? "SOLD OUT" : "AVAILABLE" : (existing.stockStatus || "AVAILABLE").toUpperCase().includes("SOLD") ? "SOLD OUT" : "AVAILABLE";
   db.run(
     `UPDATE products 
-     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, sort_order = ?, updated_at = ?
+     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, sort_order = ?, stock_status = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === "object" ? JSON.stringify(glowSettings) : glowSettings, sortOrder, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === "object" ? JSON.stringify(glowSettings) : glowSettings, sortOrder, stockStatus, now, id]
   );
   saveDb();
   return getProductById(id);
@@ -1939,6 +1960,12 @@ async function purchaseProductDirect(params) {
     err.statusCode = 400;
     throw err;
   }
+  const directProdStatus = String(product.stockStatus || product.stock_status || "AVAILABLE").toUpperCase();
+  if (directProdStatus === "SOLD OUT" || directProdStatus === "SOLD_OUT") {
+    const err = new Error("This product is currently SOLD OUT.");
+    err.statusCode = 400;
+    throw err;
+  }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
   const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
@@ -2002,6 +2029,12 @@ async function createPendingCheckoutOrder(params) {
   const isCatDisabled = await isDenominationDisabled(product.denomination);
   if (!product.enabled || isCatDisabled) {
     const err = new Error("This recharge category is currently unavailable.");
+    err.statusCode = 400;
+    throw err;
+  }
+  const checkoutProdStatus = String(product.stockStatus || product.stock_status || "AVAILABLE").toUpperCase();
+  if (checkoutProdStatus === "SOLD OUT" || checkoutProdStatus === "SOLD_OUT") {
+    const err = new Error("This product is currently SOLD OUT.");
     err.statusCode = 400;
     throw err;
   }
@@ -2649,6 +2682,8 @@ async function getStoreSettings() {
     contactIconSize: 42,
     contactMobileIconSize: 42,
     appUrl: process.env.APP_URL || "https://vortexcode.shop",
+    defaultStoreCategory: "REDEEM CODE",
+    default_store_category: "REDEEM CODE",
     how_to_redeem_step_1_image_enabled: false,
     how_to_redeem_step_1_image_url: "",
     how_to_redeem_step_2_image_enabled: false,
@@ -2666,6 +2701,10 @@ async function getStoreSettings() {
         settings[key] = val === "true";
       } else if (key === "contactWidgetSize" || key === "contactWidgetRight" || key === "contactWidgetBottom" || key === "contactWidgetMobileSize" || key === "contactWidgetMobileRight" || key === "contactWidgetMobileBottom" || key === "contactIconSize" || key === "contactMobileIconSize") {
         settings[key] = Number(val) || settings[key];
+      } else if (key === "defaultStoreCategory" || key === "default_store_category") {
+        const normCat = String(val).toUpperCase().includes("DIAMOND") ? "DIAMONDS" : "REDEEM CODE";
+        settings.defaultStoreCategory = normCat;
+        settings.default_store_category = normCat;
       } else {
         settings[key] = val;
       }
@@ -2691,6 +2730,12 @@ async function updateStoreSettings(updates) {
   }
   if (normalizedUpdates.subtitle && !normalizedUpdates.tagline) {
     normalizedUpdates.tagline = normalizedUpdates.subtitle;
+  }
+  if (normalizedUpdates.defaultStoreCategory !== void 0 || normalizedUpdates.default_store_category !== void 0) {
+    const rawVal = normalizedUpdates.defaultStoreCategory ?? normalizedUpdates.default_store_category;
+    const validatedCat = String(rawVal).toUpperCase().includes("DIAMOND") ? "DIAMONDS" : "REDEEM CODE";
+    normalizedUpdates.defaultStoreCategory = validatedCat;
+    normalizedUpdates.default_store_category = validatedCat;
   }
   for (const [key, value] of Object.entries(normalizedUpdates)) {
     if (value !== void 0) {

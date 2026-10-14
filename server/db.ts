@@ -262,6 +262,13 @@ export async function getDb(): Promise<Database> {
     console.log('ALTER TABLE notices ADD COLUMN type failed or column exists');
   }
 
+  try {
+    dbInstance.run(`ALTER TABLE products ADD COLUMN stock_status TEXT DEFAULT 'AVAILABLE';`);
+    console.log('ALTER TABLE products ADD COLUMN stock_status success');
+  } catch (e) {
+    console.log('ALTER TABLE products ADD COLUMN stock_status failed or column exists');
+  }
+
 
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
@@ -700,6 +707,7 @@ export async function getAllProducts(includeDisabled = true) {
       p.card_badge_text as cardBadgeText,
       p.glow_settings as glowSettings,
       p.sort_order as sortOrder,
+      p.stock_status as stockStatus,
       p.created_at as createdAt, 
       p.updated_at as updatedAt,
       COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as stock,
@@ -740,12 +748,21 @@ export async function getAllProducts(includeDisabled = true) {
       obj.enabled = false;
     }
 
-    // Calculate stockStatus directly from database UNUSED count
-    obj.stockStatus = !obj.enabled
-      ? 'DISABLED'
-      : obj.stock > 0
-      ? 'AVAILABLE'
-      : 'OUT OF STOCK';
+    if (obj.category === 'DIAMONDS') {
+      const dbStatus = String(obj.stockStatus || 'AVAILABLE').toUpperCase();
+      obj.stockStatus = !obj.enabled
+        ? 'DISABLED'
+        : (dbStatus === 'OUT OF STOCK' || dbStatus === 'SOLD OUT' || dbStatus === 'SOLD_OUT')
+        ? 'OUT OF STOCK'
+        : 'AVAILABLE';
+    } else {
+      // Calculate stockStatus directly from database UNUSED count for redeem code products
+      obj.stockStatus = !obj.enabled
+        ? 'DISABLED'
+        : obj.stock > 0
+        ? 'AVAILABLE'
+        : 'OUT OF STOCK';
+    }
     return obj;
   });
 
@@ -773,6 +790,7 @@ export async function createProduct(data: {
   cardBadgeText?: string;
   glowSettings?: any;
   sortOrder?: number;
+  stockStatus?: string;
 }) {
   const db = await getDb();
   const id = `prod_${Math.round(data.price)}_${Math.random().toString(36).substring(2, 6)}`;
@@ -780,11 +798,12 @@ export async function createProduct(data: {
   const image = data.image || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png';
   const enabled = data.enabled !== undefined ? (data.enabled ? 1 : 0) : 1;
   const sortOrder = data.sortOrder !== undefined ? Number(data.sortOrder) : 0;
+  const stockStatus = data.stockStatus || 'AVAILABLE';
 
   db.run(
-    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || 'DIAMONDS', typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', sortOrder, now, now]
+    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, sort_order, stock_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || 'DIAMONDS', typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : data.glowSettings || '{}', sortOrder, stockStatus, now, now]
   );
   saveDb();
   return getProductById(id);
@@ -804,6 +823,7 @@ export async function updateProduct(
     cardBadgeText?: string;
     glowSettings?: any;
     sortOrder?: number;
+    stockStatus?: string;
   }>
 ) {
   const db = await getDb();
@@ -829,12 +849,13 @@ export async function updateProduct(
   const cardBadgeText = data.cardBadgeText !== undefined ? data.cardBadgeText : existing.cardBadgeText;
   const glowSettings = data.glowSettings !== undefined ? data.glowSettings : existing.glowSettings;
   const sortOrder = data.sortOrder !== undefined ? Number(data.sortOrder) : (existing.sortOrder ?? 0);
+  const stockStatus = (data as any).stockStatus !== undefined ? String((data as any).stockStatus) : (existing.stockStatus || 'AVAILABLE');
 
   db.run(
     `UPDATE products 
-     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, sort_order = ?, updated_at = ?
+     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, sort_order = ?, stock_status = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === 'object' ? JSON.stringify(glowSettings) : glowSettings, sortOrder, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === 'object' ? JSON.stringify(glowSettings) : glowSettings, sortOrder, stockStatus, now, id]
   );
   saveDb();
   return getProductById(id);
@@ -1429,7 +1450,8 @@ export async function addBulkRedeemCodes(data: {
   const parsedCodes: { code: string; pin: string | null }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    const validation = validateCode(raw);
+    const rawCode = raw.includes(':') ? raw.split(':')[0].trim() : raw;
+    const validation = validateCode(rawCode);
     if (!validation.valid) {
       throw new Error(`Line ${i + 1} ("${raw}"): ${validation.error}`);
     }
@@ -1795,6 +1817,12 @@ export async function purchaseProductDirect(params: {
     throw err;
   }
 
+  if (product.category === 'DIAMONDS' && (product.stockStatus === 'OUT OF STOCK' || product.stockStatus === 'SOLD OUT' || product.stockStatus === 'SOLD_OUT')) {
+    const err: any = new Error('This diamond product is currently sold out.');
+    err.statusCode = 400;
+    throw err;
+  }
+
   const now = new Date().toISOString();
   const orderId = `ord_${Math.random().toString(36).substring(2, 9)}`;
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
@@ -1879,6 +1907,12 @@ export async function createPendingCheckoutOrder(params: {
   const isCatDisabled = await isDenominationDisabled(product.denomination);
   if (!product.enabled || isCatDisabled) {
     const err: any = new Error('This recharge category is currently unavailable.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (product.category === 'DIAMONDS' && (product.stockStatus === 'OUT OF STOCK' || product.stockStatus === 'SOLD OUT' || product.stockStatus === 'SOLD_OUT')) {
+    const err: any = new Error('This diamond product is currently sold out.');
     err.statusCode = 400;
     throw err;
   }
@@ -2752,10 +2786,20 @@ export async function updateUserStatus(identifier: string, status: 'ACTIVE' | 'D
   return getUserDetailsWithOrders(clean);
 }
 
+export async function resetTodaysSales() {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  db.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('todays_sales_reset_at', ?);`, [now]);
+  saveDb();
+  return { success: true, message: "Today's sales counter reset successfully", resetAt: now };
+}
+
 export async function getAdminAnalyticsSummary() {
   const users = await getAllUsersForAdmin();
   const allOrders = await getAllOrders();
   const successfulOrders = allOrders.filter(o => o.paymentStatus === 'PAID');
+  const settings = await getStoreSettings();
+  const resetAt = settings.todays_sales_reset_at || '';
 
   const totalUsers = users.length;
   const activeUsers = users.filter(u => u.status === 'ACTIVE').length;
@@ -2763,10 +2807,14 @@ export async function getAdminAnalyticsSummary() {
   const totalCodesSold = successfulOrders.length;
   const totalSales = successfulOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
 
-  // Today's sales
+  // Today's sales (resets relative to baseline timestamp for current day)
   const todayStr = new Date().toISOString().substring(0, 10);
   const todaysSales = successfulOrders
-    .filter(o => o.createdAt && o.createdAt.startsWith(todayStr))
+    .filter(o => {
+      if (!o.createdAt || !o.createdAt.startsWith(todayStr)) return false;
+      if (resetAt && o.createdAt <= resetAt) return false;
+      return true;
+    })
     .reduce((sum, o) => sum + Number(o.amount || 0), 0);
 
   const topBuyers = [...users]

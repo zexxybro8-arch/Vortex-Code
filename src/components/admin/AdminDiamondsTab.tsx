@@ -134,6 +134,8 @@ export const AdminDiamondsTab: React.FC = () => {
     const productName = nameInput || `${quantity} Diamonds`;
 
     const currentGlowSettings = previewData.glowSettings || {};
+    const selectedStatus = formData.get('status') as string;
+    const isAvailable = selectedStatus === 'AVAILABLE' || selectedStatus === 'enabled';
 
     const prodData = {
       name: productName,
@@ -145,9 +147,9 @@ export const AdminDiamondsTab: React.FC = () => {
       category: 'DIAMONDS' as const,
       description: (formData.get('description') as string) || '',
       image: (formData.get('image') as string) || 'https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png',
-      enabled: formData.get('status') === 'enabled',
+      enabled: true,
       sortOrder: Number(formData.get('sortOrder') || 0),
-      stockStatus: 'AVAILABLE' as const,
+      stockStatus: (isAvailable ? 'AVAILABLE' : 'OUT OF STOCK') as any,
       deliveryInfo: 'Instant Delivery',
       glowSettings: currentGlowSettings,
     };
@@ -343,7 +345,29 @@ export const AdminDiamondsTab: React.FC = () => {
                 <td className="py-3 px-3">{p.rewardValueRupees} Diamonds</td>
                 <td className="py-3 px-3">₹{p.priceRupees}</td>
                 <td className="py-3 px-3">
-                  {p.enabled ? <span className="text-emerald-400 font-semibold">Enabled</span> : <span className="text-slate-500">Disabled</span>}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const isCurrentlySoldOut = p.stockStatus === 'OUT OF STOCK' || p.stockStatus === 'SOLD OUT' || p.stockStatus === 'SOLD_OUT';
+                      const nextStatus = isCurrentlySoldOut ? 'AVAILABLE' : 'OUT OF STOCK';
+                      try {
+                        await updateProduct(p.id, {
+                          enabled: true,
+                          stockStatus: nextStatus,
+                        });
+                      } catch (err: any) {
+                        alert('Failed to update status: ' + err.message);
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer transition ${
+                      p.stockStatus !== 'OUT OF STOCK' && p.stockStatus !== 'SOLD OUT' && p.stockStatus !== 'SOLD_OUT'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                    }`}
+                    title="Click to toggle AVAILABLE / SOLD OUT"
+                  >
+                    {p.stockStatus !== 'OUT OF STOCK' && p.stockStatus !== 'SOLD OUT' && p.stockStatus !== 'SOLD_OUT' ? 'AVAILABLE' : 'SOLD OUT'}
+                  </button>
                 </td>
                 <td className="py-3 px-3 text-right">
                   <button
@@ -447,15 +471,19 @@ export const AdminDiamondsTab: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">Status</label>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">Availability Status</label>
                     <select
                       name="status"
-                      value={previewData.enabled ? 'enabled' : 'disabled'}
-                      onChange={(e) => updatePreviewField('enabled', e.target.value === 'enabled')}
+                      value={previewData.stockStatus === 'OUT OF STOCK' || previewData.stockStatus === 'SOLD OUT' || previewData.stockStatus === 'SOLD_OUT' ? 'SOLD OUT' : 'AVAILABLE'}
+                      onChange={(e) => {
+                        const isAvail = e.target.value === 'AVAILABLE';
+                        updatePreviewField('enabled', true);
+                        updatePreviewField('stockStatus', isAvail ? 'AVAILABLE' : 'OUT OF STOCK');
+                      }}
                       className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:border-cyan-400 focus:outline-none"
                     >
-                      <option value="enabled">Enabled</option>
-                      <option value="disabled">Disabled</option>
+                      <option value="AVAILABLE">AVAILABLE</option>
+                      <option value="SOLD OUT">SOLD OUT</option>
                     </select>
                   </div>
                 </div>

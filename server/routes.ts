@@ -53,6 +53,7 @@ import {
   deleteProduct,
   getCategoricalSettings,
   updateCategoricalSettings,
+  resetTodaysSales,
 } from './db';
 import { paymentGateway } from './payment/gateway';
 
@@ -1356,6 +1357,16 @@ router.delete('/admin/notices/:id', isAdminMiddleware, async (req, res) => {
     res.json({ success: true, message: 'Notice deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to delete notice' });
+  }
+});
+
+// POST /api/admin/reset-todays-sales - Reset today's sales reporting baseline
+router.post('/admin/reset-todays-sales', isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await resetTodaysSales();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Failed to reset today's sales counter" });
   }
 });
 

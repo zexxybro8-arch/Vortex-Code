@@ -277,11 +277,6 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
                       <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
                         <div className="flex items-center justify-between text-xs font-mono">
                           <span className="text-slate-400">Recharge Code Reference:</span>
-                          {ord.deliveredPin && (
-                            <span className="text-slate-300">
-                              PIN: <strong className="text-emerald-400 font-mono">{revealed ? revealed.pin : '••••'}</strong>
-                            </span>
-                          )}
                         </div>
 
                         <div className="flex items-center justify-between gap-3">

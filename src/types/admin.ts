@@ -13,6 +13,7 @@ export type AdminTab =
   | 'settings'
   | 'payment-settings'
   | 'payment-text-settings'
+  | 'how-to-redeem-guide'
   | 'redeem-code-notice'
   | 'diamonds-notice'
   | 'notice';

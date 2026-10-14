@@ -254,9 +254,6 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({ isOp
                 </p>
                 <div className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-3.5 flex items-center justify-between font-mono text-sm font-bold text-emerald-300 shadow-inner">
                   <span className="truncate mr-2 tracking-wider">{order.deliveredCode}</span>
-                  {order.deliveredPin && (
-                    <span className="text-[10px] text-slate-400 font-mono">PIN: {order.deliveredPin}</span>
-                  )}
                 </div>
                 <button
                   type="button"
