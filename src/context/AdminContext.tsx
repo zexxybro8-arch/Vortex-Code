@@ -44,6 +44,7 @@ function mapApiProductToStore(p: any): StoreProduct {
     soldCount: Number(p.soldCount ?? 0),
     totalCodes: Number(p.totalCodes ?? 0),
     enabled: isEnabled,
+    sortOrder: Number(p.sortOrder ?? p.sort_order ?? 0),
   };
 }
 
@@ -104,7 +105,13 @@ interface AdminContextType {
   products: StoreProduct[];
   addProduct: (product: Omit<StoreProduct, 'id'>) => Promise<void>;
   updateProduct: (id: string, updated: Partial<StoreProduct>) => Promise<void>;
+  reorderProducts: (items: { id: string; sortOrder: number }[]) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
+
+  // Design Presets
+  designPresets: any[];
+  saveDesignPreset: (name: string, settings: any, id?: string) => Promise<void>;
+  deleteDesignPreset: (id: string) => Promise<void>;
 
   // Categories
   categories: AdminCategory[];
@@ -304,6 +311,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [designPresets, setDesignPresets] = useState<any[]>([]);
 
   const setAdminTab = (tab: AdminTab) => {
     setAdminTabInternal(tab);
@@ -327,7 +335,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshData = useCallback(async () => {
     if (!adminUser) return; // Securely skip if not authenticated
     try {
-      const [apiProducts, apiCodes, apiOrders, apiSettings, apiCats] = await Promise.all([
+      const [apiProducts, apiCodes, apiOrders, apiSettings, apiCats, apiPresets] = await Promise.all([
         api.getProducts().catch((err) => {
           console.error('Failed to load products from API:', err);
           return [];
@@ -348,6 +356,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           console.error('Failed to load categories from API:', err);
           return [];
         }),
+        api.getDesignPresets().catch((err) => {
+          console.error('Failed to load design presets from API:', err);
+          return [];
+        }),
       ]);
 
       if (apiProducts && apiProducts.length > 0) {
@@ -364,6 +376,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       if (apiCats) {
         setCategories(apiCats);
+      }
+      if (apiPresets) {
+        setDesignPresets(apiPresets);
       }
     } catch (err) {
       console.error('Error refreshing admin data from DB:', err);
@@ -438,6 +453,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         enabled: prodData.enabled,
         cardBadgeText: prodData.cardBadgeText !== undefined && prodData.cardBadgeText !== null ? String(prodData.cardBadgeText).trim() : '',
         glowSettings: JSON.stringify(prodData.glowSettings || {}),
+        sortOrder: prodData.sortOrder !== undefined ? prodData.sortOrder : 0,
       });
       await refreshData();
     } catch (err) {
@@ -462,6 +478,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         payload.glowSettings = typeof updated.glowSettings === 'string' ? updated.glowSettings : JSON.stringify(updated.glowSettings);
       }
       if (updated.enabled !== undefined) payload.enabled = updated.enabled ? 1 : 0;
+      if (updated.sortOrder !== undefined) payload.sortOrder = updated.sortOrder;
       if (updated.stockStatus !== undefined) {
         if (updated.stockStatus === 'OUT OF STOCK') {
           payload.enabled = 0;
@@ -478,12 +495,43 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const reorderProducts = async (items: { id: string; sortOrder: number }[]) => {
+    try {
+      await api.reorderProducts(items);
+      await refreshData();
+    } catch (err) {
+      console.error('Failed to reorder products:', err);
+      throw err;
+    }
+  };
+
   const deleteProduct = async (id: string) => {
     try {
       await api.deleteProduct(id);
       await refreshData();
     } catch (err) {
       console.error('Failed to delete product:', err);
+      throw err;
+    }
+  };
+
+  // Real Database Design Presets Actions
+  const saveDesignPreset = async (name: string, settings: any, id?: string) => {
+    try {
+      await api.saveDesignPreset(name, settings, id);
+      await refreshData();
+    } catch (err) {
+      console.error('Failed to save design preset:', err);
+      throw err;
+    }
+  };
+
+  const deleteDesignPreset = async (id: string) => {
+    try {
+      await api.deleteDesignPreset(id);
+      await refreshData();
+    } catch (err) {
+      console.error('Failed to delete design preset:', err);
       throw err;
     }
   };
@@ -755,7 +803,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         products,
         addProduct,
         updateProduct,
+        reorderProducts,
         deleteProduct,
+        designPresets,
+        saveDesignPreset,
+        deleteDesignPreset,
         categories,
         addCategory,
         updateCategory,

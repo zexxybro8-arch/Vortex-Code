@@ -598,6 +598,14 @@ async function getDb() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS design_presets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      settings TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   try {
     dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_order_id TEXT;`);
@@ -658,6 +666,12 @@ async function getDb() {
     console.log("ALTER TABLE products ADD COLUMN glow_settings success");
   } catch (e) {
     console.log("ALTER TABLE products ADD COLUMN glow_settings failed or column exists");
+  }
+  try {
+    dbInstance.run(`ALTER TABLE products ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`);
+    console.log("ALTER TABLE products ADD COLUMN sort_order success");
+  } catch (e) {
+    console.log("ALTER TABLE products ADD COLUMN sort_order failed or column exists");
   }
   try {
     dbInstance.run(`ALTER TABLE notices ADD COLUMN type TEXT NOT NULL DEFAULT 'redeem-code';`);
@@ -1065,6 +1079,7 @@ async function getAllProducts(includeDisabled = true) {
       p.image, 
       p.card_badge_text as cardBadgeText,
       p.glow_settings as glowSettings,
+      p.sort_order as sortOrder,
       p.created_at as createdAt, 
       p.updated_at as updatedAt,
       COUNT(CASE WHEN r.status = 'UNUSED' THEN 1 END) as stock,
@@ -1073,7 +1088,7 @@ async function getAllProducts(includeDisabled = true) {
     FROM products p
     LEFT JOIN redeem_codes r ON p.id = r.product_id
     GROUP BY p.id
-    ORDER BY p.price ASC;
+    ORDER BY p.sort_order ASC, p.price ASC;
   `;
   const res = db.exec(query);
   if (res.length === 0) return [];
@@ -1086,6 +1101,7 @@ async function getAllProducts(includeDisabled = true) {
     });
     obj.enabled = Boolean(obj.enabled);
     obj.stock = Number(obj.stock);
+    obj.sortOrder = Number(obj.sortOrder || 0);
     obj.soldCount = Number(obj.soldCount);
     obj.totalCodes = Number(obj.totalCodes);
     const denomClean = String(obj.denomination || "").trim();
@@ -1113,10 +1129,11 @@ async function createProduct(data) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const image = data.image || "https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png";
   const enabled = data.enabled !== void 0 ? data.enabled ? 1 : 0 : 1;
+  const sortOrder = data.sortOrder !== void 0 ? Number(data.sortOrder) : 0;
   db.run(
-    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || "DIAMONDS", typeof data.glowSettings === "object" ? JSON.stringify(data.glowSettings) : data.glowSettings || "{}", now, now]
+    `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, sort_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [id, data.name, data.category, data.description, Number(data.price), Number(data.rewardValue), data.denomination, enabled, image, data.cardBadgeText || "DIAMONDS", typeof data.glowSettings === "object" ? JSON.stringify(data.glowSettings) : data.glowSettings || "{}", sortOrder, now, now]
   );
   saveDb();
   return getProductById(id);
@@ -1141,14 +1158,26 @@ async function updateProduct(id, data) {
   const image = data.image !== void 0 ? data.image : existing.image;
   const cardBadgeText = data.cardBadgeText !== void 0 ? data.cardBadgeText : existing.cardBadgeText;
   const glowSettings = data.glowSettings !== void 0 ? data.glowSettings : existing.glowSettings;
+  const sortOrder = data.sortOrder !== void 0 ? Number(data.sortOrder) : existing.sortOrder ?? 0;
   db.run(
     `UPDATE products 
-     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, updated_at = ?
+     SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, sort_order = ?, updated_at = ?
      WHERE id = ?;`,
-    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === "object" ? JSON.stringify(glowSettings) : glowSettings, now, id]
+    [name, category, description, price, reward_value, denomination, enabled, image, cardBadgeText, typeof glowSettings === "object" ? JSON.stringify(glowSettings) : glowSettings, sortOrder, now, id]
   );
   saveDb();
   return getProductById(id);
+}
+async function reorderProducts(items) {
+  const db = await getDb();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  for (const item of items) {
+    if (item.id && typeof item.sortOrder === "number") {
+      db.run(`UPDATE products SET sort_order = ?, updated_at = ? WHERE id = ?;`, [item.sortOrder, now, item.id]);
+    }
+  }
+  saveDb();
+  return { success: true, message: "Products reordered successfully" };
 }
 async function deleteProduct(id) {
   const db = await getDb();
@@ -1160,6 +1189,184 @@ async function deleteProduct(id) {
   db.run(`DELETE FROM products WHERE id = ?;`, [id]);
   saveDb();
   return { success: true, message: `Product ${id} deleted successfully` };
+}
+async function getAllDesignPresets() {
+  const db = await getDb();
+  let res = db.exec(`SELECT id, name, settings, created_at, updated_at FROM design_presets ORDER BY name ASC;`);
+  if (res.length === 0 || res[0].values.length === 0) {
+    const defaultPresets = [
+      {
+        name: "Neon Green",
+        settings: {
+          glowColor: "#10B981",
+          borderColor: "#10B981",
+          badgeBgColor: "#155e75",
+          badgeTextColor: "#bae6fd",
+          buttonBgColor: "#38bdf8",
+          imageBorderColor: "#06b6d4",
+          labelBorderColor: "#06b6d4",
+          outerBorderThickness: 2,
+          imageBorderThickness: 2,
+          labelBorderThickness: 1,
+          outerGlowEnabled: true,
+          outerGlowIntensity: 50,
+          outerGlowBlur: 25,
+          imageGlowEnabled: true,
+          imageGlowIntensity: 30,
+          imageGlowBlur: 15,
+          labelGlowEnabled: true,
+          labelGlowIntensity: 20,
+          labelGlowBlur: 10,
+          labelInnerGlowIntensity: 20,
+          labelInnerGlowBlur: 10
+        }
+      },
+      {
+        name: "Ice Blue",
+        settings: {
+          glowColor: "#38bdf8",
+          borderColor: "#0284c7",
+          badgeBgColor: "#0c4a6e",
+          badgeTextColor: "#e0f2fe",
+          buttonBgColor: "#0284c7",
+          imageBorderColor: "#38bdf8",
+          labelBorderColor: "#38bdf8",
+          outerBorderThickness: 2,
+          imageBorderThickness: 2,
+          labelBorderThickness: 1,
+          outerGlowEnabled: true,
+          outerGlowIntensity: 60,
+          outerGlowBlur: 30,
+          imageGlowEnabled: true,
+          imageGlowIntensity: 40,
+          imageGlowBlur: 20,
+          labelGlowEnabled: true,
+          labelGlowIntensity: 30,
+          labelGlowBlur: 12,
+          labelInnerGlowIntensity: 30,
+          labelInnerGlowBlur: 12
+        }
+      },
+      {
+        name: "Royal Purple",
+        settings: {
+          glowColor: "#a855f7",
+          borderColor: "#7e22ce",
+          badgeBgColor: "#581c87",
+          badgeTextColor: "#f3e8ff",
+          buttonBgColor: "#9333ea",
+          imageBorderColor: "#c084fc",
+          labelBorderColor: "#c084fc",
+          outerBorderThickness: 2,
+          imageBorderThickness: 2,
+          labelBorderThickness: 1,
+          outerGlowEnabled: true,
+          outerGlowIntensity: 70,
+          outerGlowBlur: 25,
+          imageGlowEnabled: true,
+          imageGlowIntensity: 45,
+          imageGlowBlur: 18,
+          labelGlowEnabled: true,
+          labelGlowIntensity: 35,
+          labelGlowBlur: 15,
+          labelInnerGlowIntensity: 35,
+          labelInnerGlowBlur: 15
+        }
+      },
+      {
+        name: "Golden Glow",
+        settings: {
+          glowColor: "#f59e0b",
+          borderColor: "#d97706",
+          badgeBgColor: "#78350f",
+          badgeTextColor: "#fef3c7",
+          buttonBgColor: "#f59e0b",
+          imageBorderColor: "#fbbf24",
+          labelBorderColor: "#fbbf24",
+          outerBorderThickness: 2,
+          imageBorderThickness: 2,
+          labelBorderThickness: 1,
+          outerGlowEnabled: true,
+          outerGlowIntensity: 80,
+          outerGlowBlur: 30,
+          imageGlowEnabled: true,
+          imageGlowIntensity: 50,
+          imageGlowBlur: 20,
+          labelGlowEnabled: true,
+          labelGlowIntensity: 40,
+          labelGlowBlur: 15,
+          labelInnerGlowIntensity: 40,
+          labelInnerGlowBlur: 15
+        }
+      }
+    ];
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    for (const p of defaultPresets) {
+      const pid = `preset_${Math.random().toString(36).substring(2, 8)}`;
+      db.run(
+        `INSERT OR IGNORE INTO design_presets (id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?);`,
+        [pid, p.name, JSON.stringify(p.settings), now, now]
+      );
+    }
+    saveDb();
+    res = db.exec(`SELECT id, name, settings, created_at, updated_at FROM design_presets ORDER BY name ASC;`);
+  }
+  if (res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    let parsedSettings = {};
+    try {
+      parsedSettings = typeof obj.settings === "string" ? JSON.parse(obj.settings) : obj.settings || {};
+    } catch (e) {
+      parsedSettings = {};
+    }
+    return {
+      id: obj.id,
+      name: obj.name,
+      settings: parsedSettings,
+      createdAt: obj.created_at,
+      updatedAt: obj.updated_at
+    };
+  });
+}
+async function saveDesignPreset(name, settings, id) {
+  const db = await getDb();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const cleanName = (name || "").trim();
+  if (!cleanName) {
+    throw new Error("Preset name is required");
+  }
+  const settingsJson = typeof settings === "string" ? settings : JSON.stringify(settings || {});
+  const existingByName = db.exec(`SELECT id FROM design_presets WHERE LOWER(name) = LOWER(?);`, [cleanName]);
+  let targetId = id;
+  if (!targetId && existingByName.length > 0 && existingByName[0].values.length > 0) {
+    targetId = existingByName[0].values[0][0];
+  }
+  if (targetId) {
+    db.run(
+      `UPDATE design_presets SET name = ?, settings = ?, updated_at = ? WHERE id = ?;`,
+      [cleanName, settingsJson, now, targetId]
+    );
+  } else {
+    targetId = `preset_${Math.random().toString(36).substring(2, 8)}`;
+    db.run(
+      `INSERT INTO design_presets (id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?);`,
+      [targetId, cleanName, settingsJson, now, now]
+    );
+  }
+  saveDb();
+  const presets = await getAllDesignPresets();
+  return presets.find((p) => p.id === targetId || p.name.toLowerCase() === cleanName.toLowerCase());
+}
+async function deleteDesignPreset(id) {
+  const db = await getDb();
+  db.run(`DELETE FROM design_presets WHERE id = ? OR name = ?;`, [id, id]);
+  saveDb();
+  return { success: true, message: "Preset deleted successfully" };
 }
 async function isDenominationDisabled(denomination) {
   if (!denomination) return false;
@@ -2733,12 +2940,52 @@ router.put("/products/:id", isAdminMiddleware, async (req, res) => {
     res.status(500).json({ success: false, error: err.message || "Failed to update product" });
   }
 });
+router.put("/products/reorder", isAdminMiddleware, async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, error: "items array is required" });
+    }
+    const result = await reorderProducts(items);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to reorder products" });
+  }
+});
 router.delete("/products/:id", isAdminMiddleware, async (req, res) => {
   try {
     const result = await deleteProduct(req.params.id);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to delete product" });
+  }
+});
+router.get("/admin/design-presets", isAdminMiddleware, async (req, res) => {
+  try {
+    const presets = await getAllDesignPresets();
+    res.json({ success: true, presets });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to fetch design presets" });
+  }
+});
+router.post("/admin/design-presets", isAdminMiddleware, async (req, res) => {
+  try {
+    const { name, settings, id } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: "Preset name is required" });
+    }
+    const preset = await saveDesignPreset(name, settings, id);
+    res.status(201).json({ success: true, preset, message: "Design preset saved successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to save design preset" });
+  }
+});
+router.delete("/admin/design-presets/:id", isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await deleteDesignPreset(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to delete design preset" });
   }
 });
 router.get("/categories", async (req, res) => {

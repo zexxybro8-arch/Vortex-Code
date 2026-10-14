@@ -5,7 +5,11 @@ import {
   getProductById,
   createProduct,
   updateProduct,
+  reorderProducts,
   deleteOrDisableProduct,
+  getAllDesignPresets,
+  saveDesignPreset,
+  deleteDesignPreset,
   getAllCategories,
   getCategoryById,
   createCategory,
@@ -178,6 +182,20 @@ router.put('/products/:id', isAdminMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/products/reorder - Reorder multiple products
+router.put('/products/reorder', isAdminMiddleware, async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, error: 'items array is required' });
+    }
+    const result = await reorderProducts(items);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to reorder products' });
+  }
+});
+
 // DELETE /api/products/:id - Delete product
 router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
@@ -185,6 +203,42 @@ router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to delete product' });
+  }
+});
+
+// ===================== DESIGN PRESETS =====================
+
+// GET /api/admin/design-presets - Get all saved design presets
+router.get('/admin/design-presets', isAdminMiddleware, async (req, res) => {
+  try {
+    const presets = await getAllDesignPresets();
+    res.json({ success: true, presets });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch design presets' });
+  }
+});
+
+// POST /api/admin/design-presets - Save/Create design preset
+router.post('/admin/design-presets', isAdminMiddleware, async (req, res) => {
+  try {
+    const { name, settings, id } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Preset name is required' });
+    }
+    const preset = await saveDesignPreset(name, settings, id);
+    res.status(201).json({ success: true, preset, message: 'Design preset saved successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to save design preset' });
+  }
+});
+
+// DELETE /api/admin/design-presets/:id - Delete design preset
+router.delete('/admin/design-presets/:id', isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await deleteDesignPreset(req.params.id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to delete design preset' });
   }
 });
 

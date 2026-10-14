@@ -138,6 +138,7 @@ export const CustomerDashboard: React.FC = () => {
             soldCount: Number(p.soldCount ?? 0),
             totalCodes: Number(p.totalCodes ?? 0),
             enabled: isEnabled,
+            sortOrder: Number((p as any).sortOrder ?? (p as any).sort_order ?? 0),
           };
         });
         setProducts(mapped);
@@ -607,7 +608,7 @@ export const CustomerDashboard: React.FC = () => {
             
             <div className="grid grid-cols-2 gap-4">
               {((products.filter(p => p.enabled && p.category === 'DIAMONDS').length > 0
-                ? products.filter(p => p.enabled && p.category === 'DIAMONDS')
+                ? products.filter(p => p.enabled && p.category === 'DIAMONDS').sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.priceRupees - b.priceRupees)
                 : [{
                     id: 'demo-100-diamonds',
                     name: '100 Diamonds',

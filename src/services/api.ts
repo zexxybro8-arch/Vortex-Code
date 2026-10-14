@@ -1,3 +1,11 @@
+export interface ApiDesignPreset {
+  id: string;
+  name: string;
+  settings: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ApiProduct {
   id: string;
   name: string;
@@ -154,6 +162,7 @@ export const api = {
     image?: string;
     cardBadgeText?: string;
     glowSettings?: any;
+    sortOrder?: number;
   }): Promise<ApiProduct> {
     const data = await safeFetchJson('/api/products', {
       method: 'POST',
@@ -184,6 +193,51 @@ export const api = {
       headers: {
         'x-admin-token': 'SAGAR551'
       }
+    });
+  },
+
+  async reorderProducts(items: { id: string; sortOrder: number }[]): Promise<{ success: boolean; message: string }> {
+    return safeFetchJson('/api/products/reorder', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551'
+      },
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  // Design Presets
+  async getDesignPresets(): Promise<ApiDesignPreset[]> {
+    try {
+      const data = await safeFetchJson('/api/admin/design-presets', {
+        headers: { 'x-admin-token': 'SAGAR551' },
+      });
+      return data?.presets || [];
+    } catch (err) {
+      console.warn('api.getDesignPresets fallback notice:', err);
+      return [];
+    }
+  },
+
+  async saveDesignPreset(name: string, settings: any, id?: string): Promise<ApiDesignPreset> {
+    const data = await safeFetchJson('/api/admin/design-presets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': 'SAGAR551',
+      },
+      body: JSON.stringify({ name, settings, id }),
+    });
+    return data.preset;
+  },
+
+  async deleteDesignPreset(id: string): Promise<{ success: boolean; message: string }> {
+    return safeFetchJson(`/api/admin/design-presets/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: {
+        'x-admin-token': 'SAGAR551',
+      },
     });
   },
 

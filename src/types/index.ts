@@ -34,6 +34,7 @@ export interface StoreProduct {
   soldCount?: number;
   totalCodes?: number;
   enabled?: boolean;
+  sortOrder?: number;
 }
 
 export interface RedeemCode {
