@@ -341,11 +341,16 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
             {/* Price & Redeem Value */}
             <div className="grid grid-cols-2 gap-2">
               <div
-                className="p-2 rounded-xl border font-mono"
+                className="p-2 rounded-xl border font-mono bg-slate-950/90"
                 style={{
                   borderColor: currentGlow.labelBorderColor || '#059669',
                   borderWidth: `${currentGlow.labelBorderThickness || 1}px`,
-                  backgroundColor: currentGlow.badgeBgColor || '#064e3b',
+                  backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                  boxShadow: currentGlow.labelGlowEnabled
+                    ? `0 0 ${currentGlow.labelGlowBlur || 10}px ${currentGlow.labelBorderColor || '#059669'}${
+                        (currentGlow.labelGlowIntensity || 50) > 50 ? 'FF' : '80'
+                      }`
+                    : 'none',
                   color: currentGlow.badgeTextColor || '#a7f3d0',
                 }}
               >
@@ -355,11 +360,16 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
                 </div>
               </div>
               <div
-                className="p-2 rounded-xl border font-mono"
+                className="p-2 rounded-xl border font-mono bg-slate-950/90"
                 style={{
                   borderColor: currentGlow.labelBorderColor || '#059669',
                   borderWidth: `${currentGlow.labelBorderThickness || 1}px`,
-                  backgroundColor: currentGlow.badgeBgColor || '#064e3b',
+                  backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                  boxShadow: currentGlow.labelGlowEnabled
+                    ? `0 0 ${currentGlow.labelGlowBlur || 10}px ${currentGlow.labelBorderColor || '#059669'}${
+                        (currentGlow.labelGlowIntensity || 50) > 50 ? 'FF' : '80'
+                      }`
+                    : 'none',
                   color: currentGlow.badgeTextColor || '#a7f3d0',
                 }}
               >

@@ -527,7 +527,7 @@ export const CustomerDashboard: React.FC = () => {
                         style={{
                           borderColor: glow.labelBorderColor || 'rgba(16, 185, 129, 0.3)',
                           borderWidth: `${glow.labelBorderThickness !== undefined ? glow.labelBorderThickness : 1}px`,
-                          backgroundColor: glow.badgeBgColor || undefined,
+                          backgroundColor: 'rgba(2, 6, 23, 0.9)',
                           color: glow.badgeTextColor || undefined,
                           boxShadow: glow.labelGlowEnabled
                             ? `0 0 ${glow.labelGlowBlur || 10}px ${glow.labelBorderColor || '#059669'}${(glow.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}`
@@ -547,7 +547,7 @@ export const CustomerDashboard: React.FC = () => {
                         style={{
                           borderColor: glow.labelBorderColor || 'rgba(16, 185, 129, 0.3)',
                           borderWidth: `${glow.labelBorderThickness !== undefined ? glow.labelBorderThickness : 1}px`,
-                          backgroundColor: glow.badgeBgColor || undefined,
+                          backgroundColor: 'rgba(2, 6, 23, 0.9)',
                           color: glow.badgeTextColor || undefined,
                           boxShadow: glow.labelGlowEnabled
                             ? `0 0 ${glow.labelGlowBlur || 10}px ${glow.labelBorderColor || '#059669'}${(glow.labelGlowIntensity || 50) > 50 ? 'FF' : '80'}`
