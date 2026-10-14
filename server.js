@@ -2931,15 +2931,6 @@ router.post("/products", isAdminMiddleware, async (req, res) => {
     res.status(500).json({ success: false, error: err.message || "Failed to create product" });
   }
 });
-router.put("/products/:id", isAdminMiddleware, async (req, res) => {
-  try {
-    console.log("DEBUG: Updating product", req.params.id, "with body:", JSON.stringify(req.body));
-    const updated = await updateProduct(req.params.id, req.body);
-    res.json({ success: true, product: updated, message: "Product updated successfully in database" });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message || "Failed to update product" });
-  }
-});
 router.put("/products/reorder", isAdminMiddleware, async (req, res) => {
   try {
     const { items } = req.body;
@@ -2950,6 +2941,15 @@ router.put("/products/reorder", isAdminMiddleware, async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to reorder products" });
+  }
+});
+router.put("/products/:id", isAdminMiddleware, async (req, res) => {
+  try {
+    console.log("DEBUG: Updating product", req.params.id, "with body:", JSON.stringify(req.body));
+    const updated = await updateProduct(req.params.id, req.body);
+    res.json({ success: true, product: updated, message: "Product updated successfully in database" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to update product" });
   }
 });
 router.delete("/products/:id", isAdminMiddleware, async (req, res) => {

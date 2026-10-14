@@ -171,18 +171,7 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/products/:id - Update product (price, status, details)
-router.put('/products/:id', isAdminMiddleware, async (req, res) => {
-  try {
-    console.log('DEBUG: Updating product', req.params.id, 'with body:', JSON.stringify(req.body));
-    const updated = await updateProduct(req.params.id, req.body);
-    res.json({ success: true, product: updated, message: 'Product updated successfully in database' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to update product' });
-  }
-});
-
-// PUT /api/products/reorder - Reorder multiple products
+// PUT /api/products/reorder - Reorder multiple products (Must be defined BEFORE /products/:id)
 router.put('/products/reorder', isAdminMiddleware, async (req, res) => {
   try {
     const { items } = req.body;
@@ -193,6 +182,17 @@ router.put('/products/reorder', isAdminMiddleware, async (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to reorder products' });
+  }
+});
+
+// PUT /api/products/:id - Update product (price, status, details)
+router.put('/products/:id', isAdminMiddleware, async (req, res) => {
+  try {
+    console.log('DEBUG: Updating product', req.params.id, 'with body:', JSON.stringify(req.body));
+    const updated = await updateProduct(req.params.id, req.body);
+    res.json({ success: true, product: updated, message: 'Product updated successfully in database' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to update product' });
   }
 });
 
