@@ -3,7 +3,25 @@ import { useAdmin } from '../../context/AdminContext';
 import { Sparkles, DollarSign, ShoppingBag, CheckCircle, Package } from 'lucide-react';
 
 export const AdminDiamondsSalesTab: React.FC = () => {
-  const { orders, products } = useAdmin();
+  const { orders, products, resetTodaysSales } = useAdmin();
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+
+  const handleResetSales = async () => {
+    if (!window.confirm("Are you sure you want to reset today's sales reporting count? Historical orders, payment transactions, and customer records will be preserved safely.")) {
+      return;
+    }
+    try {
+      setIsResetting(true);
+      await resetTodaysSales();
+      setResetSuccess("✅ Sales reporting figures reset successfully for today.");
+      setTimeout(() => setResetSuccess(null), 4000);
+    } catch (err: any) {
+      alert("Failed to reset sales: " + (err.message || "Unknown error"));
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const diamondOrders = useMemo(() => {
     return orders.filter(o => 
@@ -26,6 +44,26 @@ export const AdminDiamondsSalesTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight">Diamonds Sales & Analytics</h1>
+          <p className="text-xs text-slate-400">Track real-time diamond recharges, revenue totals, and customer purchase logs.</p>
+        </div>
+        <button
+          onClick={handleResetSales}
+          disabled={isResetting}
+          className="py-2.5 px-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0"
+        >
+          <span className="w-4 h-4">🔄</span>
+          <span>{isResetting ? 'Resetting...' : "Reset Today's Sales"}</span>
+        </button>
+      </div>
+
+      {resetSuccess && (
+        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+          {resetSuccess}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2 shadow-lg">
           <div className="text-xs text-slate-400">Total Successful Diamond Orders</div>

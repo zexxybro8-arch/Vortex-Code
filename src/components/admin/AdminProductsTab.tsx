@@ -205,7 +205,7 @@ export const AdminProductsTab: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {products.map((prod) => {
+            {products.filter(p => p.category !== 'DIAMONDS').map((prod) => {
               return (
                 <tr key={prod.id} className="hover:bg-slate-950/50 transition-colors">
                   <td className="py-3.5 px-3 font-bold text-white">{prod.name}</td>

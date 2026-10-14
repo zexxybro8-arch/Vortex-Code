@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { generate16CharKey, formatFullCode, formatMaskedCode } from '../../utils/codeFormat';
 import type { AdminRedeemCode } from '../../types/admin';
+import { RedeemCardDesignSection } from './RedeemCardDesignSection';
 
 export const AdminRedeemCodesTab: React.FC = () => {
   const {
@@ -30,7 +31,14 @@ export const AdminRedeemCodesTab: React.FC = () => {
     updateRedeemCode,
     deleteRedeemCode,
     refreshData,
+    designPresets = [],
+    saveDesignPreset,
+    deleteDesignPreset,
+    updateProduct,
   } = useAdmin();
+
+  const redeemEligibleProducts = products.filter(p => p.category !== 'DIAMONDS');
+  const targetProd = redeemEligibleProducts.find(p => p.id === selectedProductId) || redeemEligibleProducts[0];
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -531,13 +539,29 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-400 font-sans"
                   required
                 >
-                  {products.map((p) => (
+                  {redeemEligibleProducts.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.denomination}) — Stock: {p.stock ?? 0}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {targetProd && (
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                  <span className="block text-xs font-bold text-emerald-400">🎨 Redeem Card Design & Glow Customization</span>
+                  <RedeemCardDesignSection
+                    targetProduct={targetProd}
+                    glowSettings={targetProd.glowSettings || {}}
+                    onChange={async (newGlow) => {
+                      await updateProduct(targetProd.id, { glowSettings: newGlow });
+                    }}
+                    designPresets={designPresets}
+                    saveDesignPreset={saveDesignPreset}
+                    deleteDesignPreset={deleteDesignPreset}
+                  />
+                </div>
+              )}
 
               <div className="flex gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
                 <button
@@ -656,13 +680,29 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   className="w-full py-2.5 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-400 font-sans"
                   required
                 >
-                  {products.map((p) => (
+                  {redeemEligibleProducts.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.denomination}) — Stock: {p.stock ?? 0}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {targetProd && (
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                  <span className="block text-xs font-bold text-emerald-400">🎨 Redeem Card Design & Glow Customization</span>
+                  <RedeemCardDesignSection
+                    targetProduct={targetProd}
+                    glowSettings={targetProd.glowSettings || {}}
+                    onChange={async (newGlow) => {
+                      await updateProduct(targetProd.id, { glowSettings: newGlow });
+                    }}
+                    designPresets={designPresets}
+                    saveDesignPreset={saveDesignPreset}
+                    deleteDesignPreset={deleteDesignPreset}
+                  />
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1">
