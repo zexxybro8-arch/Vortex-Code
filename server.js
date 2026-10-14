@@ -2716,7 +2716,7 @@ router.post("/products", isAdminMiddleware, async (req, res) => {
       denomination: denomination || `\u20B9${price}`,
       enabled: req.body.enabled !== void 0 ? Boolean(req.body.enabled) : true,
       image,
-      cardBadgeText: req.body.cardBadgeText,
+      cardBadgeText: req.body.cardBadgeText !== void 0 && req.body.cardBadgeText !== null ? String(req.body.cardBadgeText).trim() : "",
       glowSettings: req.body.glowSettings
     });
     res.status(201).json({ success: true, product: created, message: "Product created successfully" });

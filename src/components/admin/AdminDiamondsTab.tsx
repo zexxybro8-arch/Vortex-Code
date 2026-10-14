@@ -10,7 +10,10 @@ export const AdminDiamondsTab: React.FC = () => {
   
   React.useEffect(() => {
     if (editingProduct) {
-      setPreviewData(editingProduct);
+      setPreviewData({
+        ...editingProduct,
+        displayName: editingProduct.displayName || editingProduct.name,
+      });
     } else {
       setPreviewData({
         rewardValueRupees: 100,
@@ -103,8 +106,11 @@ export const AdminDiamondsTab: React.FC = () => {
   const updatePreview = (e: React.FormEvent<HTMLFormElement>) => {
     const formData = new FormData(e.currentTarget);
     const quantity = formData.get('quantity') as string;
+    const displayName = formData.get('displayName') as string;
     setPreviewData({
       ...previewData,
+      displayName: displayName,
+      name: displayName,
       rewardValueRupees: Number(quantity),
       priceRupees: Number(formData.get('price')),
       image: formData.get('image'),
@@ -287,6 +293,22 @@ export const AdminDiamondsTab: React.FC = () => {
                           boxShadow: previewData.glowSettings?.imageGlowEnabled ? `0 0 ${previewData.glowSettings.imageGlowBlur || 15}px ${previewData.glowSettings.imageBorderColor || '#06b6d4'}` : 'none'
                         }}
                       />
+
+                      {/* Product Name & Diamond Quantity */}
+                      <div className="mt-2.5 space-y-0.5 w-full text-center">
+                        {Boolean(previewData.displayName || previewData.name) && (
+                          <div className="font-extrabold text-white text-sm sm:text-base tracking-wide truncate">
+                            {previewData.displayName || previewData.name}
+                          </div>
+                        )}
+                        {previewData.rewardValueRupees !== undefined && previewData.rewardValueRupees !== null && previewData.rewardValueRupees !== '' && !isNaN(Number(previewData.rewardValueRupees)) && (
+                          <div className="text-[11px] font-mono text-cyan-300 font-bold flex items-center justify-center gap-1">
+                            <Sparkles className="w-3 h-3 text-cyan-400" />
+                            <span>{previewData.rewardValueRupees} Diamonds</span>
+                          </div>
+                        )}
+                      </div>
+
                       <div 
                         className="mt-3 w-full border rounded-2xl p-1.5 flex items-center justify-between transition-all duration-300"
                         style={{
