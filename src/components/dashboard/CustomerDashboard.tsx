@@ -114,17 +114,12 @@ export const CustomerDashboard: React.FC = () => {
       // Ignore out-of-order stale response
       if (currentRequestId !== fetchRequestIdRef.current) return;
 
-      // Handle Default Opening Category on initial load
+      // Handle Default Store Category on initial load
       if (!hasAppliedDefaultOpeningCategoryRef.current && settingsRes) {
         hasAppliedDefaultOpeningCategoryRef.current = true;
-        const targetOpeningCat = settingsRes.defaultOpeningCategory;
+        const targetOpeningCat = (settingsRes.defaultStoreCategory || settingsRes.defaultOpeningCategory || '').toUpperCase();
         if (targetOpeningCat === 'DIAMONDS') {
-          const hasDiamonds = Array.isArray(apiProds) && apiProds.some((p: any) => p.enabled && p.category === 'DIAMONDS');
-          if (hasDiamonds) {
-            setActiveTab('diamonds');
-          } else {
-            setActiveTab('redeem-code');
-          }
+          setActiveTab('diamonds');
         } else {
           setActiveTab('redeem-code');
         }
@@ -477,8 +472,9 @@ export const CustomerDashboard: React.FC = () => {
                 const glow = (typeof prod.glowSettings === 'string' ? JSON.parse(prod.glowSettings) : prod.glowSettings) || {};
                 const outerBorderColor = glow.borderColor || 'rgba(16, 185, 129, 0.3)';
                 const outerBorderThickness = glow.outerBorderThickness !== undefined ? glow.outerBorderThickness : 1;
+                const glowColor = glow.glowColor || glow.borderColor || '#10B981';
                 const outerGlow = glow.outerGlowEnabled !== false
-                  ? `0 0 ${glow.outerGlowBlur || 25}px ${glow.borderColor || '#10B981'}${(glow.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                  ? `0 0 ${glow.outerGlowBlur || 25}px ${glowColor}${(glow.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
                   : 'none';
 
                 return (
@@ -486,6 +482,7 @@ export const CustomerDashboard: React.FC = () => {
                     key={item.key}
                     className="bg-slate-900/95 border rounded-3xl p-5 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4 relative group neon-glow"
                     style={{
+                      backgroundColor: glow.cardBgColor || undefined,
                       borderColor: outerBorderColor,
                       borderWidth: `${outerBorderThickness}px`,
                       boxShadow: outerGlow,

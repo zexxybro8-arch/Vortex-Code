@@ -269,6 +269,10 @@ export async function getDb(): Promise<Database> {
     console.log('ALTER TABLE products ADD COLUMN stock_status failed or column exists');
   }
 
+  try {
+    dbInstance.run(`ALTER TABLE design_presets ADD COLUMN category TEXT DEFAULT 'DIAMONDS';`);
+  } catch (e) {}
+
 
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
@@ -903,18 +907,23 @@ export interface DbDesignPreset {
   id: string;
   name: string;
   settings: any;
+  category?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export async function getAllDesignPresets(): Promise<DbDesignPreset[]> {
+export async function getAllDesignPresets(categoryFilter?: string): Promise<DbDesignPreset[]> {
   const db = await getDb();
-  let res = db.exec(`SELECT id, name, settings, created_at, updated_at FROM design_presets ORDER BY name ASC;`);
   
-  if (res.length === 0 || res[0].values.length === 0) {
-    const defaultPresets = [
+  // Seed default Diamonds presets if none exist for DIAMONDS
+  const countRes = db.exec(`SELECT COUNT(*) FROM design_presets WHERE category = 'DIAMONDS';`);
+  const diamondsCount = (countRes[0]?.values[0]?.[0] as number) || 0;
+
+  if (diamondsCount === 0) {
+    const defaultDiamondsPresets = [
       {
         name: 'Neon Green',
+        category: 'DIAMONDS',
         settings: {
           glowColor: '#10B981',
           borderColor: '#10B981',
@@ -941,6 +950,7 @@ export async function getAllDesignPresets(): Promise<DbDesignPreset[]> {
       },
       {
         name: 'Ice Blue',
+        category: 'DIAMONDS',
         settings: {
           glowColor: '#38bdf8',
           borderColor: '#0284c7',
@@ -967,6 +977,7 @@ export async function getAllDesignPresets(): Promise<DbDesignPreset[]> {
       },
       {
         name: 'Royal Purple',
+        category: 'DIAMONDS',
         settings: {
           glowColor: '#a855f7',
           borderColor: '#7e22ce',
@@ -993,6 +1004,7 @@ export async function getAllDesignPresets(): Promise<DbDesignPreset[]> {
       },
       {
         name: 'Golden Glow',
+        category: 'DIAMONDS',
         settings: {
           glowColor: '#f59e0b',
           borderColor: '#d97706',
@@ -1020,16 +1032,157 @@ export async function getAllDesignPresets(): Promise<DbDesignPreset[]> {
     ];
 
     const now = new Date().toISOString();
-    for (const p of defaultPresets) {
+    for (const p of defaultDiamondsPresets) {
       const pid = `preset_${Math.random().toString(36).substring(2, 8)}`;
       db.run(
-        `INSERT OR IGNORE INTO design_presets (id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?);`,
-        [pid, p.name, JSON.stringify(p.settings), now, now]
+        `INSERT OR IGNORE INTO design_presets (id, name, settings, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);`,
+        [pid, p.name, JSON.stringify(p.settings), p.category, now, now]
       );
     }
     saveDb();
-    res = db.exec(`SELECT id, name, settings, created_at, updated_at FROM design_presets ORDER BY name ASC;`);
   }
+
+  // Seed default Redeem Code presets if requested and none exist
+  if (categoryFilter === 'REDEEM_CODE' || !categoryFilter) {
+    const rcRes = db.exec(`SELECT COUNT(*) FROM design_presets WHERE category = 'REDEEM_CODE';`);
+    const rcCount = (rcRes[0]?.values[0]?.[0] as number) || 0;
+    if (rcCount === 0) {
+      const defaultRedeemPresets = [
+        {
+          name: 'Cyber Emerald',
+          category: 'REDEEM_CODE',
+          settings: {
+            glowColor: '#10B981',
+            borderColor: '#10B981',
+            cardBgColor: '#090d16',
+            badgeBgColor: '#064e3b',
+            badgeTextColor: '#a7f3d0',
+            buttonBgColor: '#34d399',
+            imageBorderColor: '#059669',
+            labelBorderColor: '#059669',
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 50,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 30,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 20,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 20,
+            labelInnerGlowBlur: 10,
+          }
+        },
+        {
+          name: 'Vortex Crimson',
+          category: 'REDEEM_CODE',
+          settings: {
+            glowColor: '#f43f5e',
+            borderColor: '#e11d48',
+            cardBgColor: '#140509',
+            badgeBgColor: '#881337',
+            badgeTextColor: '#ffe4e6',
+            buttonBgColor: '#f43f5e',
+            imageBorderColor: '#fb7185',
+            labelBorderColor: '#fb7185',
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 60,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 35,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 25,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 25,
+            labelInnerGlowBlur: 10,
+          }
+        },
+        {
+          name: 'Electric Amber',
+          category: 'REDEEM_CODE',
+          settings: {
+            glowColor: '#f59e0b',
+            borderColor: '#d97706',
+            cardBgColor: '#140d04',
+            badgeBgColor: '#78350f',
+            badgeTextColor: '#fef3c7',
+            buttonBgColor: '#f59e0b',
+            imageBorderColor: '#fbbf24',
+            labelBorderColor: '#fbbf24',
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 55,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 30,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 20,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 20,
+            labelInnerGlowBlur: 10,
+          }
+        },
+        {
+          name: 'Midnight Sapphire',
+          category: 'REDEEM_CODE',
+          settings: {
+            glowColor: '#3b82f6',
+            borderColor: '#2563eb',
+            cardBgColor: '#060e1d',
+            badgeBgColor: '#1e3a8a',
+            badgeTextColor: '#dbeafe',
+            buttonBgColor: '#3b82f6',
+            imageBorderColor: '#60a5fa',
+            labelBorderColor: '#60a5fa',
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 50,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 30,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 20,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 20,
+            labelInnerGlowBlur: 10,
+          }
+        }
+      ];
+
+      const now = new Date().toISOString();
+      for (const p of defaultRedeemPresets) {
+        const pid = `preset_${Math.random().toString(36).substring(2, 8)}`;
+        db.run(
+          `INSERT OR IGNORE INTO design_presets (id, name, settings, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);`,
+          [pid, p.name, JSON.stringify(p.settings), p.category, now, now]
+        );
+      }
+      saveDb();
+    }
+  }
+
+  let query = `SELECT id, name, settings, category, created_at, updated_at FROM design_presets`;
+  const params: any[] = [];
+  if (categoryFilter) {
+    query += ` WHERE category = ? OR category = 'ALL'`;
+    params.push(categoryFilter);
+  }
+  query += ` ORDER BY name ASC;`;
+
+  let res = db.exec(query, params);
 
   if (res.length === 0) return [];
   const columns = res[0].columns;
@@ -1048,13 +1201,14 @@ export async function getAllDesignPresets(): Promise<DbDesignPreset[]> {
       id: obj.id,
       name: obj.name,
       settings: parsedSettings,
+      category: obj.category || 'DIAMONDS',
       createdAt: obj.created_at,
       updatedAt: obj.updated_at,
     };
   });
 }
 
-export async function saveDesignPreset(name: string, settings: any, id?: string): Promise<DbDesignPreset> {
+export async function saveDesignPreset(name: string, settings: any, id?: string, category: string = 'DIAMONDS'): Promise<DbDesignPreset> {
   const db = await getDb();
   const now = new Date().toISOString();
   const cleanName = (name || '').trim();
@@ -1071,14 +1225,14 @@ export async function saveDesignPreset(name: string, settings: any, id?: string)
 
   if (targetId) {
     db.run(
-      `UPDATE design_presets SET name = ?, settings = ?, updated_at = ? WHERE id = ?;`,
-      [cleanName, settingsJson, now, targetId]
+      `UPDATE design_presets SET name = ?, settings = ?, category = ?, updated_at = ? WHERE id = ?;`,
+      [cleanName, settingsJson, category, now, targetId]
     );
   } else {
     targetId = `preset_${Math.random().toString(36).substring(2, 8)}`;
     db.run(
-      `INSERT INTO design_presets (id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?);`,
-      [targetId, cleanName, settingsJson, now, now]
+      `INSERT INTO design_presets (id, name, settings, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);`,
+      [targetId, cleanName, settingsJson, category, now, now]
     );
   }
   saveDb();
@@ -2877,6 +3031,8 @@ export async function getStoreSettings() {
     how_to_redeem_step_3_image_url: '',
     how_to_redeem_step_4_image_enabled: false,
     how_to_redeem_step_4_image_url: '',
+    defaultStoreCategory: 'REDEEM CODE',
+    defaultOpeningCategory: 'REDEEM CODE',
   };
 
   if (res.length > 0 && res[0].values.length > 0) {
@@ -2913,6 +3069,17 @@ export async function getStoreSettings() {
   if (settings.tagline && !settings.subtitle) settings.subtitle = settings.tagline;
   if (settings.subtitle && !settings.tagline) settings.tagline = settings.subtitle;
 
+  if (settings.defaultStoreCategory && !settings.defaultOpeningCategory) {
+    settings.defaultOpeningCategory = settings.defaultStoreCategory;
+  }
+  if (settings.defaultOpeningCategory && !settings.defaultStoreCategory) {
+    settings.defaultStoreCategory = settings.defaultOpeningCategory;
+  }
+  if (!settings.defaultStoreCategory) {
+    settings.defaultStoreCategory = 'REDEEM CODE';
+    settings.defaultOpeningCategory = 'REDEEM CODE';
+  }
+
   return settings;
 }
 
@@ -2930,6 +3097,12 @@ export async function updateStoreSettings(updates: Record<string, any>) {
   }
   if (normalizedUpdates.subtitle && !normalizedUpdates.tagline) {
     normalizedUpdates.tagline = normalizedUpdates.subtitle;
+  }
+  if (normalizedUpdates.defaultStoreCategory && !normalizedUpdates.defaultOpeningCategory) {
+    normalizedUpdates.defaultOpeningCategory = normalizedUpdates.defaultStoreCategory;
+  }
+  if (normalizedUpdates.defaultOpeningCategory && !normalizedUpdates.defaultStoreCategory) {
+    normalizedUpdates.defaultStoreCategory = normalizedUpdates.defaultOpeningCategory;
   }
 
   for (const [key, value] of Object.entries(normalizedUpdates)) {

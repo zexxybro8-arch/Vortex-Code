@@ -674,16 +674,20 @@ async function getDb() {
     console.log("ALTER TABLE products ADD COLUMN sort_order failed or column exists");
   }
   try {
+    dbInstance.run(`ALTER TABLE notices ADD COLUMN type TEXT NOT NULL DEFAULT 'redeem-code';`);
+    console.log("ALTER TABLE notices ADD COLUMN type success");
+  } catch (e) {
+    console.log("ALTER TABLE notices ADD COLUMN type failed or column exists");
+  }
+  try {
     dbInstance.run(`ALTER TABLE products ADD COLUMN stock_status TEXT DEFAULT 'AVAILABLE';`);
     console.log("ALTER TABLE products ADD COLUMN stock_status success");
   } catch (e) {
     console.log("ALTER TABLE products ADD COLUMN stock_status failed or column exists");
   }
   try {
-    dbInstance.run(`ALTER TABLE notices ADD COLUMN type TEXT NOT NULL DEFAULT 'redeem-code';`);
-    console.log("ALTER TABLE notices ADD COLUMN type success");
+    dbInstance.run(`ALTER TABLE design_presets ADD COLUMN category TEXT DEFAULT 'DIAMONDS';`);
   } catch (e) {
-    console.log("ALTER TABLE notices ADD COLUMN type failed or column exists");
   }
   try {
     const tableSqlRes = dbInstance.exec(`SELECT sql FROM sqlite_master WHERE name = 'redeem_codes';`);
@@ -1118,16 +1122,11 @@ async function getAllProducts(includeDisabled = true) {
     if (isCatDisabled) {
       obj.enabled = false;
     }
-    const rawCustomStatus = String(obj.stockStatus || obj.stock_status || "AVAILABLE").toUpperCase();
-    const isSoldOut = rawCustomStatus === "SOLD OUT" || rawCustomStatus === "SOLD_OUT";
-    if (!obj.enabled) {
-      obj.stockStatus = "DISABLED";
-    } else if (isSoldOut) {
-      obj.stockStatus = "SOLD OUT";
-    } else if (obj.category === "DIAMONDS") {
-      obj.stockStatus = "AVAILABLE";
+    if (obj.category === "DIAMONDS") {
+      const dbStatus = String(obj.stockStatus || "AVAILABLE").toUpperCase();
+      obj.stockStatus = !obj.enabled ? "DISABLED" : dbStatus === "OUT OF STOCK" || dbStatus === "SOLD OUT" || dbStatus === "SOLD_OUT" ? "OUT OF STOCK" : "AVAILABLE";
     } else {
-      obj.stockStatus = obj.stock > 0 ? "AVAILABLE" : "OUT OF STOCK";
+      obj.stockStatus = !obj.enabled ? "DISABLED" : obj.stock > 0 ? "AVAILABLE" : "OUT OF STOCK";
     }
     return obj;
   });
@@ -1147,8 +1146,7 @@ async function createProduct(data) {
   const image = data.image || "https://i.ibb.co/s9Gk3DMm/IMG-20261007-001618-366.png";
   const enabled = data.enabled !== void 0 ? data.enabled ? 1 : 0 : 1;
   const sortOrder = data.sortOrder !== void 0 ? Number(data.sortOrder) : 0;
-  const stockStatusRaw = data.stockStatus || data.stock_status || "AVAILABLE";
-  const stockStatus = String(stockStatusRaw).toUpperCase().includes("SOLD") ? "SOLD OUT" : "AVAILABLE";
+  const stockStatus = data.stockStatus || "AVAILABLE";
   db.run(
     `INSERT INTO products (id, name, category, description, price, reward_value, denomination, enabled, image, card_badge_text, glow_settings, sort_order, stock_status, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
@@ -1178,8 +1176,7 @@ async function updateProduct(id, data) {
   const cardBadgeText = data.cardBadgeText !== void 0 ? data.cardBadgeText : existing.cardBadgeText;
   const glowSettings = data.glowSettings !== void 0 ? data.glowSettings : existing.glowSettings;
   const sortOrder = data.sortOrder !== void 0 ? Number(data.sortOrder) : existing.sortOrder ?? 0;
-  const stockStatusInput = data.stockStatus !== void 0 ? data.stockStatus : data.stock_status;
-  const stockStatus = stockStatusInput !== void 0 ? String(stockStatusInput).toUpperCase().includes("SOLD") ? "SOLD OUT" : "AVAILABLE" : (existing.stockStatus || "AVAILABLE").toUpperCase().includes("SOLD") ? "SOLD OUT" : "AVAILABLE";
+  const stockStatus = data.stockStatus !== void 0 ? String(data.stockStatus) : existing.stockStatus || "AVAILABLE";
   db.run(
     `UPDATE products 
      SET name = ?, category = ?, description = ?, price = ?, reward_value = ?, denomination = ?, enabled = ?, image = ?, card_badge_text = ?, glow_settings = ?, sort_order = ?, stock_status = ?, updated_at = ?
@@ -1211,13 +1208,15 @@ async function deleteProduct(id) {
   saveDb();
   return { success: true, message: `Product ${id} deleted successfully` };
 }
-async function getAllDesignPresets() {
+async function getAllDesignPresets(categoryFilter) {
   const db = await getDb();
-  let res = db.exec(`SELECT id, name, settings, created_at, updated_at FROM design_presets ORDER BY name ASC;`);
-  if (res.length === 0 || res[0].values.length === 0) {
-    const defaultPresets = [
+  const countRes = db.exec(`SELECT COUNT(*) FROM design_presets WHERE category = 'DIAMONDS';`);
+  const diamondsCount = countRes[0]?.values[0]?.[0] || 0;
+  if (diamondsCount === 0) {
+    const defaultDiamondsPresets = [
       {
         name: "Neon Green",
+        category: "DIAMONDS",
         settings: {
           glowColor: "#10B981",
           borderColor: "#10B981",
@@ -1244,6 +1243,7 @@ async function getAllDesignPresets() {
       },
       {
         name: "Ice Blue",
+        category: "DIAMONDS",
         settings: {
           glowColor: "#38bdf8",
           borderColor: "#0284c7",
@@ -1270,6 +1270,7 @@ async function getAllDesignPresets() {
       },
       {
         name: "Royal Purple",
+        category: "DIAMONDS",
         settings: {
           glowColor: "#a855f7",
           borderColor: "#7e22ce",
@@ -1296,6 +1297,7 @@ async function getAllDesignPresets() {
       },
       {
         name: "Golden Glow",
+        category: "DIAMONDS",
         settings: {
           glowColor: "#f59e0b",
           borderColor: "#d97706",
@@ -1322,16 +1324,152 @@ async function getAllDesignPresets() {
       }
     ];
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    for (const p of defaultPresets) {
+    for (const p of defaultDiamondsPresets) {
       const pid = `preset_${Math.random().toString(36).substring(2, 8)}`;
       db.run(
-        `INSERT OR IGNORE INTO design_presets (id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?);`,
-        [pid, p.name, JSON.stringify(p.settings), now, now]
+        `INSERT OR IGNORE INTO design_presets (id, name, settings, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);`,
+        [pid, p.name, JSON.stringify(p.settings), p.category, now, now]
       );
     }
     saveDb();
-    res = db.exec(`SELECT id, name, settings, created_at, updated_at FROM design_presets ORDER BY name ASC;`);
   }
+  if (categoryFilter === "REDEEM_CODE" || !categoryFilter) {
+    const rcRes = db.exec(`SELECT COUNT(*) FROM design_presets WHERE category = 'REDEEM_CODE';`);
+    const rcCount = rcRes[0]?.values[0]?.[0] || 0;
+    if (rcCount === 0) {
+      const defaultRedeemPresets = [
+        {
+          name: "Cyber Emerald",
+          category: "REDEEM_CODE",
+          settings: {
+            glowColor: "#10B981",
+            borderColor: "#10B981",
+            cardBgColor: "#090d16",
+            badgeBgColor: "#064e3b",
+            badgeTextColor: "#a7f3d0",
+            buttonBgColor: "#34d399",
+            imageBorderColor: "#059669",
+            labelBorderColor: "#059669",
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 50,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 30,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 20,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 20,
+            labelInnerGlowBlur: 10
+          }
+        },
+        {
+          name: "Vortex Crimson",
+          category: "REDEEM_CODE",
+          settings: {
+            glowColor: "#f43f5e",
+            borderColor: "#e11d48",
+            cardBgColor: "#140509",
+            badgeBgColor: "#881337",
+            badgeTextColor: "#ffe4e6",
+            buttonBgColor: "#f43f5e",
+            imageBorderColor: "#fb7185",
+            labelBorderColor: "#fb7185",
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 60,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 35,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 25,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 25,
+            labelInnerGlowBlur: 10
+          }
+        },
+        {
+          name: "Electric Amber",
+          category: "REDEEM_CODE",
+          settings: {
+            glowColor: "#f59e0b",
+            borderColor: "#d97706",
+            cardBgColor: "#140d04",
+            badgeBgColor: "#78350f",
+            badgeTextColor: "#fef3c7",
+            buttonBgColor: "#f59e0b",
+            imageBorderColor: "#fbbf24",
+            labelBorderColor: "#fbbf24",
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 55,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 30,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 20,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 20,
+            labelInnerGlowBlur: 10
+          }
+        },
+        {
+          name: "Midnight Sapphire",
+          category: "REDEEM_CODE",
+          settings: {
+            glowColor: "#3b82f6",
+            borderColor: "#2563eb",
+            cardBgColor: "#060e1d",
+            badgeBgColor: "#1e3a8a",
+            badgeTextColor: "#dbeafe",
+            buttonBgColor: "#3b82f6",
+            imageBorderColor: "#60a5fa",
+            labelBorderColor: "#60a5fa",
+            outerBorderThickness: 2,
+            imageBorderThickness: 2,
+            labelBorderThickness: 1,
+            outerGlowEnabled: true,
+            outerGlowIntensity: 50,
+            outerGlowBlur: 25,
+            imageGlowEnabled: true,
+            imageGlowIntensity: 30,
+            imageGlowBlur: 15,
+            labelGlowEnabled: true,
+            labelGlowIntensity: 20,
+            labelGlowBlur: 10,
+            labelInnerGlowIntensity: 20,
+            labelInnerGlowBlur: 10
+          }
+        }
+      ];
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      for (const p of defaultRedeemPresets) {
+        const pid = `preset_${Math.random().toString(36).substring(2, 8)}`;
+        db.run(
+          `INSERT OR IGNORE INTO design_presets (id, name, settings, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);`,
+          [pid, p.name, JSON.stringify(p.settings), p.category, now, now]
+        );
+      }
+      saveDb();
+    }
+  }
+  let query = `SELECT id, name, settings, category, created_at, updated_at FROM design_presets`;
+  const params = [];
+  if (categoryFilter) {
+    query += ` WHERE category = ? OR category = 'ALL'`;
+    params.push(categoryFilter);
+  }
+  query += ` ORDER BY name ASC;`;
+  let res = db.exec(query, params);
   if (res.length === 0) return [];
   const columns = res[0].columns;
   return res[0].values.map((row) => {
@@ -1349,12 +1487,13 @@ async function getAllDesignPresets() {
       id: obj.id,
       name: obj.name,
       settings: parsedSettings,
+      category: obj.category || "DIAMONDS",
       createdAt: obj.created_at,
       updatedAt: obj.updated_at
     };
   });
 }
-async function saveDesignPreset(name, settings, id) {
+async function saveDesignPreset(name, settings, id, category = "DIAMONDS") {
   const db = await getDb();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const cleanName = (name || "").trim();
@@ -1369,14 +1508,14 @@ async function saveDesignPreset(name, settings, id) {
   }
   if (targetId) {
     db.run(
-      `UPDATE design_presets SET name = ?, settings = ?, updated_at = ? WHERE id = ?;`,
-      [cleanName, settingsJson, now, targetId]
+      `UPDATE design_presets SET name = ?, settings = ?, category = ?, updated_at = ? WHERE id = ?;`,
+      [cleanName, settingsJson, category, now, targetId]
     );
   } else {
     targetId = `preset_${Math.random().toString(36).substring(2, 8)}`;
     db.run(
-      `INSERT INTO design_presets (id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?);`,
-      [targetId, cleanName, settingsJson, now, now]
+      `INSERT INTO design_presets (id, name, settings, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);`,
+      [targetId, cleanName, settingsJson, category, now, now]
     );
   }
   saveDb();
@@ -1672,7 +1811,8 @@ async function addBulkRedeemCodes(data) {
   const parsedCodes = [];
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    const validation = validateCode(raw);
+    const rawCode = raw.includes(":") ? raw.split(":")[0].trim() : raw;
+    const validation = validateCode(rawCode);
     if (!validation.valid) {
       throw new Error(`Line ${i + 1} ("${raw}"): ${validation.error}`);
     }
@@ -1960,9 +2100,8 @@ async function purchaseProductDirect(params) {
     err.statusCode = 400;
     throw err;
   }
-  const directProdStatus = String(product.stockStatus || product.stock_status || "AVAILABLE").toUpperCase();
-  if (directProdStatus === "SOLD OUT" || directProdStatus === "SOLD_OUT") {
-    const err = new Error("This product is currently SOLD OUT.");
+  if (product.category === "DIAMONDS" && (product.stockStatus === "OUT OF STOCK" || product.stockStatus === "SOLD OUT" || product.stockStatus === "SOLD_OUT")) {
+    const err = new Error("This diamond product is currently sold out.");
     err.statusCode = 400;
     throw err;
   }
@@ -2032,9 +2171,8 @@ async function createPendingCheckoutOrder(params) {
     err.statusCode = 400;
     throw err;
   }
-  const checkoutProdStatus = String(product.stockStatus || product.stock_status || "AVAILABLE").toUpperCase();
-  if (checkoutProdStatus === "SOLD OUT" || checkoutProdStatus === "SOLD_OUT") {
-    const err = new Error("This product is currently SOLD OUT.");
+  if (product.category === "DIAMONDS" && (product.stockStatus === "OUT OF STOCK" || product.stockStatus === "SOLD OUT" || product.stockStatus === "SOLD_OUT")) {
+    const err = new Error("This diamond product is currently sold out.");
     err.statusCode = 400;
     throw err;
   }
@@ -2624,17 +2762,30 @@ async function updateUserStatus(identifier, status) {
   saveDb();
   return getUserDetailsWithOrders(clean);
 }
+async function resetTodaysSales() {
+  const db = await getDb();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(`INSERT OR REPLACE INTO store_settings (key, value) VALUES ('todays_sales_reset_at', ?);`, [now]);
+  saveDb();
+  return { success: true, message: "Today's sales counter reset successfully", resetAt: now };
+}
 async function getAdminAnalyticsSummary() {
   const users = await getAllUsersForAdmin();
   const allOrders = await getAllOrders();
   const successfulOrders = allOrders.filter((o) => o.paymentStatus === "PAID");
+  const settings = await getStoreSettings();
+  const resetAt = settings.todays_sales_reset_at || "";
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.status === "ACTIVE").length;
   const usersWithPurchases = users.filter((u) => u.successfulOrders > 0).length;
   const totalCodesSold = successfulOrders.length;
   const totalSales = successfulOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
   const todayStr = (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
-  const todaysSales = successfulOrders.filter((o) => o.createdAt && o.createdAt.startsWith(todayStr)).reduce((sum, o) => sum + Number(o.amount || 0), 0);
+  const todaysSales = successfulOrders.filter((o) => {
+    if (!o.createdAt || !o.createdAt.startsWith(todayStr)) return false;
+    if (resetAt && o.createdAt <= resetAt) return false;
+    return true;
+  }).reduce((sum, o) => sum + Number(o.amount || 0), 0);
   const topBuyers = [...users].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 5).map((u) => ({
     customerId: u.customerId,
     name: u.fullName,
@@ -2682,8 +2833,6 @@ async function getStoreSettings() {
     contactIconSize: 42,
     contactMobileIconSize: 42,
     appUrl: process.env.APP_URL || "https://vortexcode.shop",
-    defaultStoreCategory: "REDEEM CODE",
-    default_store_category: "REDEEM CODE",
     how_to_redeem_step_1_image_enabled: false,
     how_to_redeem_step_1_image_url: "",
     how_to_redeem_step_2_image_enabled: false,
@@ -2691,7 +2840,9 @@ async function getStoreSettings() {
     how_to_redeem_step_3_image_enabled: false,
     how_to_redeem_step_3_image_url: "",
     how_to_redeem_step_4_image_enabled: false,
-    how_to_redeem_step_4_image_url: ""
+    how_to_redeem_step_4_image_url: "",
+    defaultStoreCategory: "REDEEM CODE",
+    defaultOpeningCategory: "REDEEM CODE"
   };
   if (res.length > 0 && res[0].values.length > 0) {
     res[0].values.forEach((row) => {
@@ -2701,10 +2852,6 @@ async function getStoreSettings() {
         settings[key] = val === "true";
       } else if (key === "contactWidgetSize" || key === "contactWidgetRight" || key === "contactWidgetBottom" || key === "contactWidgetMobileSize" || key === "contactWidgetMobileRight" || key === "contactWidgetMobileBottom" || key === "contactIconSize" || key === "contactMobileIconSize") {
         settings[key] = Number(val) || settings[key];
-      } else if (key === "defaultStoreCategory" || key === "default_store_category") {
-        const normCat = String(val).toUpperCase().includes("DIAMOND") ? "DIAMONDS" : "REDEEM CODE";
-        settings.defaultStoreCategory = normCat;
-        settings.default_store_category = normCat;
       } else {
         settings[key] = val;
       }
@@ -2714,6 +2861,16 @@ async function getStoreSettings() {
   if (settings.storeName && !settings.websiteName) settings.websiteName = settings.storeName;
   if (settings.tagline && !settings.subtitle) settings.subtitle = settings.tagline;
   if (settings.subtitle && !settings.tagline) settings.tagline = settings.subtitle;
+  if (settings.defaultStoreCategory && !settings.defaultOpeningCategory) {
+    settings.defaultOpeningCategory = settings.defaultStoreCategory;
+  }
+  if (settings.defaultOpeningCategory && !settings.defaultStoreCategory) {
+    settings.defaultStoreCategory = settings.defaultOpeningCategory;
+  }
+  if (!settings.defaultStoreCategory) {
+    settings.defaultStoreCategory = "REDEEM CODE";
+    settings.defaultOpeningCategory = "REDEEM CODE";
+  }
   return settings;
 }
 async function updateStoreSettings(updates) {
@@ -2731,11 +2888,11 @@ async function updateStoreSettings(updates) {
   if (normalizedUpdates.subtitle && !normalizedUpdates.tagline) {
     normalizedUpdates.tagline = normalizedUpdates.subtitle;
   }
-  if (normalizedUpdates.defaultStoreCategory !== void 0 || normalizedUpdates.default_store_category !== void 0) {
-    const rawVal = normalizedUpdates.defaultStoreCategory ?? normalizedUpdates.default_store_category;
-    const validatedCat = String(rawVal).toUpperCase().includes("DIAMOND") ? "DIAMONDS" : "REDEEM CODE";
-    normalizedUpdates.defaultStoreCategory = validatedCat;
-    normalizedUpdates.default_store_category = validatedCat;
+  if (normalizedUpdates.defaultStoreCategory && !normalizedUpdates.defaultOpeningCategory) {
+    normalizedUpdates.defaultOpeningCategory = normalizedUpdates.defaultStoreCategory;
+  }
+  if (normalizedUpdates.defaultOpeningCategory && !normalizedUpdates.defaultStoreCategory) {
+    normalizedUpdates.defaultStoreCategory = normalizedUpdates.defaultOpeningCategory;
   }
   for (const [key, value] of Object.entries(normalizedUpdates)) {
     if (value !== void 0) {
@@ -3007,7 +3164,8 @@ router.delete("/products/:id", isAdminMiddleware, async (req, res) => {
 });
 router.get("/admin/design-presets", isAdminMiddleware, async (req, res) => {
   try {
-    const presets = await getAllDesignPresets();
+    const category = req.query.category;
+    const presets = await getAllDesignPresets(category);
     res.json({ success: true, presets });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to fetch design presets" });
@@ -3015,11 +3173,11 @@ router.get("/admin/design-presets", isAdminMiddleware, async (req, res) => {
 });
 router.post("/admin/design-presets", isAdminMiddleware, async (req, res) => {
   try {
-    const { name, settings, id } = req.body;
+    const { name, settings, id, category } = req.body;
     if (!name) {
       return res.status(400).json({ success: false, error: "Preset name is required" });
     }
-    const preset = await saveDesignPreset(name, settings, id);
+    const preset = await saveDesignPreset(name, settings, id, category || "DIAMONDS");
     res.status(201).json({ success: true, preset, message: "Design preset saved successfully" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to save design preset" });
@@ -3895,6 +4053,14 @@ router.delete("/admin/notices/:id", isAdminMiddleware, async (req, res) => {
     res.json({ success: true, message: "Notice deleted successfully" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message || "Failed to delete notice" });
+  }
+});
+router.post("/admin/reset-todays-sales", isAdminMiddleware, async (req, res) => {
+  try {
+    const result = await resetTodaysSales();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "Failed to reset today's sales counter" });
   }
 });
 function sanitizeStoreSettings(rawSettings) {

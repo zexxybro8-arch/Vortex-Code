@@ -70,6 +70,10 @@ export const AdminDiamondsTab: React.FC = () => {
     setPresetStatus(null);
   }, [editingProduct, isModalOpen]);
 
+  const diamondPresets = designPresets.filter(
+    (p: any) => p.category === 'DIAMONDS' || p.category === 'ALL'
+  );
+
   const diamondProducts = products
     .filter((p) => p.category === 'DIAMONDS')
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.priceRupees - b.priceRupees);
@@ -186,7 +190,7 @@ export const AdminDiamondsTab: React.FC = () => {
   // Preset Handlers
   const handleApplyPreset = (presetId: string) => {
     if (!presetId) return;
-    const preset = designPresets.find((p: any) => p.id === presetId);
+    const preset = diamondPresets.find((p: any) => p.id === presetId);
     if (preset && preset.settings) {
       setSelectedPresetId(presetId);
       setPreviewData((prev: any) => ({
@@ -204,7 +208,7 @@ export const AdminDiamondsTab: React.FC = () => {
     if (!cleanName) return;
 
     const currentGlowSettings = previewData.glowSettings || {};
-    const existing = designPresets.find((p: any) => p.name.toLowerCase() === cleanName.toLowerCase());
+    const existing = diamondPresets.find((p: any) => p.name.toLowerCase() === cleanName.toLowerCase());
 
     if (existing) {
       const confirmOverwrite = window.confirm(
@@ -214,7 +218,7 @@ export const AdminDiamondsTab: React.FC = () => {
     }
 
     try {
-      await saveDesignPreset(cleanName, currentGlowSettings, existing?.id);
+      await saveDesignPreset(cleanName, currentGlowSettings, existing?.id, 'DIAMONDS');
       setIsSavePresetModalOpen(false);
       setPresetNameInput('');
       setPresetStatus(`Preset "${cleanName}" saved successfully!`);
@@ -225,7 +229,7 @@ export const AdminDiamondsTab: React.FC = () => {
   };
 
   const handleDeletePresetClick = async (presetId: string) => {
-    const preset = designPresets.find((p: any) => p.id === presetId);
+    const preset = diamondPresets.find((p: any) => p.id === presetId);
     if (!preset) return;
 
     const confirmDelete = window.confirm(`Are you sure you want to delete preset "${preset.name}"?`);
@@ -539,7 +543,7 @@ export const AdminDiamondsTab: React.FC = () => {
                     className="flex-1 p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-cyan-400 focus:outline-none"
                   >
                     <option value="">-- Apply a Saved Design Preset --</option>
-                    {designPresets.map((preset: any) => (
+                    {diamondPresets.map((preset: any) => (
                       <option key={preset.id} value={preset.id}>
                         {preset.name}
                       </option>

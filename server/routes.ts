@@ -212,7 +212,8 @@ router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
 // GET /api/admin/design-presets - Get all saved design presets
 router.get('/admin/design-presets', isAdminMiddleware, async (req, res) => {
   try {
-    const presets = await getAllDesignPresets();
+    const category = req.query.category as string | undefined;
+    const presets = await getAllDesignPresets(category);
     res.json({ success: true, presets });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to fetch design presets' });
@@ -222,11 +223,11 @@ router.get('/admin/design-presets', isAdminMiddleware, async (req, res) => {
 // POST /api/admin/design-presets - Save/Create design preset
 router.post('/admin/design-presets', isAdminMiddleware, async (req, res) => {
   try {
-    const { name, settings, id } = req.body;
+    const { name, settings, id, category } = req.body;
     if (!name) {
       return res.status(400).json({ success: false, error: 'Preset name is required' });
     }
-    const preset = await saveDesignPreset(name, settings, id);
+    const preset = await saveDesignPreset(name, settings, id, category || 'DIAMONDS');
     res.status(201).json({ success: true, preset, message: 'Design preset saved successfully' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to save design preset' });

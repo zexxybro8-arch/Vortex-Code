@@ -220,14 +220,14 @@ export const api = {
     }
   },
 
-  async saveDesignPreset(name: string, settings: any, id?: string): Promise<ApiDesignPreset> {
+  async saveDesignPreset(name: string, settings: any, id?: string, category: string = 'DIAMONDS'): Promise<ApiDesignPreset> {
     const data = await safeFetchJson('/api/admin/design-presets', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-admin-token': 'SAGAR551',
       },
-      body: JSON.stringify({ name, settings, id }),
+      body: JSON.stringify({ name, settings, id, category }),
     });
     return data.preset;
   },

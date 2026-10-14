@@ -110,7 +110,7 @@ interface AdminContextType {
 
   // Design Presets
   designPresets: any[];
-  saveDesignPreset: (name: string, settings: any, id?: string) => Promise<void>;
+  saveDesignPreset: (name: string, settings: any, id?: string, category?: string) => Promise<void>;
   deleteDesignPreset: (id: string) => Promise<void>;
 
   // Categories
@@ -518,9 +518,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Real Database Design Presets Actions
-  const saveDesignPreset = async (name: string, settings: any, id?: string) => {
+  const saveDesignPreset = async (name: string, settings: any, id?: string, category?: string) => {
     try {
-      await api.saveDesignPreset(name, settings, id);
+      await api.saveDesignPreset(name, settings, id, category);
       await refreshData();
     } catch (err) {
       console.error('Failed to save design preset:', err);

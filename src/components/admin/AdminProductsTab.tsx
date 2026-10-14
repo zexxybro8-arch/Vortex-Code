@@ -43,6 +43,7 @@ export const AdminProductsTab: React.FC = () => {
   const defaultGlow = {
     glowColor: '#10B981',
     borderColor: '#10B981',
+    cardBgColor: '#090d16',
     badgeBgColor: '#064e3b',
     badgeTextColor: '#a7f3d0',
     buttonBgColor: '#34d399',
@@ -63,6 +64,10 @@ export const AdminProductsTab: React.FC = () => {
     labelInnerGlowIntensity: 20,
     labelInnerGlowBlur: 10,
   };
+
+  const redeemPresets = designPresets.filter(
+    (p: any) => p.category === 'REDEEM_CODE' || p.category === 'ALL'
+  );
 
   useEffect(() => {
     if (editingProduct) {
@@ -125,7 +130,7 @@ export const AdminProductsTab: React.FC = () => {
   // Preset Handlers
   const handleApplyPreset = (presetId: string) => {
     if (!presetId) return;
-    const preset = designPresets.find((p: any) => p.id === presetId);
+    const preset = redeemPresets.find((p: any) => p.id === presetId);
     if (preset && preset.settings) {
       setSelectedPresetId(presetId);
       setPreviewData((prev: any) => ({
@@ -143,7 +148,7 @@ export const AdminProductsTab: React.FC = () => {
     if (!cleanName) return;
 
     const currentGlowSettings = previewData.glowSettings || {};
-    const existing = designPresets.find((p: any) => p.name.toLowerCase() === cleanName.toLowerCase());
+    const existing = redeemPresets.find((p: any) => p.name.toLowerCase() === cleanName.toLowerCase());
 
     if (existing) {
       const confirmOverwrite = window.confirm(
@@ -153,7 +158,7 @@ export const AdminProductsTab: React.FC = () => {
     }
 
     try {
-      await saveDesignPreset(cleanName, currentGlowSettings, existing?.id);
+      await saveDesignPreset(cleanName, currentGlowSettings, existing?.id, 'REDEEM_CODE');
       setIsSavePresetModalOpen(false);
       setPresetNameInput('');
       setPresetStatus(`Preset "${cleanName}" saved successfully!`);
@@ -164,7 +169,7 @@ export const AdminProductsTab: React.FC = () => {
   };
 
   const handleDeletePresetClick = async (presetId: string) => {
-    const preset = designPresets.find((p: any) => p.id === presetId);
+    const preset = redeemPresets.find((p: any) => p.id === presetId);
     if (!preset) return;
 
     const confirmDelete = window.confirm(`Are you sure you want to delete preset "${preset.name}"?`);
@@ -464,7 +469,7 @@ export const AdminProductsTab: React.FC = () => {
                     className="flex-1 p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-emerald-400 focus:outline-none"
                   >
                     <option value="">-- Apply a Saved Design Preset --</option>
-                    {designPresets.map((preset: any) => (
+                    {redeemPresets.map((preset: any) => (
                       <option key={preset.id} value={preset.id}>
                         {preset.name}
                       </option>
@@ -496,9 +501,10 @@ export const AdminProductsTab: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { key: 'glowColor', label: 'Glow Color', default: '#10B981' },
-                    { key: 'borderColor', label: 'Border Color', default: '#10B981' },
-                    { key: 'badgeBgColor', label: 'Badge Background', default: '#064e3b' },
-                    { key: 'badgeTextColor', label: 'Badge Text', default: '#a7f3d0' },
+                    { key: 'borderColor', label: 'Outer Card Border', default: '#10B981' },
+                    { key: 'cardBgColor', label: 'Card Background', default: '#090d16' },
+                    { key: 'badgeBgColor', label: 'Label Background', default: '#064e3b' },
+                    { key: 'badgeTextColor', label: 'Label Text Color', default: '#a7f3d0' },
                     { key: 'buttonBgColor', label: 'Button Background', default: '#34d399' },
                     { key: 'imageBorderColor', label: 'Image Border Color', default: '#059669' },
                     { key: 'labelBorderColor', label: 'Label Border Color', default: '#059669' },
@@ -618,12 +624,13 @@ export const AdminProductsTab: React.FC = () => {
               </h3>
 
               <div
-                className="bg-slate-900/95 border rounded-3xl p-5 transition-all duration-300 flex flex-col justify-between space-y-4 relative w-full max-w-xs"
+                className="border rounded-3xl p-5 transition-all duration-300 flex flex-col justify-between space-y-4 relative w-full max-w-xs shadow-xl"
                 style={{
+                  backgroundColor: currentGlow.cardBgColor || '#090d16',
                   borderColor: currentGlow.borderColor || '#10B981',
                   borderWidth: `${currentGlow.outerBorderThickness || 2}px`,
                   boxShadow: currentGlow.outerGlowEnabled
-                    ? `0 0 ${currentGlow.outerGlowBlur || 25}px ${currentGlow.borderColor || '#10B981'}${
+                    ? `0 0 ${currentGlow.outerGlowBlur || 25}px ${currentGlow.glowColor || currentGlow.borderColor || '#10B981'}${
                         (currentGlow.outerGlowIntensity || 50) > 50 ? 'FF' : '80'
                       }`
                     : 'none',
@@ -660,13 +667,29 @@ export const AdminProductsTab: React.FC = () => {
 
                 {/* 2. PRICE & REDEEM VALUE */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono">
-                    <div className="text-[9px] font-extrabold text-slate-400 uppercase">PRICE</div>
-                    <div className="text-sm font-black text-white">₹{previewData.priceRupees || 0}</div>
+                  <div
+                    className="p-2.5 rounded-xl border font-mono"
+                    style={{
+                      borderColor: currentGlow.labelBorderColor || '#059669',
+                      borderWidth: `${currentGlow.labelBorderThickness || 1}px`,
+                      backgroundColor: currentGlow.badgeBgColor || '#064e3b',
+                      color: currentGlow.badgeTextColor || '#a7f3d0',
+                    }}
+                  >
+                    <div className="text-[9px] font-extrabold uppercase opacity-80">PRICE</div>
+                    <div className="text-sm font-black" style={{ color: currentGlow.badgeTextColor || '#ffffff' }}>₹{previewData.priceRupees || 0}</div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono">
-                    <div className="text-[9px] font-extrabold text-emerald-400 uppercase">REDEEM VALUE</div>
-                    <div className="text-sm font-black text-emerald-400">₹{previewData.rewardValueRupees || 0}</div>
+                  <div
+                    className="p-2.5 rounded-xl border font-mono"
+                    style={{
+                      borderColor: currentGlow.labelBorderColor || '#059669',
+                      borderWidth: `${currentGlow.labelBorderThickness || 1}px`,
+                      backgroundColor: currentGlow.badgeBgColor || '#064e3b',
+                      color: currentGlow.badgeTextColor || '#a7f3d0',
+                    }}
+                  >
+                    <div className="text-[9px] font-extrabold uppercase opacity-80">REDEEM VALUE</div>
+                    <div className="text-sm font-black" style={{ color: currentGlow.badgeTextColor || '#10B981' }}>₹{previewData.rewardValueRupees || 0}</div>
                   </div>
                 </div>
 

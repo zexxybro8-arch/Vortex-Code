@@ -68,6 +68,7 @@ export const AdminSettingsTab: React.FC = () => {
       supportEmail,
       currencySymbol,
       enableAutoFulfillment,
+      defaultStoreCategory: defaultOpeningCategory,
       defaultOpeningCategory,
       appUrl,
     });
@@ -264,9 +265,9 @@ export const AdminSettingsTab: React.FC = () => {
             </div>
 
             <div className="sm:col-span-2 border-t border-slate-800/80 pt-3 mt-1">
-              <label className="block text-xs font-bold text-emerald-400 mb-1">DEFAULT OPENING CATEGORY</label>
+              <label className="block text-xs font-bold text-emerald-400 mb-1">DEFAULT STORE CATEGORY</label>
               <p className="text-[11px] text-slate-400 mb-2">
-                Select which category appears selected when a customer freshly opens the storefront.
+                Select which category is selected first when a customer opens the store (REDEEM CODE or DIAMONDS).
               </p>
               <select
                 value={defaultOpeningCategory}
