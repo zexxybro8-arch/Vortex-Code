@@ -34,14 +34,33 @@
   animation: pulse-glow 3s infinite ease-in-out;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); filter: brightness(1); }
-  50% { transform: translateY(-8px); filter: brightness(1.1); }
+@keyframes card-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes card-shine {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(250%) skewX(-20deg);
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .float-animation {
     animation: float 3s ease-in-out infinite;
+  }
+  .animate-card-float {
+    animation: card-float 4s ease-in-out infinite;
+  }
+  .animate-card-shine {
+    animation: card-shine 4.5s ease-in-out infinite;
   }
 }
 

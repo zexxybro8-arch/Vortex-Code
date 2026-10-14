@@ -297,7 +297,7 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
           </div>
 
           <div
-            className="border rounded-3xl p-4 transition-all duration-300 flex flex-col justify-between space-y-3.5 relative w-full max-w-[240px] sm:max-w-[270px] shadow-xl"
+            className="border rounded-3xl p-4 transition-all duration-300 flex flex-col justify-between space-y-3.5 relative w-full max-w-[240px] sm:max-w-[270px] shadow-xl float-animation"
             style={{
               backgroundColor: currentGlow.cardBgColor || '#090d16',
               borderColor: currentGlow.borderColor || '#10B981',

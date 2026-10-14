@@ -463,7 +463,7 @@ export const CustomerDashboard: React.FC = () => {
 
             {/* PRODUCT / REDEEM CODE CARDS GRID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {displayItems.map((item) => {
+              {displayItems.map((item, index) => {
                 const prod = item.product;
                 const isBuying =
                   (buyingProductId === prod.id && (!item.codeRecord || buyingCodeId === item.codeRecord.id)) ||
@@ -480,14 +480,27 @@ export const CustomerDashboard: React.FC = () => {
                 return (
                   <div
                     key={item.key}
-                    className="bg-slate-900/95 border rounded-3xl p-5 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4 relative group neon-glow"
+                    className="bg-slate-900/95 border rounded-3xl p-5 transition-all duration-300 hover:shadow-2xl flex flex-col justify-between space-y-4 relative group neon-glow overflow-hidden animate-card-float"
                     style={{
                       backgroundColor: glow.cardBgColor || undefined,
                       borderColor: outerBorderColor,
                       borderWidth: `${outerBorderThickness}px`,
                       boxShadow: outerGlow,
+                      animationDelay: `${(index * 0.7) % 3.5}s`,
                     }}
                   >
+                    {/* Continuous Diagonal Shining Reflection Effect */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl z-20">
+                      <div 
+                        className="absolute top-0 bottom-0 w-1/2 bg-gradient-to-r from-transparent via-white/12 to-transparent animate-card-shine"
+                        style={{
+                          animationDuration: '4.5s',
+                          animationTimingFunction: 'ease-in-out',
+                          animationIterationCount: 'infinite',
+                          animationDelay: `${(index * 0.9) % 4}s`,
+                        }}
+                      />
+                    </div>
                     
                     {/* 1. TOP AREA: Product Icon + Large Title */}
                     <div className="flex items-center gap-3.5">
@@ -566,7 +579,7 @@ export const CustomerDashboard: React.FC = () => {
                     {/* 3. RECHARGE CODE CONTAINER */}
                     <div className="space-y-1.5">
                       <div className="text-[10px] font-mono font-bold text-emerald-400/90 uppercase tracking-wider flex items-center justify-between">
-                        <span>RECHARGE CODE</span>
+                        <span>REDEEM CODE</span>
                         {item.isOutOfStock ? (
                           <span className="text-rose-400 font-extrabold text-[9px] uppercase">OUT OF STOCK</span>
                         ) : (
@@ -689,7 +702,7 @@ export const CustomerDashboard: React.FC = () => {
                     image: 'https://i.ibb.co/HDkCvRrY/file-00000000e09c82119087489c4d51e78a.png',
                     enabled: true,
                     category: 'DIAMONDS'
-                  }]) as any[]).map((p: any) => {
+                  }]) as any[]).map((p: any, index: number) => {
                     const isSoldOut = p.stockStatus === 'OUT OF STOCK' || p.stockStatus === 'SOLD OUT' || p.stockStatus === 'SOLD_OUT';
 
                     return (
@@ -701,18 +714,31 @@ export const CustomerDashboard: React.FC = () => {
                       className={`bg-slate-950/90 border rounded-3xl p-3 sm:p-4 flex flex-col items-center text-center transition-all duration-300 relative overflow-hidden backdrop-blur-xl ${
                         isSoldOut 
                           ? 'cursor-not-allowed opacity-90' 
-                          : 'cursor-pointer group hover:border-cyan-400 float-animation'
+                          : 'cursor-pointer group hover:border-cyan-400 animate-card-float'
                       }`}
                       style={{
                         borderColor: isSoldOut ? 'rgba(244, 63, 94, 0.4)' : (p.glowSettings?.borderColor || '#06b6d4'),
                         borderWidth: `${p.glowSettings?.outerBorderThickness || 2}px`,
                         boxShadow: isSoldOut 
                           ? '0 0 15px rgba(244, 63, 94, 0.25)' 
-                          : (p.glowSettings?.outerGlowEnabled 
-                              ? `0 0 ${p.glowSettings.outerGlowBlur || 25}px ${p.glowSettings.borderColor || '#06b6d4'}${(p.glowSettings.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
-                              : 'none')
+                          : (p.glowSettings?.outerGlowEnabled !== false
+                              ? `0 0 ${p.glowSettings?.outerGlowBlur || 25}px ${p.glowSettings?.borderColor || '#06b6d4'}${(p.glowSettings?.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                              : 'none'),
+                        animationDelay: `${(index * 0.7) % 3.5}s`,
                       }}
                     >
+                      {/* Continuous Diagonal Shining Reflection Effect */}
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl z-20">
+                        <div 
+                          className="absolute top-0 bottom-0 w-1/2 bg-gradient-to-r from-transparent via-cyan-300/15 to-transparent animate-card-shine"
+                          style={{
+                            animationDuration: '4.5s',
+                            animationTimingFunction: 'ease-in-out',
+                            animationIterationCount: 'infinite',
+                            animationDelay: `${(index * 0.9) % 4}s`,
+                          }}
+                        />
+                      </div>
                       {/* 1. Card Badge Text / SOLD OUT Badge */}
                       {isSoldOut ? (
                         <div className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl border border-rose-500/50 bg-rose-500/20 text-rose-300 font-black text-[11px] tracking-wider mb-2.5 shadow-[0_0_12px_rgba(244,63,94,0.4)]">
