@@ -172,8 +172,8 @@ router.post('/products', isAdminMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/products/reorder - Reorder multiple products (Must be defined BEFORE /products/:id)
-router.put('/products/reorder', isAdminMiddleware, async (req, res) => {
+// PUT & POST /api/products/reorder - Reorder multiple products (Must be defined BEFORE /products/:id)
+const handleReorderProducts = async (req: any, res: any) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items)) {
@@ -184,11 +184,17 @@ router.put('/products/reorder', isAdminMiddleware, async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to reorder products' });
   }
-});
+};
+
+router.put('/products/reorder', isAdminMiddleware, handleReorderProducts);
+router.post('/products/reorder', isAdminMiddleware, handleReorderProducts);
 
 // PUT /api/products/:id - Update product (price, status, details)
 router.put('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
+    if (req.params.id === 'reorder') {
+      return handleReorderProducts(req, res);
+    }
     console.log('DEBUG: Updating product', req.params.id, 'with body:', JSON.stringify(req.body));
     const updated = await updateProduct(req.params.id, req.body);
     res.json({ success: true, product: updated, message: 'Product updated successfully in database' });
@@ -200,10 +206,13 @@ router.put('/products/:id', isAdminMiddleware, async (req, res) => {
 // DELETE /api/products/:id - Delete product
 router.delete('/products/:id', isAdminMiddleware, async (req, res) => {
   try {
+    if (req.params.id === 'reorder') {
+      return res.status(400).json({ success: false, error: 'Invalid product ID' });
+    }
     const result = await deleteProduct(req.params.id);
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to delete product' });
+    res.status(400).json({ success: false, error: err.message || 'Failed to delete product' });
   }
 });
 

@@ -888,17 +888,30 @@ export async function deleteOrDisableProduct(id: string) {
 export async function deleteProduct(id: string) {
   const db = await getDb();
   
+  const existing = await getProductById(id);
+  if (!existing) {
+    throw new Error(`Product with ID "${id}" does not exist in database.`);
+  }
+
   // Check for linked orders or codes
   const linkedOrders = db.exec(`SELECT count(*) FROM orders WHERE product_id = ?;`, [id]);
   const linkedCodes = db.exec(`SELECT count(*) FROM redeem_codes WHERE product_id = ?;`, [id]);
   
-  if ((linkedOrders[0].values[0][0] as number) > 0 || (linkedCodes[0].values[0][0] as number) > 0) {
-    throw new Error('Cannot delete product: It is referenced by existing orders or redeem codes.');
+  const orderCount = (linkedOrders[0]?.values[0]?.[0] as number) || 0;
+  const codeCount = (linkedCodes[0]?.values[0]?.[0] as number) || 0;
+  
+  if (orderCount > 0 || codeCount > 0) {
+    const reasons: string[] = [];
+    if (orderCount > 0) reasons.push(`${orderCount} historical order(s)`);
+    if (codeCount > 0) reasons.push(`${codeCount} inventory redeem code(s)`);
+    throw new Error(
+      `Cannot delete product "${existing.name}": It is referenced by ${reasons.join(' and ')}. To preserve customer purchase history and inventory, please deactivate (disable) the product instead.`
+    );
   }
   
   db.run(`DELETE FROM products WHERE id = ?;`, [id]);
   saveDb();
-  return { success: true, message: `Product ${id} deleted successfully` };
+  return { success: true, message: `Product "${existing.name}" deleted successfully` };
 }
 
 // ===================== DESIGN PRESETS =====================
