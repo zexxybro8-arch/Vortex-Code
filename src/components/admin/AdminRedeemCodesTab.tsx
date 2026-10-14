@@ -104,6 +104,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
       );
       setSelectedCodeIds([]);
       setIsBulkDeleteModalOpen(false);
+      setIsBulkDeleteMode(false);
       await refreshData();
       setTimeout(() => setAlertSuccess(null), 6000);
     } catch (err: any) {
@@ -353,7 +354,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => {
               if (products.length > 0 && !selectedProductId) setSelectedProductId(products[0].id);
@@ -377,6 +378,25 @@ export const AdminRedeemCodesTab: React.FC = () => {
           >
             <Sparkles className="w-4 h-4" />
             <span>Bulk Codes</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (!isBulkDeleteMode) {
+                setIsBulkDeleteMode(true);
+              } else {
+                setIsBulkDeleteMode(false);
+                setSelectedCodeIds([]);
+              }
+            }}
+            className={`py-2.5 px-4 font-bold text-xs rounded-xl transition-all flex items-center gap-2 shrink-0 cursor-pointer shadow ${
+              isBulkDeleteMode
+                ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>{isBulkDeleteMode ? 'Cancel Selection' : 'Bulk Delete'}</span>
           </button>
         </div>
       </div>
@@ -485,14 +505,30 @@ export const AdminRedeemCodesTab: React.FC = () => {
         <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
           <div className="flex items-center gap-3 flex-wrap">
             <span>Showing {filteredCodes.length} code(s)</span>
-            {selectedCodeIds.length > 0 && (
-              <button
-                onClick={() => setIsBulkDeleteModalOpen(true)}
-                className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Selected ({selectedCodeIds.length})</span>
-              </button>
+            {isBulkDeleteMode && (
+              <>
+                <span className="text-emerald-400 font-mono font-bold">
+                  Selected: {selectedCodeIds.length} code(s)
+                </span>
+                {selectedCodeIds.length > 0 && (
+                  <button
+                    onClick={() => setIsBulkDeleteModalOpen(true)}
+                    className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Selected ({selectedCodeIds.length})</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setIsBulkDeleteMode(false);
+                    setSelectedCodeIds([]);
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all cursor-pointer border border-slate-700"
+                >
+                  Cancel Selection
+                </button>
+              </>
             )}
           </div>
           <button
@@ -508,17 +544,19 @@ export const AdminRedeemCodesTab: React.FC = () => {
           <table className="w-full text-left text-xs font-sans">
             <thead>
               <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
-                <th className="py-3 px-4 w-10">
-                  <input
-                    type="checkbox"
-                    checked={allFilteredSelected}
-                    ref={el => {
-                      if (el) el.indeterminate = someFilteredSelected;
-                    }}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
-                  />
-                </th>
+                {isBulkDeleteMode && (
+                  <th className="py-3 px-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      ref={el => {
+                        if (el) el.indeterminate = someFilteredSelected;
+                      }}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-3 px-4">Product Name</th>
                 <th className="py-3 px-4">Code Key</th>
                 <th className="py-3 px-4">Denomination</th>
@@ -530,7 +568,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
             <tbody className="divide-y divide-slate-800/80">
               {filteredCodes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500 font-mono">
+                  <td colSpan={isBulkDeleteMode ? 7 : 6} className="py-8 text-center text-slate-500 font-mono">
                     No recharge codes match the selected filters.
                   </td>
                 </tr>
@@ -540,14 +578,16 @@ export const AdminRedeemCodesTab: React.FC = () => {
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-950/50 transition-colors font-mono">
-                      <td className="py-3.5 px-4 w-10">
-                        <input
-                          type="checkbox"
-                          checked={selectedCodeIds.includes(item.id)}
-                          onChange={() => handleToggleSelectCode(item.id)}
-                          className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
-                        />
-                      </td>
+                      {isBulkDeleteMode && (
+                        <td className="py-3.5 px-4 w-10">
+                          <input
+                            type="checkbox"
+                            checked={selectedCodeIds.includes(item.id)}
+                            onChange={() => handleToggleSelectCode(item.id)}
+                            className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="py-3.5 px-4 font-sans font-bold text-white">
                         {item.productName}
                       </td>

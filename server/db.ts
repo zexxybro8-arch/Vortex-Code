@@ -181,6 +181,10 @@ export async function getDb(): Promise<Database> {
   `);
 
   try {
+    dbInstance.run(`ALTER TABLE orders ADD COLUMN reserved_code_id TEXT;`);
+  } catch (e) {}
+
+  try {
     dbInstance.run(`ALTER TABLE orders ADD COLUMN gateway_order_id TEXT;`);
   } catch (e) {
     // Ignore error if column already exists
