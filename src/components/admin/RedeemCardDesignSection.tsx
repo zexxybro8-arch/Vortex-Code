@@ -176,7 +176,7 @@ export const RedeemCardDesignSection: React.FC<RedeemCardDesignSectionProps> = (
           {/* Color Pickers */}
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-slate-300">Card Color Palette</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { key: 'glowColor', label: 'Glow Color', default: '#10B981' },
                 { key: 'borderColor', label: 'Outer Card Border', default: '#10B981' },

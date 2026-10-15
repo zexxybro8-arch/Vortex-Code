@@ -982,8 +982,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
 
       {/* Edit Code Modal */}
       {codeToEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="bg-slate-900 border border-blue-500/40 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-blue-500/40 rounded-2xl p-4 sm:p-6 w-full max-w-lg max-h-[90vh] shadow-2xl space-y-4 relative my-auto overflow-y-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-blue-400" />
