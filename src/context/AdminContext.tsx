@@ -75,6 +75,7 @@ function mapApiCodeToAdmin(c: any): AdminRedeemCode {
         ? 'DISABLED'
         : 'RESERVED',
     cardColor: c.cardColor || c.card_color || 'blue',
+    glowSettings: typeof c.glowSettings === 'string' ? JSON.parse(c.glowSettings) : (c.glowSettings || c.glow_settings || {}),
     createdAt: c.createdAt ? c.createdAt.substring(0, 10) : new Date().toISOString().substring(0, 10),
     usedAt: c.usedAt || undefined,
   };
@@ -129,9 +130,10 @@ interface AdminContextType {
     code: string,
     pin?: string,
     status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED',
-    cardColor?: string
+    cardColor?: string,
+    glowSettings?: any
   ) => Promise<any>;
-  addBulkRedeemCodes: (productId: string, codesText: string, cardColor?: string) => Promise<any>;
+  addBulkRedeemCodes: (productId: string, codesText: string, cardColor?: string, glowSettings?: any) => Promise<any>;
   updateRedeemCode: (id: string, updates: any) => Promise<any>;
   deleteRedeemCode: (id: string, force?: boolean) => Promise<any>;
   deleteBulkRedeemCodes: (ids: string[]) => Promise<any>;

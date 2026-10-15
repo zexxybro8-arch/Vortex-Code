@@ -105,6 +105,7 @@ export async function getDb(): Promise<Database> {
       status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD', 'DISABLED')),
       order_id TEXT,
       card_color TEXT DEFAULT 'blue',
+      glow_settings TEXT,
       created_at TEXT NOT NULL,
       used_at TEXT,
       FOREIGN KEY(product_id) REFERENCES products(id)
@@ -281,6 +282,10 @@ export async function getDb(): Promise<Database> {
 
   try {
     dbInstance.run(`ALTER TABLE redeem_codes ADD COLUMN card_color TEXT DEFAULT 'blue';`);
+  } catch (e) {}
+
+  try {
+    dbInstance.run(`ALTER TABLE redeem_codes ADD COLUMN glow_settings TEXT;`);
   } catch (e) {}
 
   // Ensure redeem_codes table allows 'DISABLED' status
@@ -1508,6 +1513,7 @@ export async function getRedeemCodes(productId?: string, status?: string, denomi
       r.status, 
       r.order_id as orderId, 
       r.card_color as cardColor,
+      r.glow_settings as glowSettings,
       r.created_at as createdAt, 
       r.used_at as usedAt 
     FROM redeem_codes r
@@ -1552,6 +1558,11 @@ export async function getRedeemCodes(productId?: string, status?: string, denomi
     obj.codeFull = formatFullCode(obj.code);
     obj.codeMasked = maskCode(obj.code);
     obj.cardColor = obj.cardColor || 'blue';
+    try {
+      obj.glowSettings = typeof obj.glowSettings === 'string' ? JSON.parse(obj.glowSettings) : (obj.glowSettings || {});
+    } catch {
+      obj.glowSettings = {};
+    }
     return obj;
   });
 }
@@ -1562,6 +1573,7 @@ export async function addRedeemCode(data: {
   pin?: string;
   status?: string;
   cardColor?: string;
+  glowSettings?: any;
 }) {
   const db = await getDb();
   const validation = validateCode(data.code);
@@ -1578,6 +1590,7 @@ export async function addRedeemCode(data: {
   const now = new Date().toISOString();
   const pin = data.pin?.trim() || null;
   const cardColor = data.cardColor?.trim() || 'blue';
+  const glowSettingsStr = typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : (data.glowSettings || '{}');
 
   let status = 'UNUSED';
   if (data.status) {
@@ -1591,9 +1604,9 @@ export async function addRedeemCode(data: {
   const usedAt = status === 'SOLD' ? now : null;
 
   db.run(
-    `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, card_color, created_at, used_at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?);`,
-    [id, data.productId, cleanCode, pin, status, cardColor, now, usedAt]
+    `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, card_color, glow_settings, created_at, used_at)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?);`,
+    [id, data.productId, cleanCode, pin, status, cardColor, glowSettingsStr, now, usedAt]
   );
   saveDb();
   return {
@@ -1605,6 +1618,7 @@ export async function addRedeemCode(data: {
     pin,
     status,
     cardColor,
+    glowSettings: typeof glowSettingsStr === 'string' ? JSON.parse(glowSettingsStr) : glowSettingsStr,
     createdAt: now,
   };
 }
@@ -1613,12 +1627,14 @@ export async function addBulkRedeemCodes(data: {
   productId: string;
   codesText: string;
   cardColor?: string;
+  glowSettings?: any;
 }) {
   const db = await getDb();
   const prod = await getProductById(data.productId);
   if (!prod) throw new Error(`Product ${data.productId} does not exist`);
 
   const cardColor = data.cardColor?.trim() || 'blue';
+  const glowSettingsStr = typeof data.glowSettings === 'object' ? JSON.stringify(data.glowSettings) : (data.glowSettings || '{}');
 
   // Split lines or commas
   const lines = data.codesText
@@ -1649,9 +1665,9 @@ export async function addBulkRedeemCodes(data: {
   for (const item of parsedCodes) {
     const id = `cd_${Math.random().toString(36).substring(2, 9)}`;
     db.run(
-      `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, card_color, created_at, used_at)
-       VALUES (?, ?, ?, ?, 'UNUSED', NULL, ?, ?, NULL);`,
-      [id, data.productId, item.code, item.pin, cardColor, now]
+      `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, card_color, glow_settings, created_at, used_at)
+       VALUES (?, ?, ?, ?, 'UNUSED', NULL, ?, ?, ?, NULL);`,
+      [id, data.productId, item.code, item.pin, cardColor, glowSettingsStr, now]
     );
     addedIds.push(id);
     addedCount++;
@@ -1663,7 +1679,7 @@ export async function addBulkRedeemCodes(data: {
     addedCount,
     productId: data.productId,
     cardColor,
-    message: `Successfully added ${addedCount} 16-character redeem code(s) for ${prod.name} with color ${cardColor}`,
+    message: `Successfully added ${addedCount} 16-character redeem code(s) for ${prod.name}`,
   };
 }
 
@@ -1688,11 +1704,12 @@ export async function updateRedeemCode(
     status?: string;
     productId?: string;
     cardColor?: string;
+    glowSettings?: any;
   }
 ) {
   const db = await getDb();
   const cleanId = id.trim();
-  const check = db.exec(`SELECT id, code, pin, status, product_id, card_color FROM redeem_codes WHERE id = ?;`, [cleanId]);
+  const check = db.exec(`SELECT id, code, pin, status, product_id, card_color, glow_settings FROM redeem_codes WHERE id = ?;`, [cleanId]);
   if (check.length === 0 || check[0].values.length === 0) {
     throw new Error(`Redeem code with ID "${cleanId}" not found in database.`);
   }
@@ -1703,6 +1720,7 @@ export async function updateRedeemCode(
   let status = row[3] as string;
   let productId = row[4] as string;
   let cardColor = (row[5] as string) || 'blue';
+  let glowSettings = row[6] ? (typeof row[6] === 'string' ? JSON.parse(row[6]) : row[6]) : {};
 
   if (updates.code) {
     const validation = validateCode(updates.code);
@@ -1734,12 +1752,17 @@ export async function updateRedeemCode(
     cardColor = updates.cardColor.trim() || 'blue';
   }
 
+  if (updates.glowSettings !== undefined) {
+    glowSettings = updates.glowSettings;
+  }
+
+  const glowSettingsStr = typeof glowSettings === 'object' ? JSON.stringify(glowSettings) : (glowSettings || '{}');
   const now = new Date().toISOString();
   const usedAt = status === 'SOLD' ? now : null;
 
   db.run(
-    `UPDATE redeem_codes SET code = ?, pin = ?, status = ?, product_id = ?, card_color = ?, used_at = ? WHERE id = ?;`,
-    [code, pin, status, productId, cardColor, usedAt, cleanId]
+    `UPDATE redeem_codes SET code = ?, pin = ?, status = ?, product_id = ?, card_color = ?, glow_settings = ?, used_at = ? WHERE id = ?;`,
+    [code, pin, status, productId, cardColor, glowSettingsStr, usedAt, cleanId]
   );
   saveDb();
 
@@ -1752,6 +1775,7 @@ export async function updateRedeemCode(
     pin,
     status,
     cardColor,
+    glowSettings: typeof glowSettingsStr === 'string' ? JSON.parse(glowSettingsStr) : glowSettingsStr,
     updatedAt: now,
   };
 }

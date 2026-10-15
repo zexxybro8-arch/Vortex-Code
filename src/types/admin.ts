@@ -97,6 +97,7 @@ export interface AdminRedeemCode {
   orderId?: string | null;
   status: 'AVAILABLE' | 'USED' | 'RESERVED' | 'DISABLED';
   cardColor?: string;
+  glowSettings?: any;
   createdAt: string;
   usedByCustomerEmail?: string;
   usedAt?: string;
