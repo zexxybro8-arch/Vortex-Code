@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { defaultRedeemGlowSettings } from '../admin/RedeemCardDesignSection';
 import { UIDVerificationModal } from './UIDVerificationModal';
 import { useAuth } from '../../context/AuthContext';
 import { api, type ApiRedeemCode } from '../../services/api';
@@ -469,7 +470,9 @@ export const CustomerDashboard: React.FC = () => {
                   (buyingProductId === prod.id && (!item.codeRecord || buyingCodeId === item.codeRecord.id)) ||
                   (buyingCodeId !== null && item.codeRecord && buyingCodeId === item.codeRecord.id);
 
-                const glow = (typeof prod.glowSettings === 'string' ? JSON.parse(prod.glowSettings) : prod.glowSettings) || {};
+                const itemGlow = item.codeRecord?.glowSettings;
+                const parsedItemGlow = typeof itemGlow === 'string' ? JSON.parse(itemGlow) : itemGlow;
+                const glow = parsedItemGlow || (typeof prod.glowSettings === 'string' ? JSON.parse(prod.glowSettings) : prod.glowSettings) || defaultRedeemGlowSettings;
                 const COLOR_MAP_LOCAL: Record<string, string> = {
                   blue: '#3b82f6',
                   green: '#10b981',

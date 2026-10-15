@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { generate16CharKey, formatFullCode, formatMaskedCode } from '../../utils/codeFormat';
 import type { AdminRedeemCode } from '../../types/admin';
-import { RedeemCardDesignSection } from './RedeemCardDesignSection';
+import { RedeemCardDesignSection, defaultRedeemGlowSettings } from './RedeemCardDesignSection';
 
 const COLOR_PRESETS = [
   { label: 'Blue', value: '#3b82f6' },
@@ -191,6 +191,9 @@ export const AdminRedeemCodesTab: React.FC = () => {
   const [quantity, setQuantity] = useState(5);
   const [pastedCodes, setPastedCodes] = useState('');
   const [bulkCardColor, setBulkCardColor] = useState('#3b82f6');
+  const [bulkGlowSettings, setBulkGlowSettings] = useState(defaultRedeemGlowSettings);
+  const [singleGlowSettings, setSingleGlowSettings] = useState(defaultRedeemGlowSettings);
+  const [editGlowSettingsValue, setEditGlowSettingsValue] = useState(defaultRedeemGlowSettings);
 
   // Single Code State
   const [singleCode, setSingleCode] = useState('');
@@ -247,7 +250,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
         }
       }
 
-      const result = await addBulkRedeemCodes(targetProd.id, codesToSave.join('\n'), bulkCardColor);
+      const result = await addBulkRedeemCodes(targetProd.id, codesToSave.join('\n'), bulkCardColor, bulkGlowSettings);
       setAlertSuccess(
         `✅ Successfully added ${result.addedCount} redeem code(s) for ${targetProd.name} (${targetProd.denomination}) to the database! Stock updated.`
       );
@@ -284,7 +287,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
         singleCode.trim(),
         singlePin.trim() || undefined,
         singleStatus,
-        singleCardColor
+        singleCardColor,
+        singleGlowSettings
       );
       setAlertSuccess(
         `✅ Added redeem code for ${targetProd.name} (${targetProd.denomination}) with status ${singleStatus} to database! Stock updated.`
@@ -308,6 +312,11 @@ export const AdminRedeemCodesTab: React.FC = () => {
     setEditStatusValue(code.status || 'AVAILABLE');
     setEditProductIdValue(code.productId || products[0]?.id || '');
     setEditCardColorValue(code.cardColor || '#3b82f6');
+    try {
+      setEditGlowSettingsValue(code.glowSettings ? (typeof code.glowSettings === 'string' ? JSON.parse(code.glowSettings) : code.glowSettings) : defaultRedeemGlowSettings);
+    } catch (e) {
+      setEditGlowSettingsValue(defaultRedeemGlowSettings);
+    }
   };
 
   const handleEditCodeSubmit = async (e: React.FormEvent) => {
@@ -324,6 +333,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
         status: editStatusValue,
         productId: editProductIdValue || undefined,
         cardColor: editCardColorValue,
+        glowSettings: editGlowSettingsValue,
       });
       setAlertSuccess(`✅ Redeem code updated successfully in database! Status: ${editStatusValue}`);
       setCodeToEdit(null);
@@ -740,10 +750,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   <span className="block text-xs font-bold text-emerald-400">🎨 Redeem Card Design & Glow Customization</span>
                   <RedeemCardDesignSection
                     targetProduct={targetProd}
-                    glowSettings={targetProd.glowSettings || {}}
-                    onChange={async (newGlow) => {
-                      await updateProduct(targetProd.id, { glowSettings: newGlow });
-                    }}
+                    glowSettings={bulkGlowSettings}
+                    onChange={(newGlow) => setBulkGlowSettings(newGlow)}
                     designPresets={designPresets}
                     saveDesignPreset={saveDesignPreset}
                     deleteDesignPreset={deleteDesignPreset}
@@ -883,10 +891,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   <span className="block text-xs font-bold text-emerald-400">🎨 Redeem Card Design & Glow Customization</span>
                   <RedeemCardDesignSection
                     targetProduct={targetProd}
-                    glowSettings={targetProd.glowSettings || {}}
-                    onChange={async (newGlow) => {
-                      await updateProduct(targetProd.id, { glowSettings: newGlow });
-                    }}
+                    glowSettings={singleGlowSettings}
+                    onChange={(newGlow) => setSingleGlowSettings(newGlow)}
                     designPresets={designPresets}
                     saveDesignPreset={saveDesignPreset}
                     deleteDesignPreset={deleteDesignPreset}
@@ -1024,7 +1030,17 @@ export const AdminRedeemCodesTab: React.FC = () => {
                 />
               </div>
 
-              <CardColorPicker value={editCardColorValue} onChange={setEditCardColorValue} />
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <span className="block text-xs font-bold text-blue-400">🎨 Redeem Card Design & Glow Customization</span>
+                <RedeemCardDesignSection
+                  targetProduct={products.find(p => p.id === editProductIdValue)}
+                  glowSettings={editGlowSettingsValue}
+                  onChange={setEditGlowSettingsValue}
+                  designPresets={designPresets}
+                  saveDesignPreset={saveDesignPreset}
+                  deleteDesignPreset={deleteDesignPreset}
+                />
+              </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">

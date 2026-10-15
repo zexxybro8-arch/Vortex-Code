@@ -576,10 +576,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     code: string,
     pin?: string,
     status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED',
-    cardColor?: string
+    cardColor?: string,
+    glowSettings?: any
   ) => {
     try {
-      const result = await api.addRedeemCode({ productId, code, pin, status, cardColor });
+      const result = await api.addRedeemCode({ productId, code, pin, status, cardColor, glowSettings });
       await refreshData();
       return result;
     } catch (err) {
@@ -588,9 +589,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const addBulkRedeemCodes = async (productId: string, codesText: string, cardColor?: string) => {
+  const addBulkRedeemCodes = async (productId: string, codesText: string, cardColor?: string, glowSettings?: any) => {
     try {
-      const result = await api.addBulkRedeemCodes(productId, codesText, cardColor);
+      const result = await api.addBulkRedeemCodes(productId, codesText, cardColor, glowSettings);
       await refreshData();
       return result;
     } catch (err) {
@@ -607,6 +608,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       status?: string;
       productId?: string;
       cardColor?: string;
+      glowSettings?: any;
     }
   ) => {
     try {
