@@ -21,6 +21,60 @@ import { generate16CharKey, formatFullCode, formatMaskedCode } from '../../utils
 import type { AdminRedeemCode } from '../../types/admin';
 import { RedeemCardDesignSection } from './RedeemCardDesignSection';
 
+const COLOR_PRESETS = [
+  { label: 'Blue', value: '#3b82f6' },
+  { label: 'Green', value: '#10b981' },
+  { label: 'Purple', value: '#a855f7' },
+  { label: 'Red', value: '#ef4444' },
+  { label: 'Gold', value: '#eab308' },
+  { label: 'Pink', value: '#ec4899' },
+  { label: 'Cyan', value: '#06b6d4' },
+];
+
+function CardColorPicker({ value, onChange }: { value: string; onChange: (col: string) => void }) {
+  const currentVal = value || '#3b82f6';
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs font-semibold text-slate-300">
+        Redeem Card Color
+      </label>
+      <div className="flex items-center gap-2 flex-wrap">
+        {COLOR_PRESETS.map((preset) => (
+          <button
+            key={preset.value}
+            type="button"
+            onClick={() => onChange(preset.value)}
+            className={`w-7 h-7 rounded-full border-2 transition-all cursor-pointer flex items-center justify-center ${
+              currentVal.toLowerCase() === preset.value.toLowerCase()
+                ? 'scale-110 border-white shadow-lg'
+                : 'border-slate-700 hover:scale-105'
+            }`}
+            style={{ backgroundColor: preset.value }}
+            title={preset.label}
+          />
+        ))}
+        <div className="relative flex items-center gap-2 ml-2">
+          <input
+            type="color"
+            value={currentVal.startsWith('#') ? currentVal : '#3b82f6'}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-0.5"
+            title="Custom Hex Color"
+          />
+          <span className="text-[11px] font-mono text-slate-400">{currentVal}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-1.5 p-2 rounded-xl bg-slate-950 border border-slate-800">
+        <span className="text-[10px] uppercase font-bold text-slate-400">Preview:</span>
+        <div
+          className="h-4 flex-1 rounded-lg border border-white/20 transition-all shadow-inner"
+          style={{ backgroundColor: currentVal, boxShadow: `0 0 10px ${currentVal}` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export const AdminRedeemCodesTab: React.FC = () => {
   const {
     products,
@@ -130,16 +184,19 @@ export const AdminRedeemCodesTab: React.FC = () => {
   const [editPinValue, setEditPinValue] = useState('');
   const [editStatusValue, setEditStatusValue] = useState<'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'>('AVAILABLE');
   const [editProductIdValue, setEditProductIdValue] = useState('');
+  const [editCardColorValue, setEditCardColorValue] = useState('#3b82f6');
 
   // Bulk Generator State
   const [bulkMode, setBulkMode] = useState<'generate' | 'paste'>('generate');
   const [quantity, setQuantity] = useState(5);
   const [pastedCodes, setPastedCodes] = useState('');
+  const [bulkCardColor, setBulkCardColor] = useState('#3b82f6');
 
   // Single Code State
   const [singleCode, setSingleCode] = useState('');
   const [singlePin, setSinglePin] = useState('');
   const [singleStatus, setSingleStatus] = useState<'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'>('AVAILABLE');
+  const [singleCardColor, setSingleCardColor] = useState('#3b82f6');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -190,7 +247,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
         }
       }
 
-      const result = await addBulkRedeemCodes(targetProd.id, codesToSave.join('\n'));
+      const result = await addBulkRedeemCodes(targetProd.id, codesToSave.join('\n'), bulkCardColor);
       setAlertSuccess(
         `✅ Successfully added ${result.addedCount} redeem code(s) for ${targetProd.name} (${targetProd.denomination}) to the database! Stock updated.`
       );
@@ -226,7 +283,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
         targetProd.id,
         singleCode.trim(),
         singlePin.trim() || undefined,
-        singleStatus
+        singleStatus,
+        singleCardColor
       );
       setAlertSuccess(
         `✅ Added redeem code for ${targetProd.name} (${targetProd.denomination}) with status ${singleStatus} to database! Stock updated.`
@@ -249,6 +307,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
     setEditPinValue(code.pin || '');
     setEditStatusValue(code.status || 'AVAILABLE');
     setEditProductIdValue(code.productId || products[0]?.id || '');
+    setEditCardColorValue(code.cardColor || '#3b82f6');
   };
 
   const handleEditCodeSubmit = async (e: React.FormEvent) => {
@@ -264,6 +323,7 @@ export const AdminRedeemCodesTab: React.FC = () => {
         pin: editPinValue.trim(),
         status: editStatusValue,
         productId: editProductIdValue || undefined,
+        cardColor: editCardColorValue,
       });
       setAlertSuccess(`✅ Redeem code updated successfully in database! Status: ${editStatusValue}`);
       setCodeToEdit(null);
@@ -691,6 +751,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
                 </div>
               )}
 
+              <CardColorPicker value={bulkCardColor} onChange={setBulkCardColor} />
+
               <div className="flex gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
                 <button
                   type="button"
@@ -856,6 +918,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
                 />
               </div>
 
+              <CardColorPicker value={singleCardColor} onChange={setSingleCardColor} />
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Initial Status
@@ -959,6 +1023,8 @@ export const AdminRedeemCodesTab: React.FC = () => {
                   required
                 />
               </div>
+
+              <CardColorPicker value={editCardColorValue} onChange={setEditCardColorValue} />
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">

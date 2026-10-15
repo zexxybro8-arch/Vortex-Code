@@ -470,11 +470,25 @@ export const CustomerDashboard: React.FC = () => {
                   (buyingCodeId !== null && item.codeRecord && buyingCodeId === item.codeRecord.id);
 
                 const glow = (typeof prod.glowSettings === 'string' ? JSON.parse(prod.glowSettings) : prod.glowSettings) || {};
-                const outerBorderColor = glow.borderColor || 'rgba(16, 185, 129, 0.3)';
+                const COLOR_MAP_LOCAL: Record<string, string> = {
+                  blue: '#3b82f6',
+                  green: '#10b981',
+                  purple: '#a855f7',
+                  red: '#ef4444',
+                  gold: '#eab308',
+                  pink: '#ec4899',
+                  cyan: '#06b6d4',
+                };
+                const resolveColorLocal = (c?: string) => {
+                  if (!c) return '';
+                  const lower = c.toLowerCase();
+                  return COLOR_MAP_LOCAL[lower] || c;
+                };
+                const codeCardColor = resolveColorLocal(item.codeRecord?.cardColor) || glow.borderColor || glow.glowColor || '#3b82f6';
+                const outerBorderColor = codeCardColor;
                 const outerBorderThickness = glow.outerBorderThickness !== undefined ? glow.outerBorderThickness : 1;
-                const glowColor = glow.glowColor || glow.borderColor || '#10B981';
                 const outerGlow = glow.outerGlowEnabled !== false
-                  ? `0 0 ${glow.outerGlowBlur || 25}px ${glowColor}${(glow.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
+                  ? `0 0 ${glow.outerGlowBlur || 25}px ${codeCardColor}${(glow.outerGlowIntensity || 50) > 50 ? 'FF' : '80'}`
                   : 'none';
 
                 return (

@@ -41,6 +41,7 @@ export interface ApiRedeemCode {
   pin: string;
   status: 'UNUSED' | 'RESERVED' | 'SOLD';
   orderId: string | null;
+  cardColor?: string;
   createdAt: string;
   usedAt: string | null;
 }
@@ -286,6 +287,7 @@ export const api = {
     code: string;
     pin?: string;
     status?: string;
+    cardColor?: string;
   }): Promise<any> {
     return safeFetchJson('/api/redeem-codes', {
       method: 'POST',
@@ -297,14 +299,14 @@ export const api = {
     });
   },
 
-  async addBulkRedeemCodes(productId: string, codesText: string): Promise<{ success: boolean; addedCount: number; message: string }> {
+  async addBulkRedeemCodes(productId: string, codesText: string, cardColor?: string): Promise<{ success: boolean; addedCount: number; message: string }> {
     return safeFetchJson('/api/redeem-codes/bulk', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'x-admin-token': 'SAGAR551'
       },
-      body: JSON.stringify({ productId, codesText }),
+      body: JSON.stringify({ productId, codesText, cardColor }),
     });
   },
 
@@ -313,6 +315,7 @@ export const api = {
     pin?: string;
     status?: string;
     productId?: string;
+    cardColor?: string;
   }): Promise<any> {
     return safeFetchJson(`/api/redeem-codes/${encodeURIComponent(id)}`, {
       method: 'PUT',

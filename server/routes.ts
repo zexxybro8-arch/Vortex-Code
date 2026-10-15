@@ -363,11 +363,11 @@ router.get('/redeem-codes', async (req, res) => {
 // POST /api/redeem-codes - Add single code
 router.post('/redeem-codes', isAdminMiddleware, async (req, res) => {
   try {
-    const { productId, code, pin } = req.body;
+    const { productId, code, pin, cardColor } = req.body;
     if (!productId || !code) {
       return res.status(400).json({ success: false, error: 'productId and code are required' });
     }
-    const created = await addRedeemCode({ productId, code, pin });
+    const created = await addRedeemCode({ productId, code, pin, cardColor });
     res.status(201).json({ success: true, code: created, message: 'Redeem code added to database successfully' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to add redeem code' });
@@ -377,22 +377,22 @@ router.post('/redeem-codes', isAdminMiddleware, async (req, res) => {
 // POST /api/redeem-codes/bulk - Add multiple codes
 router.post('/redeem-codes/bulk', isAdminMiddleware, async (req, res) => {
   try {
-    const { productId, codesText } = req.body;
+    const { productId, codesText, cardColor } = req.body;
     if (!productId || !codesText) {
       return res.status(400).json({ success: false, error: 'productId and codesText are required' });
     }
-    const result = await addBulkRedeemCodes({ productId, codesText });
+    const result = await addBulkRedeemCodes({ productId, codesText, cardColor });
     res.status(201).json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to add bulk codes' });
   }
 });
 
-// PUT /api/redeem-codes/:id - Update redeem code (status, code, pin, product)
+// PUT /api/redeem-codes/:id - Update redeem code (status, code, pin, product, cardColor)
 router.put('/redeem-codes/:id', isAdminMiddleware, async (req, res) => {
   try {
-    const { status, code, pin, productId } = req.body;
-    const result = await updateRedeemCode(req.params.id, { status, code, pin, productId });
+    const { status, code, pin, productId, cardColor } = req.body;
+    const result = await updateRedeemCode(req.params.id, { status, code, pin, productId, cardColor });
     res.json({ success: true, code: result, message: 'Redeem code updated successfully' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to update code' });

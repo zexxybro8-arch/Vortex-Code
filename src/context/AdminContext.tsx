@@ -74,6 +74,7 @@ function mapApiCodeToAdmin(c: any): AdminRedeemCode {
         : c.status === 'DISABLED'
         ? 'DISABLED'
         : 'RESERVED',
+    cardColor: c.cardColor || c.card_color || 'blue',
     createdAt: c.createdAt ? c.createdAt.substring(0, 10) : new Date().toISOString().substring(0, 10),
     usedAt: c.usedAt || undefined,
   };
@@ -127,9 +128,10 @@ interface AdminContextType {
     productId: string,
     code: string,
     pin?: string,
-    status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'
+    status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED',
+    cardColor?: string
   ) => Promise<any>;
-  addBulkRedeemCodes: (productId: string, codesText: string) => Promise<any>;
+  addBulkRedeemCodes: (productId: string, codesText: string, cardColor?: string) => Promise<any>;
   updateRedeemCode: (id: string, updates: any) => Promise<any>;
   deleteRedeemCode: (id: string, force?: boolean) => Promise<any>;
   deleteBulkRedeemCodes: (ids: string[]) => Promise<any>;
@@ -571,10 +573,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     productId: string,
     code: string,
     pin?: string,
-    status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED'
+    status?: 'AVAILABLE' | 'RESERVED' | 'USED' | 'DISABLED',
+    cardColor?: string
   ) => {
     try {
-      const result = await api.addRedeemCode({ productId, code, pin, status });
+      const result = await api.addRedeemCode({ productId, code, pin, status, cardColor });
       await refreshData();
       return result;
     } catch (err) {
@@ -583,9 +586,9 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const addBulkRedeemCodes = async (productId: string, codesText: string) => {
+  const addBulkRedeemCodes = async (productId: string, codesText: string, cardColor?: string) => {
     try {
-      const result = await api.addBulkRedeemCodes(productId, codesText);
+      const result = await api.addBulkRedeemCodes(productId, codesText, cardColor);
       await refreshData();
       return result;
     } catch (err) {
@@ -601,6 +604,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       pin?: string;
       status?: string;
       productId?: string;
+      cardColor?: string;
     }
   ) => {
     try {

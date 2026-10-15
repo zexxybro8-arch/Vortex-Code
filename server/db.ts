@@ -104,6 +104,7 @@ export async function getDb(): Promise<Database> {
       pin TEXT,
       status TEXT NOT NULL CHECK(status IN ('UNUSED', 'RESERVED', 'SOLD', 'DISABLED')),
       order_id TEXT,
+      card_color TEXT DEFAULT 'blue',
       created_at TEXT NOT NULL,
       used_at TEXT,
       FOREIGN KEY(product_id) REFERENCES products(id)
@@ -277,6 +278,10 @@ export async function getDb(): Promise<Database> {
     dbInstance.run(`ALTER TABLE design_presets ADD COLUMN category TEXT DEFAULT 'DIAMONDS';`);
   } catch (e) {}
 
+
+  try {
+    dbInstance.run(`ALTER TABLE redeem_codes ADD COLUMN card_color TEXT DEFAULT 'blue';`);
+  } catch (e) {}
 
   // Ensure redeem_codes table allows 'DISABLED' status
   try {
@@ -1502,6 +1507,7 @@ export async function getRedeemCodes(productId?: string, status?: string, denomi
       r.pin, 
       r.status, 
       r.order_id as orderId, 
+      r.card_color as cardColor,
       r.created_at as createdAt, 
       r.used_at as usedAt 
     FROM redeem_codes r
@@ -1545,6 +1551,7 @@ export async function getRedeemCodes(productId?: string, status?: string, denomi
     obj.code = normalizeCode(obj.code);
     obj.codeFull = formatFullCode(obj.code);
     obj.codeMasked = maskCode(obj.code);
+    obj.cardColor = obj.cardColor || 'blue';
     return obj;
   });
 }
@@ -1554,6 +1561,7 @@ export async function addRedeemCode(data: {
   code: string;
   pin?: string;
   status?: string;
+  cardColor?: string;
 }) {
   const db = await getDb();
   const validation = validateCode(data.code);
@@ -1569,6 +1577,7 @@ export async function addRedeemCode(data: {
   const id = `cd_${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
   const pin = data.pin?.trim() || null;
+  const cardColor = data.cardColor?.trim() || 'blue';
 
   let status = 'UNUSED';
   if (data.status) {
@@ -1582,9 +1591,9 @@ export async function addRedeemCode(data: {
   const usedAt = status === 'SOLD' ? now : null;
 
   db.run(
-    `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, created_at, used_at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?);`,
-    [id, data.productId, cleanCode, pin, status, now, usedAt]
+    `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, card_color, created_at, used_at)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?);`,
+    [id, data.productId, cleanCode, pin, status, cardColor, now, usedAt]
   );
   saveDb();
   return {
@@ -1595,6 +1604,7 @@ export async function addRedeemCode(data: {
     codeMasked: maskCode(cleanCode),
     pin,
     status,
+    cardColor,
     createdAt: now,
   };
 }
@@ -1602,10 +1612,13 @@ export async function addRedeemCode(data: {
 export async function addBulkRedeemCodes(data: {
   productId: string;
   codesText: string;
+  cardColor?: string;
 }) {
   const db = await getDb();
   const prod = await getProductById(data.productId);
   if (!prod) throw new Error(`Product ${data.productId} does not exist`);
+
+  const cardColor = data.cardColor?.trim() || 'blue';
 
   // Split lines or commas
   const lines = data.codesText
@@ -1636,9 +1649,9 @@ export async function addBulkRedeemCodes(data: {
   for (const item of parsedCodes) {
     const id = `cd_${Math.random().toString(36).substring(2, 9)}`;
     db.run(
-      `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, created_at, used_at)
-       VALUES (?, ?, ?, ?, 'UNUSED', NULL, ?, NULL);`,
-      [id, data.productId, item.code, item.pin, now]
+      `INSERT INTO redeem_codes (id, product_id, code, pin, status, order_id, card_color, created_at, used_at)
+       VALUES (?, ?, ?, ?, 'UNUSED', NULL, ?, ?, NULL);`,
+      [id, data.productId, item.code, item.pin, cardColor, now]
     );
     addedIds.push(id);
     addedCount++;
@@ -1649,7 +1662,8 @@ export async function addBulkRedeemCodes(data: {
     success: true,
     addedCount,
     productId: data.productId,
-    message: `Successfully added ${addedCount} 16-character redeem code(s) for ${prod.name}`,
+    cardColor,
+    message: `Successfully added ${addedCount} 16-character redeem code(s) for ${prod.name} with color ${cardColor}`,
   };
 }
 
@@ -1673,11 +1687,12 @@ export async function updateRedeemCode(
     pin?: string;
     status?: string;
     productId?: string;
+    cardColor?: string;
   }
 ) {
   const db = await getDb();
   const cleanId = id.trim();
-  const check = db.exec(`SELECT id, code, pin, status, product_id FROM redeem_codes WHERE id = ?;`, [cleanId]);
+  const check = db.exec(`SELECT id, code, pin, status, product_id, card_color FROM redeem_codes WHERE id = ?;`, [cleanId]);
   if (check.length === 0 || check[0].values.length === 0) {
     throw new Error(`Redeem code with ID "${cleanId}" not found in database.`);
   }
@@ -1687,6 +1702,7 @@ export async function updateRedeemCode(
   let pin = (row[2] as string) || '';
   let status = row[3] as string;
   let productId = row[4] as string;
+  let cardColor = (row[5] as string) || 'blue';
 
   if (updates.code) {
     const validation = validateCode(updates.code);
@@ -1714,12 +1730,16 @@ export async function updateRedeemCode(
     productId = updates.productId;
   }
 
+  if (updates.cardColor !== undefined) {
+    cardColor = updates.cardColor.trim() || 'blue';
+  }
+
   const now = new Date().toISOString();
   const usedAt = status === 'SOLD' ? now : null;
 
   db.run(
-    `UPDATE redeem_codes SET code = ?, pin = ?, status = ?, product_id = ?, used_at = ? WHERE id = ?;`,
-    [code, pin, status, productId, usedAt, cleanId]
+    `UPDATE redeem_codes SET code = ?, pin = ?, status = ?, product_id = ?, card_color = ?, used_at = ? WHERE id = ?;`,
+    [code, pin, status, productId, cardColor, usedAt, cleanId]
   );
   saveDb();
 
@@ -1731,6 +1751,7 @@ export async function updateRedeemCode(
     codeMasked: maskCode(code),
     pin,
     status,
+    cardColor,
     updatedAt: now,
   };
 }
